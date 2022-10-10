@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.cpa.por.ipcdpor;
 
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
@@ -85,5 +86,33 @@ public class IPCDPORState implements AbstractState {
 
     public int getCurThreadCounter() {
         return curState.getThreadCounter();
+    }
+
+    public EdgeType getTransferInEdgeType() {
+        return transferInEdgeType;
+    }
+
+    public CFAEdge getTransferInEdge() {
+        return curState.getProcEdge();
+    }
+
+    public void setSleepSet(Set<Pair<Integer, Integer>> pSleepSet) {
+        sleepSet = pSleepSet;
+    }
+
+    public Set<Pair<Integer, Integer>> getSleepSet() {
+        return sleepSet;
+    }
+
+    public boolean isUpdated() {
+        return hasUpdated;
+    }
+
+    public void setAsUpdated() {
+        hasUpdated = true;
+    }
+
+    public int getTransferInEdgeThreadId() {
+        return curState.getProcessEdgeThreadId();
     }
 }
