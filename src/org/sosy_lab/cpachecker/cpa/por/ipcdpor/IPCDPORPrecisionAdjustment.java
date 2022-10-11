@@ -4,6 +4,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.FluentIterable.from;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCall;
@@ -19,6 +20,7 @@ import org.sosy_lab.cpachecker.cpa.bdd.BDDState;
 import org.sosy_lab.cpachecker.cpa.por.EdgeType;
 import org.sosy_lab.cpachecker.cpa.por.pcdpor.AbstractICComputer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.dependence.DGNode;
@@ -26,10 +28,7 @@ import org.sosy_lab.cpachecker.util.dependence.conditional.CondDepConstraints;
 import org.sosy_lab.cpachecker.util.dependence.conditional.ConditionalDepGraph;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
 
@@ -202,7 +201,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                             int ipcdporAStateInEdgeThreadId = ipcdporAState.getTransferInEdgeThreadId();
 
                             // flag for judge whether A-InEdge could be an isolated transition.
-                            boolean isAStateInEdgeIsolated = true;
+                            boolean AStateInEdgeMaybeIsolated = true;
 
                             for (int j = i + 1; j < updatedGVASuccessors.size(); j++) {
                                 IPCDPORState ipcdporBState = updatedGVASuccessors.get(j);
@@ -216,13 +215,42 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                     ipcdporBState.sleepSetAdd(Pair.of(ipcdporAStateInEdgeThreadId, ipcdporAStateInEdge.hashCode()));
                                 } else {
                                     // if two edges are dependent, then A-InEdge can't be the isolated transition.
-                                    isAStateInEdgeIsolated = false;
+                                    AStateInEdgeMaybeIsolated = false;
                                 }
                             }
 
-                            if (isAStateInEdgeIsolated) {
-                                // A-InEdge is an isolated transition.
+                            if (AStateInEdgeMaybeIsolated) {
+                                // A-InEdge maybe an isolated transition.
+                                // if just two gvaSuccessors, pcdpor can guarantee the optimality.
+                                if (updatedGVASuccessors.size() <= 2) {
+                                    continue;
+                                }
+                                ImmutableList<IPCDPORState> rmAGVASuccessors =
+                                        from(updatedGVASuccessors).filter(s -> !s.equals(ipcdporAState)).toList();
+                                ImmutableList<CFAEdge> rmAGVATransferInEdges =
+                                        from(rmAGVASuccessors).transform(s -> s.getTransferInEdge()).toList();
 
+                                // calculate whether A-InEdge is isolated at parComputeState.
+                                boolean AStateInEdgeIsolated = isIsolated(ipcdporAStateInEdge, rmAGVATransferInEdges, parComputeState);
+
+                                if (AStateInEdgeIsolated) {
+                                    // if isolated, add the corresponding edges to the corresponding ipcdporState's sleep set.
+                                    // TODO: here somme edge are added twice
+                                    for (IPCDPORState ipcdporState : rmAGVASuccessors) {
+                                        ImmutableSet<Pair<Integer, Integer>> edgesAddToSleepSet =
+                                                // other edge should be added to sleep set of the current 'ipcdporState'
+                                                from(rmAGVASuccessors).filter(s -> !s.equals(ipcdporState))
+                                                        .transform(s -> {
+                                                            int edgeThreadId = s.getTransferInEdgeThreadId();
+                                                            CFAEdge edge = s.getTransferInEdge();
+                                                            return Pair.of(edgeThreadId, edge.hashCode());
+                                                        }).toSet();
+                                       // add to sleep set.
+                                       edgesAddToSleepSet.forEach(pair -> ipcdporState.sleepSetAdd(pair));
+                                    }
+                                } else {
+                                    // if not ...
+                                }
                             } else {
                                 // A-InEdge can't be an isolated transition.
 
@@ -334,6 +362,63 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
             }
             default:
                 return false;
+        }
+    }
+
+    /**
+     *
+     * @param pCheckEdge
+     * @param pEdges
+     * @param pComputeState
+     * @return
+     * @throws CPATransferException
+     * @throws InterruptedException
+     */
+    public boolean isIsolated(final CFAEdge pCheckEdge, ImmutableList<CFAEdge> pEdges, AbstractState pComputeState) throws CPATransferException, InterruptedException {
+
+        assert pEdges.size() >= 1 : "When judge isolation the size of 'pEdges' must be >= 1";
+        if (pComputeState instanceof BDDState) {
+            BDDState bddState = (BDDState) pComputeState;
+
+            // recursive bound: pEdges.size() == 1
+            if (pEdges.size() == 1) {
+                return canSkip(pCheckEdge, pEdges.get(0), bddState);
+            } else {
+                // recursive compute the isolation.
+                boolean result = true;
+                // for every edge p in 'pEdges', calculate whether pCheckEdge and p are independent
+                // at the successor of p.
+                for (CFAEdge p : pEdges) {
+                    //
+                    ArrayList<BDDState> bddSuccessors = (ArrayList<BDDState>) bddCPA
+                            .getTransferRelation()
+                            .getAbstractSuccessorsForEdge(pComputeState, null, p);
+
+                    assert bddSuccessors.size() <= 1;
+
+                    if (bddSuccessors.size() == 0) {
+                        // if the successor of p is unreachable, return false, i.e. not isolated.
+                        result = false;
+                        break;
+                    } else {
+                        BDDState computeState = bddSuccessors.get(0);
+                        ImmutableList<CFAEdge> rmPFromEdges =
+                                from(pEdges).filter(s -> !s.equals(p)).toList();
+                        if(!isIsolated(pCheckEdge, rmPFromEdges, computeState)) {
+                            // if 'pCheckEdge' and any edge in 'rmPFromEdges' are not independent
+                            // at the successor of p.
+                            result = false;
+                            break;
+                        } else {
+                            continue;
+                        }
+                    }
+                }
+                return result;
+            }
+        } else {
+            // TODO: when pComputeState is not BDD state, return false conservatively.
+            return false;
         }
     }
 }
