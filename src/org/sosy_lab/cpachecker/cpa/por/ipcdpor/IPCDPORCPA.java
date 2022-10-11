@@ -8,6 +8,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
+import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.cpa.bdd.BDDCPA;
 import org.sosy_lab.cpachecker.cpa.bdd.PredicateManager;
@@ -59,6 +60,11 @@ public class IPCDPORCPA extends AbstractCPA implements ConfigurableProgramAnalys
         config = pConfig;
         statistics = new IPCDPORStatistics();
     }
+
+    public static CPAFactory factory() {
+        return AutomaticCPAFactory.forType(IPCDPORCPA.class);
+    }
+
     @Override
     public PrecisionAdjustment getPrecisionAdjustment() {
         try {
@@ -73,7 +79,8 @@ public class IPCDPORCPA extends AbstractCPA implements ConfigurableProgramAnalys
 
                    return new IPCDPORPrecisionAdjustment(
                            GlobalInfo.getInstance().getEdgeInfo().getCondDepGraph(),
-                           new BDDICComputer(cfa, new PredicateManager(config, namedRegionManager, cfa), statistics)
+                           new BDDICComputer(cfa, new PredicateManager(config, namedRegionManager, cfa), statistics),
+                           statistics
                    );
                } else if (depComputationStateType.equals("PREDICATE")) {
 
@@ -81,7 +88,8 @@ public class IPCDPORCPA extends AbstractCPA implements ConfigurableProgramAnalys
 
                    return new IPCDPORPrecisionAdjustment(
                            GlobalInfo.getInstance().getEdgeInfo().getCondDepGraph(),
-                           new PredicateICComputer(predicateCPA, statistics)
+                           new PredicateICComputer(predicateCPA, statistics),
+                           statistics
                    );
                }
             } else {
@@ -105,7 +113,7 @@ public class IPCDPORCPA extends AbstractCPA implements ConfigurableProgramAnalys
 
     @Override
     public void collectStatistics(Collection<Statistics> statsCollection) {
-
+        statsCollection.add(statistics);
     }
 
     @SuppressWarnings("unchecked")

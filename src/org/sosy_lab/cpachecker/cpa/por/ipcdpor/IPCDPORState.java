@@ -115,4 +115,17 @@ public class IPCDPORState implements AbstractState {
     public int getTransferInEdgeThreadId() {
         return curState.getProcessEdgeThreadId();
     }
+
+    public boolean sleepSetContains(Pair<Integer, Integer> targetInfo) {
+        return sleepSet.contains(targetInfo);
+    }
+
+    /**
+     * add the target pair to sleep set.
+     * @param targetPair contains the 'thread-id' of thread that edge from and
+     *                   'edge_hashCode()'.
+     */
+    public void sleepSetAdd(Pair<Integer, Integer> targetPair) {
+        sleepSet.add(targetPair);
+    }
 }

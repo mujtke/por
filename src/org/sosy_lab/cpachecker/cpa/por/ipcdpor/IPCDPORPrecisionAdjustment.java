@@ -20,6 +20,7 @@ import org.sosy_lab.cpachecker.cpa.por.EdgeType;
 import org.sosy_lab.cpachecker.cpa.por.pcdpor.AbstractICComputer;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.dependence.DGNode;
 import org.sosy_lab.cpachecker.util.dependence.conditional.CondDepConstraints;
 import org.sosy_lab.cpachecker.util.dependence.conditional.ConditionalDepGraph;
@@ -40,6 +41,8 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
     private final AbstractICComputer icComputer;
     // TODO: we need BDDCPA to calculate the independence at states in future
     private final BDDCPA bddCPA;
+
+    private IPCDPORStatistics stat;
 
     // the Filter that find the global access edge's successors of
     // the given parent state.
@@ -63,7 +66,8 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
 
     public IPCDPORPrecisionAdjustment (
             ConditionalDepGraph pCondDepGraph,
-            AbstractICComputer pIcComputer) throws InvalidConfigurationException {
+            AbstractICComputer pIcComputer,
+            IPCDPORStatistics pStatistics) throws InvalidConfigurationException {
         condDepGraph = checkNotNull(pCondDepGraph, "No condDepGraph " +
                 "found, please enable the option: utils.edgeinfo.buildDepGraph!");
         nExploredChildCache = new HashMap<>();
@@ -72,6 +76,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
         Optional<ConfigurableProgramAnalysis> cpas = globalInfo.getCPA();
         assert cpas.isPresent() : "error when get cpa, it shouldn't be empty";
         bddCPA = retrieveCPA(cpas.get(), BDDCPA.class);
+        stat = pStatistics;
     }
 
     @SuppressWarnings("unchecked")
@@ -137,6 +142,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                 } else {
                     // this normal successor could be pruned.
                     // i.e. we don't need to explore other normal successors.
+                    stat.avoidExplorationTimes.inc();
                     return Optional.empty();
                 }
             }
@@ -160,6 +166,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                     );
                 } else {
                     //
+                    stat.avoidExplorationTimes.inc();
                     return Optional.empty();
                 }
             }
@@ -169,7 +176,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
             if (!gvaSuccessors.isEmpty()) {
                 // firstly, we need to update the sleep sets of all gvaSuccessors.
                 if (!ipcdporParState.isUpdated()) {
-                    // if just one gvaEdge, then ...
+                    // if just one gvaEdge, then ... (don't need to compute the dependency).
                     if (gvaSuccessors.size() > 1) {
                         ImmutableList<IPCDPORState> updatedGVASuccessors =
                                 from(gvaSuccessors)
@@ -187,6 +194,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                         }
 
                         // dependency computation.
+                        // i.e. whether any two edges depart form parState are dependent at parState.
                         for (int i = 0; i < updatedGVASuccessors.size() - 1; i++) {
                             // get A state, the in-edge of A state and the 'thread id' of the in-edge.
                             IPCDPORState ipcdporAState = updatedGVASuccessors.get(i);
@@ -196,14 +204,16 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                             // flag for judge whether A-InEdge could be an isolated transition.
                             boolean isAStateInEdgeIsolated = true;
 
-                            for (int j = i + 1; j < updatedGVASuccessors.size() - 1; j++) {
+                            for (int j = i + 1; j < updatedGVASuccessors.size(); j++) {
                                 IPCDPORState ipcdporBState = updatedGVASuccessors.get(j);
                                 CFAEdge ipcdporBStateInEdge = ipcdporBState.getTransferInEdge();
 
                                 // determine whether the transfer-info of A-state is independent with the
                                 // transfer-info of B-state.
                                 if (canSkip(ipcdporAStateInEdge, ipcdporBStateInEdge, parComputeState)) {
-                                    //
+                                    // add the A-InEdge to the sleep set of B-State.
+                                    // i.e. A-InEdge's exploration can be avoided.
+                                    ipcdporBState.sleepSetAdd(Pair.of(ipcdporAStateInEdgeThreadId, ipcdporAStateInEdge.hashCode()));
                                 } else {
                                     // if two edges are dependent, then A-InEdge can't be the isolated transition.
                                     isAStateInEdgeIsolated = false;
@@ -211,19 +221,41 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                             }
 
                             if (isAStateInEdgeIsolated) {
-                                //
+                                // A-InEdge is an isolated transition.
+
                             } else {
-                                //
+                                // A-InEdge can't be an isolated transition.
+
                             }
                         }
                     }
+                    // after updating, set as updated.
+                    ipcdporParState.setAsUpdated();
                 }
-                // after updating, set as updated.
-                ipcdporParState.setAsUpdated();
+
+                // next, check whether current transfer-in edge is in the sleep set of the parState.
+                int curTransferInEdgeThreadId = ipcdporCurState.getTransferInEdgeThreadId();
+                // an element in sleep set is a pair: <thread-id, edge_hashCode()>
+                Pair<Integer, Integer> curTransferInfo = Pair.of(
+                        curTransferInEdgeThreadId,
+                        ipcdporCurStateInEdge.hashCode()
+                );
+                if (ipcdporParState.sleepSetContains(curTransferInfo)) {
+                    // curTransferInEdge \in the sleep set of parState, so we don't need to explore this edge.
+                    stat.realRedundantTimes.inc();
+                    stat.avoidExplorationTimes.inc();
+                    return Optional.empty();
+                } else {
+                    // we need to explore this edge.
+                    return Optional.of(
+                            PrecisionAdjustmentResult.create(state, precision,
+                                    PrecisionAdjustmentResult.Action.CONTINUE));
+                }
             }
         } else {
             throw new AssertionError("IPCDPOR needs use the information of the current state's parent ARGState");
         }
+
         return Optional.of(
                 PrecisionAdjustmentResult.create(state, precision, PrecisionAdjustmentResult.Action.CONTINUE)
         );
@@ -231,6 +263,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
 
     private boolean canSkip(CFAEdge pCheckEdge, CFAEdge pCurEdge, AbstractState pComputeState) {
 
+        stat.checkSkipTimes.inc();
         DGNode checkNode = condDepGraph.getDGNode(pCheckEdge.hashCode()),
                 curNode = condDepGraph.getDGNode(pCurEdge.hashCode());
 
@@ -248,13 +281,17 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
             if (!containThreadCreateEdge
             && !pCheckEdge.getSuccessor().isLoopStart()
             && !pCurEdge.getSuccessor().isLoopStart()) {
+
+                stat.checkSkipUnIndepTimes.inc();
                 return true;
             } else {
+                stat.checkSkipFailedTimes.inc();
                 return false;
             }
         } else {
             // case 1: unconditionally dependent, we can't skip.
             if (ics.isUnCondDep()) {
+                stat.checkSkipUnDepTimes.inc();
                 return false;
             } else {
                 // case 2: conditionally independent, we need to use constraints to check whether
@@ -267,12 +304,16 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                     if (!containThreadCreateEdge
                     && !pCheckEdge.getSuccessor().isLoopStart()
                     && !pCurEdge.getSuccessor().isLoopStart()) {
+
+                        stat.checkSkipCondIndepTimes.inc();
                         return true;
                     } else {
+                        stat.checkSkipFailedTimes.inc();
                         return false;
                     }
                 } else {
                     // is conditionally dependent.
+                    stat.checkSkipCondDepTimes.inc();
                     return false;
                 }
             }
