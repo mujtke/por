@@ -12,6 +12,7 @@ import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AStatement;
 import org.sosy_lab.cpachecker.cfa.model.AStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.core.defaults.precision.VariableTrackingPrecision;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
@@ -231,11 +232,19 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                         from(rmAGVASuccessors).transform(s -> s.getTransferInEdge()).toList();
 
                                 // calculate whether A-InEdge is isolated at parComputeState.
-                                boolean AStateInEdgeIsolated = isIsolated(ipcdporAStateInEdge, rmAGVATransferInEdges, parComputeState);
+                                // TODO: here we need get BDDState-related precision rather the 'ipcdporState' precision.
+                                // BDDState-related precision is 'VariableTrackingPrecision'
+                                VariableTrackingPrecision bddPrecisionOfParState =
+                                        ((WrapperPrecision) states.getPrecision(argParState))
+                                                .retrieveWrappedPrecision(VariableTrackingPrecision.class);
+                                // TODO: if there are multi-precision in precision of ParState, we will get the first matched one.
+
+                                boolean AStateInEdgeIsolated = isIsolated(ipcdporAStateInEdge, rmAGVATransferInEdges, parComputeState, bddPrecisionOfParState);
 
                                 if (AStateInEdgeIsolated) {
                                     // if isolated, add the corresponding edges to the corresponding ipcdporState's sleep set.
-                                    // TODO: here somme edge are added twice
+                                    // if 'a' is isolated, then for {b, c}, add 'c' to b-State, add 'b' to c-State.
+                                    //
                                     for (IPCDPORState ipcdporState : rmAGVASuccessors) {
                                         ImmutableSet<Pair<Integer, Integer>> edgesAddToSleepSet =
                                                 // other edge should be added to sleep set of the current 'ipcdporState'
@@ -248,6 +257,8 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                        // add to sleep set.
                                        edgesAddToSleepSet.forEach(pair -> ipcdporState.sleepSetAdd(pair));
                                     }
+                                    // TODO: edges left could be avoided to consider.
+                                    break;
                                 } else {
                                     // if not ...
                                 }
@@ -374,9 +385,9 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
      * @throws CPATransferException
      * @throws InterruptedException
      */
-    public boolean isIsolated(final CFAEdge pCheckEdge, ImmutableList<CFAEdge> pEdges, AbstractState pComputeState) throws CPATransferException, InterruptedException {
+    public boolean isIsolated(final CFAEdge pCheckEdge, ImmutableList<CFAEdge> pEdges, AbstractState pComputeState, Precision pPrecision) throws CPATransferException, InterruptedException {
 
-        assert pEdges.size() >= 1 : "When judge isolation the size of 'pEdges' must be >= 1";
+        assert pEdges.size() >= 1 : "When judging isolatism the size of 'pEdges' must be >= 1";
         if (pComputeState instanceof BDDState) {
             BDDState bddState = (BDDState) pComputeState;
 
@@ -389,10 +400,11 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                 // for every edge p in 'pEdges', calculate whether pCheckEdge and p are independent
                 // at the successor of p.
                 for (CFAEdge p : pEdges) {
-                    //
-                    ArrayList<BDDState> bddSuccessors = (ArrayList<BDDState>) bddCPA
+                    // TODO: Precision should not be 'null', it's used in BDDTransferRelation.
+
+                    Set<BDDState> bddSuccessors = (Set<BDDState>) bddCPA
                             .getTransferRelation()
-                            .getAbstractSuccessorsForEdge(pComputeState, null, p);
+                            .getAbstractSuccessorsForEdge(pComputeState, pPrecision, p);
 
                     assert bddSuccessors.size() <= 1;
 
@@ -401,10 +413,11 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                         result = false;
                         break;
                     } else {
-                        BDDState computeState = bddSuccessors.get(0);
+                        BDDState computeState = bddSuccessors.iterator().next();
                         ImmutableList<CFAEdge> rmPFromEdges =
                                 from(pEdges).filter(s -> !s.equals(p)).toList();
-                        if(!isIsolated(pCheckEdge, rmPFromEdges, computeState)) {
+                        // TODO: when recursive, we don't change the precision: Maybe problematic.
+                        if(!isIsolated(pCheckEdge, rmPFromEdges, computeState, pPrecision)) {
                             // if 'pCheckEdge' and any edge in 'rmPFromEdges' are not independent
                             // at the successor of p.
                             result = false;
