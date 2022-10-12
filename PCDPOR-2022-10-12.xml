@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!DOCTYPE benchmark PUBLIC "+//IDN sosy-lab.org//DTD BenchExec benchmark 1.9//EN" "https://www.sosy-lab.org/benchexec/benchmark-1.9.dtd">
+<benchmark tool="cpachecker" timelimit="15 min" memlimit="15 GB" threads="1">
+
+  <resultfiles>**/*.graphml</resultfiles>
+
+  <option name="-heap">15360M</option>
+  <option name="-benchmark"/>
+  <option name="-timelimit">900 s</option>
+
+<rundefinition name="SV-COMP22_unreach-call-cpachecker-bdd_pcdpor">
+	<tasks name="ConcurrencySafety-Main">
+		<includesfile>../sv-benchmarks/c/ConcurrencySafety-Main.set</includesfile>
+		<propertyfile>../sv-benchmarks/c/properties/unreach-call.prp</propertyfile>
+
+		<option name="-config">./config/myAnalysis-concurrency-bdd-pcdpor.properties</option>
+	</tasks>
+</rundefinition>
+
+</benchmark>
+

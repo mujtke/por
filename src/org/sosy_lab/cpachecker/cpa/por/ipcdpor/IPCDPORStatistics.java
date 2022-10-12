@@ -13,6 +13,7 @@ public class IPCDPORStatistics implements Statistics {
 
     // timer
     final StatTimer ipcdporComputeDepTimer = new StatTimer("IPCDPOR dependency computation time");
+    final StatTimer additionalComputeIsolatedTimer = new StatTimer("IPCDPOR additional isolation computation time");
 
     // counter
     final StatCounter depComputeTimes = new StatCounter("IPCDPOR dependency check times");
@@ -27,6 +28,9 @@ public class IPCDPORStatistics implements Statistics {
     final StatCounter checkSkipFailedTimes = new StatCounter("IPCDPOR check-skip failed times (other cases)");
     final StatCounter realRedundantTimes = new StatCounter("IPCDPOR real redundant times");
     final StatCounter avoidExplorationTimes = new StatCounter("IPCDPOR avoid exploration times");
+    final StatCounter isolatedTransTimes = new StatCounter("IPCDPOR find additional isolated transition times");
+    final StatCounter additionalBddStateNumber = new StatCounter("Additional BDDState computation times");
+
     @Override
     public void printStatistics(PrintStream out, CPAcheckerResult.Result result, UnmodifiableReachedSet reached) {
         out.println(
@@ -36,6 +40,7 @@ public class IPCDPORStatistics implements Statistics {
                 + depComputeTimes.getUpdateCount()
                 + ")"
         );
+        out.println("IPCDPOR compute additional isolated transitions overheads: " + additionalComputeIsolatedTimer.getConsumedTime());
         out.println("IPCDPOR constraint entailing information: ");
         out.println("\tEntail:         " + depConstraintsEntailTimes.getUpdateCount());
         out.println("\tNot Entail:     " + depConstraintsNotEntailTimes.getUpdateCount());
@@ -50,6 +55,8 @@ public class IPCDPORStatistics implements Statistics {
 
         out.println("Avoid Exploration Total Times: " + avoidExplorationTimes.getUpdateCount());
         out.println("Real Redundant (By Constraint Computation): " + realRedundantTimes.getUpdateCount());
+        out.println("Additional Isolated transitions Times: " + isolatedTransTimes.getUpdateCount());
+        out.println("Additional BDDState computation Times: " + additionalBddStateNumber.getUpdateCount());
     }
 
     @Override

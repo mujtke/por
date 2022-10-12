@@ -221,9 +221,12 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                             }
 
                             if (AStateInEdgeMaybeIsolated) {
+
+                                stat.additionalComputeIsolatedTimer.start();
                                 // A-InEdge maybe an isolated transition.
                                 // if just two gvaSuccessors, pcdpor can guarantee the optimality.
                                 if (updatedGVASuccessors.size() <= 2) {
+                                    stat.additionalComputeIsolatedTimer.stop();
                                     continue;
                                 }
                                 ImmutableList<IPCDPORState> rmAGVASuccessors =
@@ -245,6 +248,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                     // if isolated, add the corresponding edges to the corresponding ipcdporState's sleep set.
                                     // if 'a' is isolated, then for {b, c}, add 'c' to b-State, add 'b' to c-State.
                                     //
+                                    stat.isolatedTransTimes.inc();
                                     for (IPCDPORState ipcdporState : rmAGVASuccessors) {
                                         ImmutableSet<Pair<Integer, Integer>> edgesAddToSleepSet =
                                                 // other edge should be added to sleep set of the current 'ipcdporState'
@@ -258,9 +262,11 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                        edgesAddToSleepSet.forEach(pair -> ipcdporState.sleepSetAdd(pair));
                                     }
                                     // TODO: edges left could be avoided to consider.
+                                    stat.additionalComputeIsolatedTimer.stop();
                                     break;
                                 } else {
                                     // if not ...
+                                    stat.additionalComputeIsolatedTimer.stop();
                                 }
                             } else {
                                 // A-InEdge can't be an isolated transition.
@@ -405,6 +411,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                     Set<BDDState> bddSuccessors = (Set<BDDState>) bddCPA
                             .getTransferRelation()
                             .getAbstractSuccessorsForEdge(pComputeState, pPrecision, p);
+                    stat.additionalBddStateNumber.inc();
 
                     assert bddSuccessors.size() <= 1;
 
