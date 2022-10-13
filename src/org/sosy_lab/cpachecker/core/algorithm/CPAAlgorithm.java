@@ -47,6 +47,7 @@ import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGMergeJoinCPAEnabledAnalysis;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.por.ipcdpor.IPCDPORState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
@@ -313,7 +314,11 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       }
     }
 
-    System.out.println(((ARGState) state).getStateId());
+//    System.out.println(((ARGState) state).getStateId());
+    if (((ARGState) state).getStateId() == 39) {
+      AbstractState ipcdporState = AbstractStates.extractStateByType(state, IPCDPORState.class);
+//      System.out.println("");
+    }
 
     // if (!((ARGState) state).getParents().isEmpty()) {
     // ARGState argParState = ((ARGState) state).getParents().iterator().next();
@@ -362,11 +367,6 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       logger.log(Level.FINER, "Considering successor of current state");
       logger.log(Level.ALL, "Successor of", state, "\nis", successor);
 
-      if (state instanceof ARGState && ((ARGState) successor).getStateId() == 3706) {
-        int k = 0;
-        ++k;
-        // System.out.println(((ARGState) state).getStateId());
-      }
       // @Nullable
       // ThreadingIntpState curState =
       // AbstractStates.extractStateByType(successor, ThreadingIntpState.class);
@@ -390,10 +390,10 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       Precision successorPrecision = precAdjustmentResult.precision();
       Action action = precAdjustmentResult.action();
 
-      if (state instanceof ARGState && ((ARGState) successor).getStateId() == 30) {
-        int k = 0;
-        ++k;
-      }
+//      if (state instanceof ARGState && ((ARGState) successor).getStateId() == 30) {
+//        int k = 0;
+//        ++k;
+//      }
 
       if (action == Action.BREAK) {
         stats.stopTimer.start();
