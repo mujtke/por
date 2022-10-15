@@ -12,9 +12,10 @@
 *~
 __pycache__
 a.out
+*.log
 
 /.checkstyle
-/.classpath
+.classpath
 /.factorypath.template
 /.flake8
 /.gitlab-ci.yml
