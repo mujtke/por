@@ -44,26 +44,32 @@ public class IPCDPORState implements AbstractState {
         return curState.hashCode() + transferInEdgeType.hashCode() + sleepSet.hashCode();
     }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == this) {
-            return true;
-        } else {
-            if (obj != null && obj instanceof IPCDPORState) {
-                IPCDPORState other = (IPCDPORState) obj;
-                if ((curState == null && other.curState == null)
-                || (curState != null && other.curState != null)) {
-                    if (curState.equals(other.curState)
-                    && transferInEdgeType.equals(other.transferInEdgeType)
-                    && sleepSet.equals(other.sleepSet)) {
-                        return true;
-                    }
-                }
-            }
-        }
+//    @Override
+//    public boolean equals(Object obj) {
+//        if (obj == this) {
+//            return true;
+//        } else {
+//            if (obj != null && obj instanceof IPCDPORState) {
+//                IPCDPORState other = (IPCDPORState) obj;
+//                if ((curState == null && other.curState == null)
+//                || (curState != null && other.curState != null)) {
+//                    if (curState.equals(other.curState)
+//                    && transferInEdgeType.equals(other.transferInEdgeType)
+//                    && sleepSet.equals(other.sleepSet)) {
+//                        return true;
+//                    }
+//                }
+//            }
+//        }
+//
+//        return false;
+//    }
 
-        return false;
+    @Override
+    public boolean equals(Object pOjb) {
+        return true;
     }
+
 
     @Override
     public String toString() {

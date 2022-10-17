@@ -6,6 +6,7 @@ import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
@@ -31,6 +32,7 @@ import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
 import java.util.*;
 
+@Options(prefix = "cpa.por.ipcdpor")
 public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
 
     private final ConditionalDepGraph condDepGraph;
@@ -41,6 +43,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
     private final AbstractICComputer icComputer;
     // TODO: we need BDDCPA to calculate the independence at states in future
     private final BDDCPA bddCPA;
+
 
     private IPCDPORStatistics stat;
 
@@ -193,6 +196,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                             throw new CPAException("Unsupported ICComputer: " + icComputer.getClass().toString());
                         }
 
+//                        System.out.println(((ARGState) fullState).getStateId() + "");
                         // dependency computation.
                         // i.e. whether any two edges depart form parState are dependent at parState.
                         for (int i = 0; i < updatedGVASuccessors.size() - 1; i++) {
@@ -201,7 +205,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                             CFAEdge ipcdporAStateInEdge = ipcdporAState.getTransferInEdge();
                             int ipcdporAStateInEdgeThreadId = ipcdporAState.getTransferInEdgeThreadId();
 
-                            // flag for judge whether A-InEdge could be an isolated transition.
+                            // flag for judging whether A-InEdge could be an isolated transition.
                             boolean AStateInEdgeMaybeIsolated = true;
 
                             for (int j = i + 1; j < updatedGVASuccessors.size(); j++) {
@@ -220,6 +224,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                 }
                             }
 
+                            //
                             if (AStateInEdgeMaybeIsolated) {
 
                                 stat.additionalComputeIsolatedTimer.start();
@@ -229,8 +234,13 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                     stat.additionalComputeIsolatedTimer.stop();
                                     continue;
                                 }
+                                // TODO: 'equals' method of IPCDPORState seems to have some problem.
+//                                ImmutableList<IPCDPORState> rmAGVASuccessors =
+//                                        from(updatedGVASuccessors).filter(s -> !s.equals(ipcdporAState)).toList();
+//                                ImmutableList<CFAEdge> rmAGVATransferInEdges =
+//                                        from(rmAGVASuccessors).transform(s -> s.getTransferInEdge()).toList();
                                 ImmutableList<IPCDPORState> rmAGVASuccessors =
-                                        from(updatedGVASuccessors).filter(s -> !s.equals(ipcdporAState)).toList();
+                                        from(updatedGVASuccessors).filter(s -> s.hashCode() != ipcdporAState.hashCode()).toList();
                                 ImmutableList<CFAEdge> rmAGVATransferInEdges =
                                         from(rmAGVASuccessors).transform(s -> s.getTransferInEdge()).toList();
 
@@ -248,11 +258,28 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                     // if isolated, add the corresponding edges to the corresponding ipcdporState's sleep set.
                                     // if 'a' is isolated, then for {b, c}, add 'c' to b-State, add 'b' to c-State.
                                     //
+
+                                    // for debug:
+//                                    System.out.println("\nIsolated Transition and Other transitions:");
+//                                    System.out.println("\tIsolated t: \n\t\t" + ipcdporAStateInEdge);
+//                                    System.out.println("\tOther t: ");
+//                                    rmAGVATransferInEdges.forEach(edge -> System.out.println("\t\t" + edge.toString())
+//                                    );
+//                                    System.out.println("\n");
+
                                     stat.isolatedTransTimes.inc();
                                     for (IPCDPORState ipcdporState : rmAGVASuccessors) {
+                                        // TODO: 'equals' method of IPCDPORState seems to have some problem.
+                                        // other edge should be added to sleep set of the current 'ipcdporState'
+//                                        ImmutableSet<Pair<Integer, Integer>> edgesAddToSleepSet =
+//                                                from(rmAGVASuccessors).filter(s -> !s.equals(ipcdporState))
+//                                                        .transform(s -> {
+//                                                            int edgeThreadId = s.getTransferInEdgeThreadId();
+//                                                            CFAEdge edge = s.getTransferInEdge();
+//                                                            return Pair.of(edgeThreadId, edge.hashCode());
+//                                                        }).toSet();
                                         ImmutableSet<Pair<Integer, Integer>> edgesAddToSleepSet =
-                                                // other edge should be added to sleep set of the current 'ipcdporState'
-                                                from(rmAGVASuccessors).filter(s -> !s.equals(ipcdporState))
+                                                from(rmAGVASuccessors).filter(s -> s.hashCode() != ipcdporState.hashCode())
                                                         .transform(s -> {
                                                             int edgeThreadId = s.getTransferInEdgeThreadId();
                                                             CFAEdge edge = s.getTransferInEdge();
@@ -260,9 +287,16 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                                         }).toSet();
                                        // add to sleep set.
                                        edgesAddToSleepSet.forEach(pair -> ipcdporState.sleepSetAdd(pair));
+                                       // debug
+//                                        System.out.println("\nState: " + ipcdporState.toString());
+//                                        System.out.println("Add to Sleep:");
+//                                        from(rmAGVASuccessors).filter(s -> s.hashCode() != ipcdporState.hashCode())
+//                                                .transform(s -> s.getTransferInEdge()).toSet()
+//                                                .forEach(e -> System.out.println(e.toString()));
                                     }
-                                    // TODO: edges left could be avoided to consider.
+                                    // TODO: edges left could be avoided to explore.
                                     stat.additionalComputeIsolatedTimer.stop();
+                                    // TODO: if current edge is an isolated edge, whether we can skip other edges directly.
                                     break;
                                 } else {
                                     // if not ...
@@ -277,6 +311,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                     // after updating, set as updated.
                     ipcdporParState.setAsUpdated();
                 }
+//                System.out.println("");
 
                 // next, check whether current transfer-in edge is in the sleep set of the parState.
                 int curTransferInEdgeThreadId = ipcdporCurState.getTransferInEdgeThreadId();
@@ -307,6 +342,13 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
     }
 
     private boolean canSkip(CFAEdge pCheckEdge, CFAEdge pCurEdge, AbstractState pComputeState) {
+
+//        System.out.println(
+//                ""
+//                + "/" + pCheckEdge.toString()
+//                + "\n"
+//                + "\\" + pCurEdge.toString()
+//        );
 
         stat.checkSkipTimes.inc();
         DGNode checkNode = condDepGraph.getDGNode(pCheckEdge.hashCode()),
