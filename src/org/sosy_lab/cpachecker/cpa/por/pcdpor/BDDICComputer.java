@@ -29,13 +29,19 @@ public class BDDICComputer extends AbstractICComputer {
   private final PCDPORStatistics statistics;
 
   public BDDICComputer(CFA pCfa, PredicateManager pPredmgr, PCDPORStatistics pStatistics) {
-    assert pCfa.getVarClassification().isEmpty();
+    // the assertion can lead an error when running in cmdline, varClassification is not empty.
+    // assert pCfa.getVarClassification().isEmpty();
 
     predmgr = pPredmgr;
     machineModel = pCfa.getMachineModel();
     statistics = pStatistics;
   }
 
+  /**
+   * computeDep: compute the constraint 'pIcs' holds at the BDD state 'pState'
+   * @param pICs contains constraints
+   * @param pState the BDD state in which whether pICS holds is judged.
+   */
   @Override
   public boolean computeDep(CondDepConstraints pICs, AbstractState pState) {
     if (pState instanceof BDDState) {

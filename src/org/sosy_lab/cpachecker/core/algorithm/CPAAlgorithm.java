@@ -29,6 +29,7 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.common.time.Timer;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.CPAcheckerResult.Result;
 import org.sosy_lab.cpachecker.core.defaults.MergeSepOperator;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -314,37 +315,37 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       }
     }
 
-//    System.out.println(((ARGState) state).getStateId());
-    if (((ARGState) state).getStateId() == 39) {
+    System.out.println(((ARGState) state).getStateId());
+    if (((ARGState) state).getStateId() > 0) {
       AbstractState ipcdporState = AbstractStates.extractStateByType(state, IPCDPORState.class);
 //      System.out.println("");
     }
 
-    // if (!((ARGState) state).getParents().isEmpty()) {
-    // ARGState argParState = ((ARGState) state).getParents().iterator().next();
-    // CFAEdge edge = argParState.getEdgeToChild((ARGState) state);
-    //
-    // int curStateId = ((ARGState) state).getStateId(), parStateId = argParState.getStateId();
-    // System.out.println(
-    // ""
-    // + curStateId
-    // + " [fillcolor=\"cornflowerblue\" shape=\"box\" label=\"s"
-    // + curStateId
-    // + "\" id=\""
-    // + curStateId
-    // + "\"]");
-    // System.out.println(
-    // parStateId
-    // + " -> "
-    // + curStateId
-    // + " [label=\""
-    // + edge
-    // + "\" id=\""
-    // + parStateId
-    // + " -> "
-    // + curStateId
-    // + "\"]");
-    // }
+//     if (!((ARGState) state).getParents().isEmpty()) {
+//     ARGState argParState = ((ARGState) state).getParents().iterator().next();
+//     CFAEdge edge = argParState.getEdgeToChild((ARGState) state);
+//
+//     int curStateId = ((ARGState) state).getStateId(), parStateId = argParState.getStateId();
+//     System.out.println(
+//     ""
+//     + curStateId
+//     + " [fillcolor=\"cornflowerblue\" shape=\"box\" label=\"s"
+//     + curStateId
+//     + "\" id=\""
+//     + curStateId
+//     + "\"]");
+//     System.out.println(
+//     parStateId
+//     + " -> "
+//     + curStateId
+//     + " [label=\""
+//     + edge
+//     + "\" id=\""
+//     + parStateId
+//     + " -> "
+//     + curStateId
+//     + "\"]");
+//     }
 
     stats.transferTimer.start();
     Collection<? extends AbstractState> successors;

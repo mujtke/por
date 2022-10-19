@@ -13,6 +13,9 @@
 __pycache__
 a.out
 *.log
+*.dot
+*.pdf 
+*.txt
 
 /.checkstyle
 .classpath

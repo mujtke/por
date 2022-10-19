@@ -53,6 +53,7 @@ public class PCDPORState implements AbstractState {
     return curState.hashCode() + transferInEdgeType.hashCode() + sleepSet.hashCode();
   }
 
+  // TODO: this equals method seems to have problem.
   @Override
   public boolean equals(Object pObj) {
     return true;

@@ -2015,6 +2015,23 @@ cpa.por.bppor.followFunctionCalls = true
 # block to get the core dependent-related edge
 cpa.por.bppor.useDetBlockCache = false
 
+# Which type of state should be used to compute the constrained dependency at
+# certain state?
+# - bdd: BDDState (default)
+# - predicate: PredicateAbstractState
+# NOTICE: Corresponding CPA should be used!
+cpa.por.ipcdpor.depComputationStateType = "BDD"
+  allowed values: [BDD, PREDICATE]
+
+# With this option enabled, function calls that occur in the CFA are
+# followed. By disabling this option one can traverse a function without
+# following function calls (in this case FunctionSummaryEdges are used)
+cpa.por.ipcdpor.followFunctionCalls = true
+
+# With this option enabled, thread creation edge willbe regarded as a normal
+# edge, which may reduces the redundantinterleavings
+cpa.por.ipcdpor.regardThreadCreationAsNormalEdge = false
+
 # With this option enabled, function calls that occur in the CFA are
 # followed. By disabling this option one can traverse a function without
 # following function calls (in this case FunctionSummaryEdges are used)

@@ -164,6 +164,7 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
               throw new CPAException("Unsupported ICComputer: " + icComputer.getClass().toString());
             }
 
+//            System.out.println(((ARGState) pFullState).getStateId() + "");
             for (int i = 0; i < updateGVASuccessors.size() - 1; ++i) {
               PCDPORState cpdporAState = updateGVASuccessors.get(i);
               CFAEdge cpdporAStateEdge = cpdporAState.getCurrentTransferInEdge();
@@ -185,6 +186,7 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
           }
           cpdporParState.setAsUpdated();
         }
+//        System.out.println("");
 
         // check whether current transfer-in edge is in the sleep set of parent state.
         int curTransInThreadId = cpdporCurState.getCurrentTransferInEdgeThreadId();
@@ -214,6 +216,14 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
   }
 
   private boolean canSkip(CFAEdge pCheckEdge, CFAEdge pCurEdge, AbstractState pComputeState) {
+
+//    System.out.println(
+//            ""
+//                    + "/" + pCheckEdge.toString()
+//                    + "\n"
+//                    + "\\" + pCurEdge.toString()
+//    );
+
     statistics.checkSkipTimes.inc();
     DGNode depCheckNode = condDepGraph.getDGNode(pCheckEdge.hashCode()),
         depCurNode = condDepGraph.getDGNode(pCurEdge.hashCode());
@@ -238,7 +248,7 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
         return false;
       }
     } else {
-      // unconditional independent, we cannot skip.
+      // unconditional dependent, we cannot skip.
       if (ics.isUnCondDep()) {
         statistics.checkSkipUnDepTimes.inc();
         return false;
