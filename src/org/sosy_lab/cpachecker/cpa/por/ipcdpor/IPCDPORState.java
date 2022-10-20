@@ -3,6 +3,7 @@ package org.sosy_lab.cpachecker.cpa.por.ipcdpor;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.Graphable;
 import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
 import org.sosy_lab.cpachecker.cpa.por.EdgeType;
 import org.sosy_lab.cpachecker.cpa.por.ppor.PeepholeState;
@@ -12,7 +13,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public class IPCDPORState implements AbstractState {
+public class IPCDPORState implements AbstractState, Graphable {
 
     private PeepholeState curState;
     private EdgeType transferInEdgeType;
@@ -133,5 +134,18 @@ public class IPCDPORState implements AbstractState {
      */
     public void sleepSetAdd(Pair<Integer, Integer> targetPair) {
         sleepSet.add(targetPair);
+    }
+
+    @Override
+    public String toDOTLabel() {
+
+        StringBuilder str = new StringBuilder();
+        str.append(sleepSet.toString());
+        return str.toString();
+    }
+
+    @Override
+    public boolean shouldBeHighlighted() {
+        return true;
     }
 }

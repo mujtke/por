@@ -224,8 +224,8 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                 }
                             }
 
-                            //
-                            if (AStateInEdgeMaybeIsolated) {
+                            // TODO: p maybe isolated only when p&q, p&r, q&r are independent at current ParState.
+                            if ((i == updatedGVASuccessors.size() - 1) && AStateInEdgeMaybeIsolated) {
 
                                 stat.additionalComputeIsolatedTimer.start();
                                 // A-InEdge maybe an isolated transition.
@@ -257,27 +257,9 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                 if (AStateInEdgeIsolated) {
                                     // if isolated, add the corresponding edges to the corresponding ipcdporState's sleep set.
                                     // if 'a' is isolated, then for {b, c}, add 'c' to b-State, add 'b' to c-State.
-                                    //
-
-                                    // for debug:
-//                                    System.out.println("\nIsolated Transition and Other transitions:");
-//                                    System.out.println("\tIsolated t: \n\t\t" + ipcdporAStateInEdge);
-//                                    System.out.println("\tOther t: ");
-//                                    rmAGVATransferInEdges.forEach(edge -> System.out.println("\t\t" + edge.toString())
-//                                    );
-//                                    System.out.println("\n");
 
                                     stat.isolatedTransTimes.inc();
                                     for (IPCDPORState ipcdporState : rmAGVASuccessors) {
-                                        // TODO: 'equals' method of IPCDPORState seems to have some problem.
-                                        // other edge should be added to sleep set of the current 'ipcdporState'
-//                                        ImmutableSet<Pair<Integer, Integer>> edgesAddToSleepSet =
-//                                                from(rmAGVASuccessors).filter(s -> !s.equals(ipcdporState))
-//                                                        .transform(s -> {
-//                                                            int edgeThreadId = s.getTransferInEdgeThreadId();
-//                                                            CFAEdge edge = s.getTransferInEdge();
-//                                                            return Pair.of(edgeThreadId, edge.hashCode());
-//                                                        }).toSet();
                                         ImmutableSet<Pair<Integer, Integer>> edgesAddToSleepSet =
                                                 from(rmAGVASuccessors).filter(s -> s.hashCode() != ipcdporState.hashCode())
                                                         .transform(s -> {
@@ -287,17 +269,7 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                                                         }).toSet();
                                        // add to sleep set.
                                        edgesAddToSleepSet.forEach(pair -> ipcdporState.sleepSetAdd(pair));
-                                       // debug
-//                                        System.out.println("\nState: " + ipcdporState.toString());
-//                                        System.out.println("Add to Sleep:");
-//                                        from(rmAGVASuccessors).filter(s -> s.hashCode() != ipcdporState.hashCode())
-//                                                .transform(s -> s.getTransferInEdge()).toSet()
-//                                                .forEach(e -> System.out.println(e.toString()));
                                     }
-                                    // TODO: edges left could be avoided to explore.
-                                    stat.additionalComputeIsolatedTimer.stop();
-                                    // TODO: if current edge is an isolated edge, whether we can skip other edges directly.
-                                    break;
                                 } else {
                                     // if not ...
                                     stat.additionalComputeIsolatedTimer.stop();

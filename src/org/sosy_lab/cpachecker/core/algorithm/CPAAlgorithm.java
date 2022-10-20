@@ -315,7 +315,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       }
     }
 
-    System.out.println(((ARGState) state).getStateId());
+//    System.out.println(((ARGState) state).getStateId());
     if (((ARGState) state).getStateId() > 0) {
       AbstractState ipcdporState = AbstractStates.extractStateByType(state, IPCDPORState.class);
 //      System.out.println("");
