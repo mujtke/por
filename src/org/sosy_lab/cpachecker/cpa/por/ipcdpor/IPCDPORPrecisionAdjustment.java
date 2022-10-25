@@ -182,10 +182,22 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                 if (!ipcdporParState.isUpdated()) {
                     // if just one gvaEdge, then ... (don't need to compute the dependency).
                     if (gvaSuccessors.size() > 1) {
+//                        ImmutableList<IPCDPORState> updatedGVASuccessors =
+//                                from(gvaSuccessors)
+//                                        .transform(s -> AbstractStates.extractStateByType(s, IPCDPORState.class))
+//                                        .toList();
+
+                        // sorted by tid of 'transferInEdge'
                         ImmutableList<IPCDPORState> updatedGVASuccessors =
                                 from(gvaSuccessors)
                                         .transform(s -> AbstractStates.extractStateByType(s, IPCDPORState.class))
-                                        .toList();
+                                        .toSortedList(new Comparator<IPCDPORState>() {
+                                            public int compare(IPCDPORState A, IPCDPORState B) {
+                                                int ATid = A.getTransferInEdgeThreadId(),
+                                                        BTid = B.getTransferInEdgeThreadId();
+                                                return ATid - BTid;
+                                            }
+                                        });
 
                         // obtain parent computation state to determine the dependency of successor transitions.
                         AbstractState parComputeState = null;
@@ -212,14 +224,6 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                         boolean[] inEdgesMaybeIsolated = new boolean[updatedGVASuccessors.size()];
                         Arrays.fill(inEdgesMaybeIsolated, true);
 
-                        // sorted by tid of 'TransferInEdge'
-                        Collections.sort(updatedGVASuccessors, new Comparator<IPCDPORState>() {
-                           public int compare(IPCDPORState stateA, IPCDPORState stateB) {
-                               int ATid = stateA.getTransferInEdgeThreadId(),
-                                       BTid = stateB.getTransferInEdgeThreadId();
-                               return ATid - BTid;
-                           }
-                        });
 
                         for (int i = 0; i < updatedGVASuccessors.size() - 1; i++) {
                             // get A state, the in-edge of A state and the 'thread id' of the in-edge.
