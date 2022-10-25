@@ -213,13 +213,14 @@ public class IPCDPORPrecisionAdjustment implements PrecisionAdjustment {
                         Arrays.fill(inEdgesMaybeIsolated, true);
 
                         // sorted by tid of 'TransferInEdge'
-                        updatedGVASuccessors.stream().sorted(new Comparator<IPCDPORState> (){
-                            public int compare(IPCDPORState stateA, IPCDPORState stateB) {
-                                int ATid = stateA.getTransferInEdgeThreadId(),
-                                        BTid = stateB.getTransferInEdgeThreadId();
-                                return ATid - BTid;
-                            }
+                        Collections.sort(updatedGVASuccessors, new Comparator<IPCDPORState>() {
+                           public int compare(IPCDPORState stateA, IPCDPORState stateB) {
+                               int ATid = stateA.getTransferInEdgeThreadId(),
+                                       BTid = stateB.getTransferInEdgeThreadId();
+                               return ATid - BTid;
+                           }
                         });
+
                         for (int i = 0; i < updatedGVASuccessors.size() - 1; i++) {
                             // get A state, the in-edge of A state and the 'thread id' of the in-edge.
                             IPCDPORState ipcdporAState = updatedGVASuccessors.get(i);
