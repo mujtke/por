@@ -8,10 +8,15 @@ import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
 import org.sosy_lab.cpachecker.cpa.por.EdgeType;
 import org.sosy_lab.cpachecker.cpa.por.ppor.PeepholeState;
 import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.dependence.DGNode;
+import org.sosy_lab.cpachecker.util.dependence.conditional.ConditionalDepGraph;
+import org.sosy_lab.cpachecker.util.dependence.conditional.EdgeVtx;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+
 
 public class IPCDPORState implements AbstractState, Graphable {
 
@@ -139,8 +144,16 @@ public class IPCDPORState implements AbstractState, Graphable {
     @Override
     public String toDOTLabel() {
 
+        ConditionalDepGraph condDepGraph = GlobalInfo.getInstance().getEdgeInfo().getCondDepGraph();
         StringBuilder str = new StringBuilder();
-        str.append(sleepSet.toString());
+        str.append("[");
+        sleepSet.forEach(pair -> {
+            DGNode dgNode = condDepGraph.getDGNode(pair.getSecond());
+            assert dgNode instanceof EdgeVtx;
+            CFAEdge blockStartEdge = ((EdgeVtx) dgNode).getBlockStartEdge();
+            str.append("(" + pair.getFirst() + ", " + blockStartEdge.toString() + ")\n");
+        });
+        str.append("]");
         return str.toString();
     }
 

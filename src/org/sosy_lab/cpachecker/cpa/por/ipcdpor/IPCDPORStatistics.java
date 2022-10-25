@@ -30,6 +30,7 @@ public class IPCDPORStatistics implements Statistics {
     final StatCounter avoidExplorationTimes = new StatCounter("IPCDPOR avoid exploration times");
     final StatCounter isolatedTransTimes = new StatCounter("IPCDPOR find additional isolated transition times");
     final StatCounter additionalBddStateNumber = new StatCounter("Additional BDDState computation times");
+    final StatCounter isolatedRemoveEdgesNumber = new StatCounter("Isolated computation prunes edges times");
 
     @Override
     public void printStatistics(PrintStream out, CPAcheckerResult.Result result, UnmodifiableReachedSet reached) {
@@ -52,6 +53,7 @@ public class IPCDPORStatistics implements Statistics {
         out.println("\tConditionally Dependent Times:      " + checkSkipCondDepTimes.getUpdateCount());
         out.println("\tConditionally Independent Times:    " + checkSkipCondIndepTimes.getUpdateCount());
         out.println("\tOther Cases (loop start or thread creation) Times: " + checkSkipFailedTimes.getUpdateCount());
+        out.println("isolated computation remove edges: " + isolatedRemoveEdgesNumber.getUpdateCount());
 
         out.println("Avoid Exploration Total Times: " + avoidExplorationTimes.getUpdateCount());
         out.println("Real Redundant (By Constraint Computation): " + realRedundantTimes.getUpdateCount());
