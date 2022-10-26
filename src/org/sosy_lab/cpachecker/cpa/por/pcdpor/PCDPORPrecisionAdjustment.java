@@ -13,10 +13,9 @@ import static com.google.common.collect.FluentIterable.from;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+
+import java.util.*;
+
 import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AFunctionCall;
 import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
@@ -150,10 +149,22 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
         // firstly, we need to update all the sleep set of all gvaSuccessors.
         if (!cpdporParState.isUpdated()) {
           if (gvaSuccessors.size() > 1) {
+//            ImmutableList<PCDPORState> updateGVASuccessors =
+//                from(gvaSuccessors)
+//                    .transform(s -> AbstractStates.extractStateByType(s, PCDPORState.class))
+//                    .toList();
+            // sorted by tid of 'transferInEdge'
             ImmutableList<PCDPORState> updateGVASuccessors =
-                from(gvaSuccessors)
-                    .transform(s -> AbstractStates.extractStateByType(s, PCDPORState.class))
-                    .toList();
+                    from(gvaSuccessors)
+                            .transform(s -> AbstractStates.extractStateByType(s, PCDPORState.class))
+                            .toSortedList(new Comparator<PCDPORState>() {
+                              public int compare(PCDPORState A, PCDPORState B) {
+                                int ATid = A.getCurrentTransferInEdgeThreadId(),
+                                        BTid = B.getCurrentTransferInEdgeThreadId();
+                                return ATid - BTid;
+                              }
+                            });
+
             // obtain parent computation state to determine the dependency of successor transitions.
             AbstractState parComputeState = null;
             if (icComputer instanceof BDDICComputer) {
@@ -165,6 +176,13 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
             }
 
 //            System.out.println(((ARGState) pFullState).getStateId() + "");
+            // debug.
+//            System.out.println("\n---------------" + argParStateId +  ": Edges ----------------");
+//            updateGVASuccessors.forEach(s -> {
+//              CFAEdge inEdge = s.getCurrentTransferInEdge();
+//              System.out.println(inEdge.toString());
+//            });
+//            System.out.println("******** pruned ********");
             for (int i = 0; i < updateGVASuccessors.size() - 1; ++i) {
               PCDPORState cpdporAState = updateGVASuccessors.get(i);
               CFAEdge cpdporAStateEdge = cpdporAState.getCurrentTransferInEdge();
@@ -180,6 +198,8 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
                   // the transfer-info of A-state can avoid.
                   cpdporBState
                       .addThreadInfoSleep(Pair.of(cpdporAStateThrdId, cpdporAStateEdge.hashCode()));
+                  // debug.
+//                  System.out.println("\t" + cpdporAStateEdge);
                 }
               }
             }

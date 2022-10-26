@@ -14,12 +14,17 @@ import java.util.Set;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.Graphable;
 import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
 import org.sosy_lab.cpachecker.cpa.por.EdgeType;
 import org.sosy_lab.cpachecker.cpa.por.ppor.PeepholeState;
 import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.dependence.DGNode;
+import org.sosy_lab.cpachecker.util.dependence.conditional.ConditionalDepGraph;
+import org.sosy_lab.cpachecker.util.dependence.conditional.EdgeVtx;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
-public class PCDPORState implements AbstractState {
+public class PCDPORState implements AbstractState, Graphable {
 
   private PeepholeState curState;
   private EdgeType transferInEdgeType;
@@ -144,4 +149,27 @@ public class PCDPORState implements AbstractState {
     return curState.getThreadCounter();
   }
 
+  // added by yzc-10.25
+  @Override
+  public String toDOTLabel() {
+
+    StringBuilder str = new StringBuilder();
+    ConditionalDepGraph condDepGraph = GlobalInfo.getInstance().getEdgeInfo().getCondDepGraph();
+
+    str.append("[");
+    sleepSet.forEach(pair -> {
+      DGNode dgNode = condDepGraph.getDGNode(pair.getSecond());
+      assert dgNode instanceof EdgeVtx;
+      CFAEdge blockStartEdge = ((EdgeVtx) dgNode).getBlockStartEdge();
+      str.append("(" + pair.getFirst() + ", " + blockStartEdge.toString() + ")\n");
+    });
+    str.append("]");
+
+    return str.toString();
+  }
+
+  @Override
+  public boolean shouldBeHighlighted() {
+    return true;
+  }
 }
