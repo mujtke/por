@@ -161,7 +161,7 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
                               public int compare(PCDPORState A, PCDPORState B) {
                                 int ATid = A.getCurrentTransferInEdgeThreadId(),
                                         BTid = B.getCurrentTransferInEdgeThreadId();
-                                return ATid - BTid;
+                                return BTid - ATid;
                               }
                             });
 
