@@ -2,7 +2,6 @@ package org.sosy_lab.cpachecker.cpa.por.xpor;
 
 import static com.google.common.collect.FluentIterable.from;
 
-import ap.Prover;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -30,13 +29,10 @@ import org.sosy_lab.cpachecker.cpa.locations.LocationsCPA;
 import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
 import org.sosy_lab.cpachecker.cpa.por.EdgeType;
 import org.sosy_lab.cpachecker.cpa.por.pcdpor.AbstractICComputer;
-import org.sosy_lab.cpachecker.cpa.predicate.PredicateAbstractState;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateCPA;
 import org.sosy_lab.cpachecker.cpa.threading.ThreadingState;
-import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.dependence.DGNode;
 import org.sosy_lab.cpachecker.util.dependence.conditional.CondDepConstraints;
 import org.sosy_lab.cpachecker.util.dependence.conditional.ConditionalDepGraph;
@@ -113,6 +109,14 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             throw new InvalidConfigurationException("Try to get cpas failed!");
         }
     }
+
+    public XPORTransferRelation() {
+        locationsCPA = null;
+        condDepGraph = null;
+        icComputer = null;
+        stats = null;
+    }
+
     @Override
     public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(AbstractState state, Precision precision, CFAEdge cfaEdge) throws CPATransferException, InterruptedException {
 
@@ -127,37 +131,47 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             return ImmutableList.of();
         }
 
-        // get the new locs.
+//        // get the new locs.
         LocationsState newLocs = (LocationsState) newLocStates.iterator().next();
-        Map<String, Integer> oldThreadIdNumbers = curState.getThreadIdNumbers();
+//        Map<String, Integer> oldThreadIdNumbers = curState.getThreadIdNumbers();
+//
+//        // update the thread ids and their number.
+//        Pair<Integer, Map<String, Integer>> newThreadInfo =
+//                updateThreadIdNumber(curState.getThreadCounter(), oldThreadIdNumbers, newLocs);
+//        int newThreadCounter = newThreadInfo.getFirstNotNull();
+//        Map<String, Integer> newThreadIdNumbers = newThreadInfo.getSecondNotNull();
+//
+//        // if 'pCfaEdge' in curState's sleepSet or isolatedSleepSet, return empty.
+//        Pair<Integer, Integer> curEdge = Pair.of(newThreadCounter, cfaEdge.hashCode());
 
-        // update the thread ids and their number.
-        Pair<Integer, Map<String, Integer>> newThreadInfo =
-                updateThreadIdNumber(curState.getThreadCounter(), oldThreadIdNumbers, newLocs);
-        int newThreadCounter = newThreadInfo.getFirstNotNull();
-        Map<String, Integer> newThreadIdNumbers = newThreadInfo.getSecondNotNull();
+        int curEdgeTid = curState.getThreadIdNumbers().get(cfaEdge.hashCode()).getSecondNotNull();
+        Pair<Integer, Integer> curEdge = Pair.of(curEdgeTid, cfaEdge.hashCode());
 
-        // if 'pCfaEdge' in curState's sleep set, return empty.
-        Pair<Integer, Integer> curEdge = Pair.of(newThreadCounter, cfaEdge.hashCode());
-        Set<List<Pair<Integer, Integer>>> curStateSleepSet = curState.getSleepSet();
-        if (curStateSleepSet.contains(ImmutableList.of(curEdge))) {
+        // if curEdge in curState's sleepSet or isolatedSleepSet, we can return empty.
+        // in curState's sleepSet means that curEdge is in sleepSet as a single element rather like 'p.q'.
+        if (curState.sleepSetContain(curEdge) || curState.isolatedSleepSetContains(curEdge)) {
             return ImmutableList.of();
         }
 
         // else, updated the sleep set and return.
+        // generate the successor with empty sleepSet and isolatedSleepSet.
+        // TODO: delay the update to 'strengthen' method: sleepSet, isolatedSleepSet, threadIdNumbers
         XPORState successor = new XPORState(
-                newThreadCounter,
+                curState.getThreadCounter(),
                 cfaEdge,
                 newLocs,
-                newThreadIdNumbers,
-                curState.getSleepSet()
+                curState.getThreadIdNumbers(),
+                new HashSet<>(),
+                new HashSet<>()
         );
-        successor.getSleepSet().forEach(l -> {
-            assert l.size() >= 1 : "every list in sleep set should have one element at least";
-            if(l.get(0).equals(curEdge)) {
-                l.remove(curEdge);
-            }
-        });
+        // TODO: if curEdge is 'gvaEdge' then updated the sleep set like:
+        // update 'p.q' -> 'q' in curState's successor. Other single edge like 'q' are removed.
+        if (determineEdgeType(cfaEdge).equals(EdgeType.GVAEdge)) {
+            successor.updateSleepSet(curState.getSleepSet(), curEdge);
+        } else {
+            // else, successor's sleep set == curState's sleep set.
+            successor.setSleepSet(curState.getSleepSet());
+        }
 
         return ImmutableList.of(successor);
     }
@@ -181,7 +195,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
 
         // Part II: add the thread id and number which created newly.
         ImmutableSet<String> tidsToAdded =
-                from(newThreadIds).filter(t -> newThreadIdNumbers.containsKey(t)).toSet();
+                from(newThreadIds).filter(t -> !newThreadIdNumbers.containsKey(t)).toSet();
         assert tidsToAdded.size() <= 1 : "the number of newly created thread must be less or equal one";
         // if nonempty, add the thread id and its number into the 'newThreadIdNumbers'.
         if(!tidsToAdded.isEmpty()) {
@@ -212,17 +226,13 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         Iterable<CFAEdge> sucEdges = curThreadingState.getOutgoingEdges();
 
         // try to obtain the corresponding tid of the edges.
-        Map<String, Integer> oldThreadIdNumbers = curXPORState.getThreadIdNumbers();
         // use 'tmpThreadingState' to replace 'curThreadingState', or else the transform method will report error.
+        updateThreadIdNumbers2(curThreadingState, sucEdges, curXPORState);
         ThreadingState tmpThreadingState = curThreadingState;
         // get the List of Triple<edge, tid, edge-hashCode>
         Map<CFAEdge, Pair<Integer, Integer>> edgesWithTid = new HashMap<>();
         sucEdges.forEach(e -> {
-            String activeThread = getActiveThread(e, tmpThreadingState);
-            assert activeThread != null : "activeThread should be not null here.";
-            int tid = oldThreadIdNumbers.get(activeThread);
-            // TODO: how to judge the tid is not null.
-            assert tid >= 0 : "tid should be not null here.";
+            int tid = curXPORState.getThreadIdNumbers().get(e.hashCode()).getSecondNotNull();
             edgesWithTid.put(e, Pair.of(tid, e.hashCode()));
         });
 
@@ -233,13 +243,15 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
 
         if(!nEdges.isEmpty()) {
             // handle the case where nEdges exist.
-            // TODO: here we add other edges to curXPORState directly, i.e. we just leave one normal edge.
+            // TODO: here we add the non-nEdgeToExplore to the curXPORState's 'isolatedSleepSet'.
             // we keep the 'nEdges.get(0)'
             CFAEdge nEdgeToExplore = nEdges.get(0);
             sucEdges.forEach(e -> {
                 if(!e.equals(nEdgeToExplore)) {
-                    List<Pair<Integer, Integer>> edgeAddToSleepSet = List.of(edgesWithTid.get(e));
-                    curXPORState.getSleepSet().add(edgeAddToSleepSet);
+//                    ArrayList<Pair<Integer, Integer>> edgeAddToSleepSet = new ArrayList<>();
+//                    edgeAddToSleepSet.add(edgesWithTid.get(e));
+//                    curXPORState.sleepSetAdd(edgeAddToSleepSet);
+                    curXPORState.isolatedSleepSetAdd(edgesWithTid.get(e));
                 }
             });
             return Collections.singleton(state);
@@ -255,8 +267,10 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                 // we just explore the selected edge and its negative branch.
                 if(!e.equals(nAEdgeToExplore)
                         && (!e.getPredecessor().equals(nAEdgeToExplore.getPredecessor()))) {
-                    List<Pair<Integer, Integer>> edgeAddToSleepSet = List.of(edgesWithTid.get(e));
-                    curXPORState.getSleepSet().add(edgeAddToSleepSet);
+//                    ArrayList<Pair<Integer, Integer>> edgeAddToSleepSet = new ArrayList<>();
+//                    edgeAddToSleepSet.add(edgesWithTid.get(e));
+//                    curXPORState.sleepSetAdd(edgeAddToSleepSet);
+                    curXPORState.isolatedSleepSetAdd(edgesWithTid.get(e));
                 }
             });
             return Collections.singleton(state);
@@ -267,14 +281,15 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             // handle the case where gvaEdges exist.
             if(gvaEdges.size() > 1) {
                 // sort 'sucEdges' by Tid.
-                ImmutableList<CFAEdge> sucEdgesSortedByTid = ImmutableList.copyOf(sucEdges);
-                Collections.sort(sucEdgesSortedByTid, new Comparator<CFAEdge>() {
-                    public int compare(CFAEdge AEdge, CFAEdge BEdge) {
-                        int ATid = edgesWithTid.get(AEdge).getFirstNotNull();
-                        int BTid = edgesWithTid.get(BEdge).getFirstNotNull();
-                        return ATid - BTid;
-                    }
-                });
+                ImmutableList<CFAEdge> sucEdgesSortedByTid = ImmutableList.sortedCopyOf(
+                        new Comparator<CFAEdge>() {
+                            public int compare(CFAEdge AEdge, CFAEdge BEdge) {
+                                int ATid = edgesWithTid.get(AEdge).getFirstNotNull();
+                                int BTid = edgesWithTid.get(BEdge).getFirstNotNull();
+                                return ATid - BTid;
+                            }
+                        },
+                        sucEdges);
 
                 AbstractState curComputerState = null;
                 if (icComputer instanceof BDDICComputer) {
@@ -295,8 +310,10 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                             // if the AEdge and BEdge are independent at curComputerState.
                             // add the [<BEdge-tid, BEdge.hashCode()>, <AEdge-tid, AEdge.hashCode()>]
                             // to the sleep set of curState.
-                            List<Pair<Integer, Integer>> edgesToAddToSleepSet =
-                                    List.of(edgesWithTid.get(BEdge), edgesWithTid.get(AEdge));
+                            ArrayList<Pair<Integer, Integer>> edgesToAddToSleepSet = new ArrayList<>();
+                            edgesToAddToSleepSet.add(edgesWithTid.get(BEdge));
+                            edgesToAddToSleepSet.add(edgesWithTid.get(AEdge));
+                            curXPORState.sleepSetAdd(edgesToAddToSleepSet);
                         }
                     }
                 }
@@ -462,5 +479,30 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             }
         }
         throw new InvalidConfigurationException("could not find the CPA " + pClass + " from " + pCPA);
+    }
+
+    public void updateThreadIdNumbers2(ThreadingState curState, Iterable<CFAEdge> edges, XPORState curXPORState) {
+        int oldThreadCounter = curXPORState.getThreadCounter();
+        Map<Integer, Pair<String, Integer>> oldThreadIdNumbers = curXPORState.getThreadIdNumbers();
+        Map<Integer, Pair<String, Integer>> newThreadIdNumbers = new HashMap<>();
+
+        for(CFAEdge e : edges) {
+            String activeThread = getActiveThread(e, curState);
+            if(!oldThreadIdNumbers.containsKey(e.hashCode())) {
+                CFAEdge curXPORStateProcEdge = curXPORState.getProcEdge();
+                if(curXPORStateProcEdge.getSuccessor().equals(e.getPredecessor())) {
+                    // if the 'e' is the successive edge of curXPORState's prcEdge.
+                    newThreadIdNumbers.put(e.hashCode(), oldThreadIdNumbers.get(curXPORStateProcEdge.hashCode()));
+                } else {
+                    // TODO: if 'e' is the first of a newly created thread.
+                    newThreadIdNumbers.put(e.hashCode(), Pair.of(activeThread, ++oldThreadCounter));
+                }
+            } else {
+                // else, for those 'e' both in oldThreadIdNumbers and in 'newThreadIdNumbers', we keep them unchanged.
+                newThreadIdNumbers.put(e.hashCode(), oldThreadIdNumbers.get(e.hashCode()));
+            }
+        }
+        // update the curXPORState's threadIdNumbers with 'newThreadIdNumbers'
+        curXPORState.setThreadIdNumbers(newThreadIdNumbers);
     }
 }
