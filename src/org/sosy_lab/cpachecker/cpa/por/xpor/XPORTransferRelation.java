@@ -170,7 +170,9 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             successor.updateSleepSet(curState.getSleepSet(), curEdge);
         } else {
             // else, successor's sleep set == curState's sleep set.
-            successor.setSleepSet(curState.getSleepSet());
+            // shallow copy have some problem.
+            // successor.setSleepSet(curState.getSleepSet());
+            successor.getSleepSet().addAll(curState.getSleepSet());
         }
 
         return ImmutableList.of(successor);
@@ -290,6 +292,8 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                             }
                         },
                         sucEdges);
+                ImmutableList<CFAEdge> sucEdgesRemoveInSleepSet = from(sucEdgesSortedByTid)
+                        .filter(e -> !curXPORState.sleepSetContain(edgesWithTid.get(e))).toList();
 
                 AbstractState curComputerState = null;
                 if (icComputer instanceof BDDICComputer) {
@@ -302,10 +306,10 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                     throw new CPATransferException("Unsupported ICComputer: " + icComputer.getClass().toString());
                 }
 
-                for(int i = 0; i < sucEdgesSortedByTid.size() - 1; i++) {
-                    CFAEdge AEdge = sucEdgesSortedByTid.get(i);
-                    for(int j = i + 1; j < sucEdgesSortedByTid.size(); j++) {
-                        CFAEdge BEdge = sucEdgesSortedByTid.get(j);
+                for(int i = 0; i < sucEdgesRemoveInSleepSet.size() - 1; i++) {
+                    CFAEdge AEdge = sucEdgesRemoveInSleepSet.get(i);
+                    for(int j = i + 1; j < sucEdgesRemoveInSleepSet.size(); j++) {
+                        CFAEdge BEdge = sucEdgesRemoveInSleepSet.get(j);
                         if(canSkip(AEdge, BEdge, curComputerState)) {
                             // if the AEdge and BEdge are independent at curComputerState.
                             // add the [<BEdge-tid, BEdge.hashCode()>, <AEdge-tid, AEdge.hashCode()>]

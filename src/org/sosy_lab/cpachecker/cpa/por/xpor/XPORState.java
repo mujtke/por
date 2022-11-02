@@ -3,6 +3,7 @@ package org.sosy_lab.cpachecker.cpa.por.xpor;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.Graphable;
 import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
 import org.sosy_lab.cpachecker.util.Pair;
 
@@ -10,7 +11,7 @@ import java.util.*;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-public class XPORState implements AbstractState {
+public class XPORState implements AbstractState, Graphable {
 
     // TODO: which fields we need.
     private int threadCounter;
@@ -140,5 +141,23 @@ public class XPORState implements AbstractState {
 
     public int hashCode() {
         return procEdge.hashCode() + sleepSet.hashCode() + threadLocs.hashCode();
+    }
+
+    @Override
+    public String toDOTLabel() {
+
+        StringBuilder str = new StringBuilder();
+        str.append("SleepSet: "
+                + sleepSet.toString()
+                + "\n"
+                + "IsolatedSleepSet: "
+                + isolatedSleepSet.toString());
+
+        return str.toString();
+    }
+
+    @Override
+    public boolean shouldBeHighlighted() {
+        return true;
     }
 }
