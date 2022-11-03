@@ -254,7 +254,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             // TODO: just let 'nEdgeToExplore = nEdges.get(0)' has some problem: if 'nEdgeToExplore' is endOfMainThread
             // other edges removed wrong.
             // CFAEdge nEdgeToExplore = nEdges.get(0);
-            CFAEdge nEdgeToExplore = getValidEdge(nEdges);
+            CFAEdge nEdgeToExplore = getValidEdge(nEdges, tmpThreadingState, curXPORState.getThreadIdNumbers());
             if(nEdgeToExplore != null) {
                 int nEdgeExploreTid = edgesWithTid.get(nEdgeToExplore).getFirstNotNull();
                 sucEdges.forEach(e -> {
@@ -524,18 +524,26 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         curXPORState.setThreadIdNumbers(newThreadIdNumbers);
     }
 
-    private CFAEdge getValidEdge(List<CFAEdge> nEdges) {
+    private CFAEdge getValidEdge(List<CFAEdge> nEdges, ThreadingState threadingState, final Map<Integer, Pair<String, Integer>> threadIdNumbers) {
         // get one nEdge that is not the endOfMainThread
         CFAEdge result = null;
         for(int i = 0; i < nEdges.size(); i++) {
             CFAEdge e = nEdges.get(i);
-            if(!e.getSuccessor().equals(mainFunctionExitNode)) {
-                // TODO: pthread_join() is regarded as normal edge.
-                if(!e.toString().contains("pthread_join")) {
-                    result = e;
-                    break;
-                }
+            if(e.getSuccessor().equals(mainFunctionExitNode)) {
+                continue;
             }
+            // TODO: pthread_join() is regarded as normal edge.
+            if(e.toString().contains("pthread_join") || e.toString().contains("pthread_exit")) {
+                continue;
+            }
+            // TODO: atomic lock problem, if the current edge's active thread doesn't held the lock, then we ignore it.
+            // don't choose it, because threadingTransferRelation will prune it.
+            if(threadingState.hasLock("__CPAchecker_atomic_lock__")
+            && !threadingState.hasLock(threadIdNumbers.get(e.hashCode()).getFirstNotNull(), "__CPAchecker_atomic_lock__")) {
+                break;
+            }
+            result = e;
+            break;
         }
         return result;
     }
