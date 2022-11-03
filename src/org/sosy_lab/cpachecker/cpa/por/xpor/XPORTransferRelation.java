@@ -19,6 +19,7 @@ import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
 import org.sosy_lab.cpachecker.cfa.ast.AStatement;
 import org.sosy_lab.cpachecker.cfa.model.AStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.*;
@@ -65,6 +66,9 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
     private final AbstractICComputer icComputer;
     private final XPORStatistics stats;
 
+    // record the exit node of mainFunction for judgement in handling 'nEdges'
+    private final CFANode mainFunctionExitNode;
+
     // the filter to find the global access edge in given edges.
     private final Function<Iterable<CFAEdge>, List<CFAEdge>> globalAccessEdgeFilter =
             (allEdges) -> from(allEdges).filter(
@@ -87,6 +91,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         locationsCPA = LocationsCPA.create(config, logger, cfa);
         condDepGraph = GlobalInfo.getInstance().getEdgeInfo().getCondDepGraph();
         stats = new XPORStatistics();
+        mainFunctionExitNode = GlobalInfo.getInstance().getCFAInfo().get().getCFA().getMainFunction().getExitNode();
 
         // According to 'depComputationStateType' determine the type of ICComputer
         // i.e. BDDICComputer or PredicateICComputer.
@@ -115,6 +120,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         condDepGraph = null;
         icComputer = null;
         stats = null;
+        mainFunctionExitNode = null;
     }
 
     @Override
@@ -245,33 +251,36 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
 
         if(!nEdges.isEmpty()) {
             // handle the case where nEdges exist.
-            // TODO: here we add the non-nEdgeToExplore to the curXPORState's 'isolatedSleepSet'.
-            // we keep the 'nEdges.get(0)'
-            CFAEdge nEdgeToExplore = nEdges.get(0);
-            sucEdges.forEach(e -> {
-                if(!e.equals(nEdgeToExplore)) {
-//                    ArrayList<Pair<Integer, Integer>> edgeAddToSleepSet = new ArrayList<>();
-//                    edgeAddToSleepSet.add(edgesWithTid.get(e));
-//                    curXPORState.sleepSetAdd(edgeAddToSleepSet);
-                    curXPORState.isolatedSleepSetAdd(edgesWithTid.get(e));
-                }
-            });
-            return Collections.singleton(state);
+            // TODO: just let 'nEdgeToExplore = nEdges.get(0)' has some problem: if 'nEdgeToExplore' is endOfMainThread
+            // other edges removed wrong.
+            // CFAEdge nEdgeToExplore = nEdges.get(0);
+            CFAEdge nEdgeToExplore = getValidEdge(nEdges);
+            if(nEdgeToExplore != null) {
+                int nEdgeExploreTid = edgesWithTid.get(nEdgeToExplore).getFirstNotNull();
+                sucEdges.forEach(e -> {
+                    if(!e.equals(nEdgeToExplore)
+                            && (edgesWithTid.get(e).getFirstNotNull() != nEdgeExploreTid)) {
+                        // if one edge has the same tid with 'nEdgeToExplore', we don't add it to the isolatedSleepSet.
+                        curXPORState.isolatedSleepSetAdd(edgesWithTid.get(e));
+                    }
+                });
+                return Collections.singleton(state);
+            }
         }
-        assert nEdges.size() == 0 : "here nEdges' size should be 0.";
+//        assert nEdges.size() == 0 : "here nEdges' size should be 0.";
 
         if(!nAEdges.isEmpty()) {
             // handle the case where nAEdges exist.
             // TODO: here we add the non-nAEdge to the curXPORState, all nAEdges need to be explored.
             // assume we choose 'nAEdges.get(0)' to explore.
             CFAEdge nAEdgeToExplore = nAEdges.get(0);
+            int nAEdgeToExploreTid = edgesWithTid.get(nAEdgeToExplore).getFirstNotNull();
             sucEdges.forEach(e -> {
                 // we just explore the selected edge and its negative branch.
                 if(!e.equals(nAEdgeToExplore)
-                        && (!e.getPredecessor().equals(nAEdgeToExplore.getPredecessor()))) {
-//                    ArrayList<Pair<Integer, Integer>> edgeAddToSleepSet = new ArrayList<>();
-//                    edgeAddToSleepSet.add(edgesWithTid.get(e));
-//                    curXPORState.sleepSetAdd(edgeAddToSleepSet);
+                        && (!e.getPredecessor().equals(nAEdgeToExplore.getPredecessor()))
+                        && (nAEdgeToExploreTid != edgesWithTid.get(e).getFirstNotNull())) {
+                    // if one edge has the same tid with 'nEdgeToExplore', we don't add it to the isolatedSleepSet.
                     curXPORState.isolatedSleepSetAdd(edgesWithTid.get(e));
                 }
             });
@@ -281,6 +290,10 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
 
         if(!gvaEdges.isEmpty()) {
             // handle the case where gvaEdges exist.
+            // not important: if the nEdges is not empty, add the edges in it(should be the endOfMainFunction).
+//            if(!nEdges.isEmpty()) {
+//                nEdges.forEach(e -> curXPORState.isolatedSleepSetAdd(edgesWithTid.get(e)));
+//            }
             if(gvaEdges.size() > 1) {
                 // sort 'sucEdges' by Tid.
                 ImmutableList<CFAEdge> sucEdgesSortedByTid = ImmutableList.sortedCopyOf(
@@ -292,6 +305,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                             }
                         },
                         sucEdges);
+                // if one edge has been in sleep set of curXPORState, then we don't consider it.
                 ImmutableList<CFAEdge> sucEdgesRemoveInSleepSet = from(sucEdgesSortedByTid)
                         .filter(e -> !curXPORState.sleepSetContain(edgesWithTid.get(e))).toList();
 
@@ -508,5 +522,18 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         }
         // update the curXPORState's threadIdNumbers with 'newThreadIdNumbers'
         curXPORState.setThreadIdNumbers(newThreadIdNumbers);
+    }
+
+    private CFAEdge getValidEdge(List<CFAEdge> nEdges) {
+        // get one nEdge that is not the endOfMainThread
+        CFAEdge result = null;
+        for(int i = 0; i < nEdges.size(); i++) {
+            CFAEdge e = nEdges.get(i);
+            if(!e.getSuccessor().equals(mainFunctionExitNode)) {
+                result = e;
+                break;
+            }
+        }
+        return result;
     }
 }
