@@ -224,7 +224,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                 break;
             }
         }
-        assert curThreadingState != null : "threading state is null is not allowed here";
+        assert curThreadingState != null : "Threading state should not be null here";
 
         assert state instanceof XPORState;
         XPORState curXPORState = (XPORState) state;
@@ -530,8 +530,11 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         for(int i = 0; i < nEdges.size(); i++) {
             CFAEdge e = nEdges.get(i);
             if(!e.getSuccessor().equals(mainFunctionExitNode)) {
-                result = e;
-                break;
+                // TODO: pthread_join() is regarded as normal edge.
+                if(!e.toString().contains("pthread_join")) {
+                    result = e;
+                    break;
+                }
             }
         }
         return result;
