@@ -21,7 +21,7 @@ public class BDDICComputer extends AbstractICComputer {
     private final MachineModel machineModel;
 
     public BDDICComputer(CFA pCfa, PredicateManager pPredmgr, XPORStatistics pStat) {
-        assert pCfa.getVarClassification().isEmpty();
+//        assert pCfa.getVarClassification().isEmpty();
 
         predmgr = pPredmgr;
         machineModel = pCfa.getMachineModel();

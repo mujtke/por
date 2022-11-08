@@ -20,6 +20,8 @@ public class XPORState implements AbstractState, Graphable {
     private LocationsState threadLocs;
     // { [edge_hashCode, <main, 0>], ... }
     private Map<Integer, Pair<String, Integer>> threadIdNumbers;
+    // { <main, 0>, ... }
+//    private Map<String, Integer> threadIdNumbers;
 
     // TODO: sleep set implements.
     // sleep set: { [<thread-id, edge-hashCode>, ..], .. }
