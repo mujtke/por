@@ -539,9 +539,17 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                     assert e instanceof CStatementEdge;
                     CStatementEdge eStatementEdge = (CStatementEdge) e;
                     CStatement eStatement = eStatementEdge.getStatement();
-                    assert eStatement instanceof CFunctionCallStatement;
-                    CFunctionCallStatement eFuncCallStatement = ((CFunctionCallStatement) eStatement);
-                    CFunctionCallExpression eFuncCallExpr = eFuncCallStatement.getFunctionCallExpression();
+                    CFunctionCallExpression eFuncCallExpr = null;
+                    if(eStatement instanceof CFunctionCallAssignmentStatement) {
+                        CFunctionCallAssignmentStatement eFuncCallAssignStatement = (CFunctionCallAssignmentStatement) eStatement;
+                        eFuncCallExpr = eFuncCallAssignStatement.getRightHandSide();
+                    } else if(eStatement instanceof CFunctionCallStatement) {
+                        CFunctionCallStatement eFuncCallStatement = ((CFunctionCallStatement) eStatement);
+                        eFuncCallExpr = eFuncCallStatement.getFunctionCallExpression();
+                    }
+                    if(eFuncCallExpr == null) {
+                        continue;
+                    }
                     List<CExpression> paras = eFuncCallExpr.getParameterExpressions();
                     assert paras.size() >= 1 : "pthread_join should have one parameter at least!";
                     CExpression endThreadIdExpr = paras.get(0);
