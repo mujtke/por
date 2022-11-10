@@ -532,7 +532,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             if(e.getSuccessor().equals(mainFunctionExitNode)) {
                 continue;
             }
-            // TODO: pthread_join() is regarded as normal edge.
+            // TODO: whether pthread_join() can be regarded as normal edge is determined by whether its successor is empty.
             if(e.getRawStatement().contains("pthread_join")) {
                 if(e.getEdgeType().equals(CFAEdgeType.StatementEdge)) {
                     // if the 'pthread_join' is not the declaration edge.
@@ -558,9 +558,9 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                     if(!threadingState.getThreadIds().contains(endThreadId)) {
                         // if the threadingState don't contain the 'endThreadId', which means the thread corresponding to 'endThreadId'
                         // has terminated, we can use it as the nEdge.
-                        return e;
-                    } else {
                         continue;
+                    } else {
+                        return e;
                     }
                 }
             }
