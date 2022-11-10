@@ -13,14 +13,14 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.ast.AExpression;
-import org.sosy_lab.cpachecker.cfa.ast.AFunctionCall;
-import org.sosy_lab.cpachecker.cfa.ast.AIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.AStatement;
+import org.sosy_lab.cpachecker.cfa.ast.*;
+import org.sosy_lab.cpachecker.cfa.ast.c.*;
 import org.sosy_lab.cpachecker.cfa.model.AStatementEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdgeType;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.cpa.bdd.BDDCPA;
@@ -129,6 +129,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         XPORState curState = (XPORState) state;
 
         // compute the new locations.
+        // if current edge is 'pthread_create', then locationsTransferRelation will create the new thread.
         Collection<? extends AbstractState> newLocStates = locationsCPA.getTransferRelation()
                 .getAbstractSuccessorsForEdge(curState.getThreadLocs(), precision, cfaEdge);
         assert newLocStates.size() <= 1 : "the number of newly gotten locationsStates must be less or equal one";
@@ -522,43 +523,43 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         throw new InvalidConfigurationException("could not find the CPA " + pClass + " from " + pCPA);
     }
 
-//    public void updateThreadIdNumbers2(ThreadingState curState, Iterable<CFAEdge> edges, XPORState curXPORState) {
-//        int oldThreadCounter = curXPORState.getThreadCounter();
-//        Map<Integer, Pair<String, Integer>> oldThreadIdNumbers = curXPORState.getThreadIdNumbers();
-//        Map<Integer, Pair<String, Integer>> newThreadIdNumbers = new HashMap<>();
-//
-//        for(CFAEdge e : edges) {
-//            String activeThread = getActiveThread(e, curState);
-//            if(!oldThreadIdNumbers.containsKey(e.hashCode())) {
-//                CFAEdge curXPORStateProcEdge = curXPORState.getProcEdge();
-//                if(curXPORStateProcEdge.getSuccessor().equals(e.getPredecessor())) {
-//                    // if the 'e' is the successive edge of curXPORState's prcEdge.
-//                    newThreadIdNumbers.put(e.hashCode(), oldThreadIdNumbers.get(curXPORStateProcEdge.hashCode()));
-//                } else {
-//                    // TODO: if 'e' is the first of a newly created thread.
-//                    newThreadIdNumbers.put(e.hashCode(), Pair.of(activeThread, ++oldThreadCounter));
-//                }
-//            } else {
-//                // else, for those 'e' both in oldThreadIdNumbers and in 'newThreadIdNumbers', we keep them unchanged.
-//                newThreadIdNumbers.put(e.hashCode(), oldThreadIdNumbers.get(e.hashCode()));
-//            }
-//        }
-//        // update the curXPORState's threadIdNumbers with 'newThreadIdNumbers'
-//        curXPORState.setThreadIdNumbers(newThreadIdNumbers);
-//    }
-
     private CFAEdge getValidEdge(List<CFAEdge> nEdges, ThreadingState threadingState) {
         // get one nEdge that is not the endOfMainThread
         CFAEdge result = null;
         for(int i = 0; i < nEdges.size(); i++) {
             CFAEdge e = nEdges.get(i);
+
             if(e.getSuccessor().equals(mainFunctionExitNode)) {
                 continue;
             }
             // TODO: pthread_join() is regarded as normal edge.
-            if(e.getRawStatement().contains("pthread_join") || e.getRawStatement().contains("pthread_exit")) {
+            if(e.getRawStatement().contains("pthread_join")) {
+                if(e.getEdgeType().equals(CFAEdgeType.StatementEdge)) {
+                    // if the 'pthread_join' is not the declaration edge.
+                    assert e instanceof CStatementEdge;
+                    CStatementEdge eStatementEdge = (CStatementEdge) e;
+                    CStatement eStatement = eStatementEdge.getStatement();
+                    assert eStatement instanceof CFunctionCallStatement;
+                    CFunctionCallStatement eFuncCallStatement = ((CFunctionCallStatement) eStatement);
+                    CFunctionCallExpression eFuncCallExpr = eFuncCallStatement.getFunctionCallExpression();
+                    List<CExpression> paras = eFuncCallExpr.getParameterExpressions();
+                    assert paras.size() >= 1 : "pthread_join should have one parameter at least!";
+                    CExpression endThreadIdExpr = paras.get(0);
+                    assert endThreadIdExpr instanceof CIdExpression;
+                    String endThreadId = ((CIdExpression) endThreadIdExpr).getName();
+                    if(!threadingState.getThreadIds().contains(endThreadId)) {
+                        // if the threadingState don't contain the 'endThreadId', which means the thread corresponding to 'endThreadId'
+                        // has terminated, we can use it as the nEdge.
+                        return e;
+                    } else {
+                        continue;
+                    }
+                }
+            }
+            if(e.getRawStatement().contains("pthread_exit")) {
                 continue;
             }
+
             // TODO: atomic lock problem, if the current edge's active thread doesn't held the lock, then we ignore it.
             // don't choose it, because threadingTransferRelation will prune it.
             String activeThread = getActiveThread(e, threadingState);
