@@ -600,9 +600,9 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                     if(!threadingState.getThreadIds().contains(endThreadId)) {
                         // if the threadingState don't contain the 'endThreadId', which means the thread corresponding to 'endThreadId'
                         // has terminated, we can use it as the nEdge.
-                        continue;
-                    } else {
                         return e;
+                    } else {
+                        continue;
                     }
                 }
             }
