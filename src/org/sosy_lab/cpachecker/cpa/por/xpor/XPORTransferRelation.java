@@ -26,6 +26,7 @@ import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.cpa.bdd.BDDCPA;
 import org.sosy_lab.cpachecker.cpa.bdd.BDDState;
 import org.sosy_lab.cpachecker.cpa.bdd.PredicateManager;
+import org.sosy_lab.cpachecker.cpa.callstack.CallstackState;
 import org.sosy_lab.cpachecker.cpa.locations.LocationsCPA;
 import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
 import org.sosy_lab.cpachecker.cpa.por.EdgeType;
@@ -39,6 +40,7 @@ import org.sosy_lab.cpachecker.util.dependence.conditional.CondDepConstraints;
 import org.sosy_lab.cpachecker.util.dependence.conditional.ConditionalDepGraph;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.predicates.regions.NamedRegionManager;
+import org.sosy_lab.cpachecker.util.threading.SingleThreadState;
 
 import java.util.*;
 
@@ -128,6 +130,16 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
 
         XPORState curState = (XPORState) state;
 
+        // TODO: we compute the new locs iff current edge is not in the sleep set of 'state'
+        Map<Integer, Pair<String, Integer>> oldThreadIdNumbers = curState.getThreadIdNumbers();
+        // if curEdge in curState's sleepSet or isolatedSleepSet, we can return empty.
+        // in curState's sleepSet means that curEdge is in sleepSet as a single element rather like 'p.q'.
+        int curThreadCounter = oldThreadIdNumbers.get(cfaEdge.hashCode()).getSecondNotNull();
+        Pair<Integer, Integer> curEdge = Pair.of(curThreadCounter, cfaEdge.hashCode());
+        if (curState.sleepSetContain(curEdge) || curState.isolatedSleepSetContains(curEdge)) {
+            return ImmutableList.of();
+        }
+
         // compute the new locations.
         // if current edge is 'pthread_create', then locationsTransferRelation will create the new thread.
         Collection<? extends AbstractState> newLocStates = locationsCPA.getTransferRelation()
@@ -140,7 +152,6 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
 
         // get the new locs.
         LocationsState newLocs = (LocationsState) newLocStates.iterator().next();
-        Map<Integer, Pair<String, Integer>> oldThreadIdNumbers = curState.getThreadIdNumbers();
 
         // update the thread ids and their number.
         Pair<Integer, Map<Integer, Pair<String, Integer>>> newThreadInfo =
@@ -148,17 +159,9 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         int newThreadCounter = newThreadInfo.getFirstNotNull();
         Map<Integer, Pair<String, Integer>> newThreadIdNumbers = newThreadInfo.getSecondNotNull();
 
-        // if curEdge in curState's sleepSet or isolatedSleepSet, we can return empty.
-        // in curState's sleepSet means that curEdge is in sleepSet as a single element rather like 'p.q'.
-        int curThreadCounter = oldThreadIdNumbers.get(cfaEdge.hashCode()).getSecondNotNull();
-        Pair<Integer, Integer> curEdge = Pair.of(curThreadCounter, cfaEdge.hashCode());
-        if (curState.sleepSetContain(curEdge) || curState.isolatedSleepSetContains(curEdge)) {
-            return ImmutableList.of();
-        }
-
         // else, updated the sleep set and return.
         // generate the successor with empty sleepSet and isolatedSleepSet.
-        // TODO: delay the update to 'strengthen' method: sleepSet, isolatedSleepSet, threadIdNumbers
+        // TODO: delay the update to 'strengthen' method: sleepSet, isolatedSleepSet.
         XPORState successor = new XPORState(
                 newThreadCounter,
                 cfaEdge,
@@ -209,16 +212,38 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         // if nonempty, add the thread id and its number into the 'newThreadIdNumbers'.
         if(!tidsToAdded.isEmpty()) {
             newThreadIdNumbers.put(tidsToAdded.iterator().next(), ++pOldThreadCounter);
-//            System.out.println("oldThreadCounter = " + (pOldThreadCounter - 1) + ", newThreadCounter = " + pOldThreadCounter);
         }
 
         // finished the update of thread id and number.
         Map<Integer, Pair<String, Integer>> newThreadIdNumsWithEdge = new HashMap<>();
-        // TODO: here the edge_hash is not known yet. So we use other hash_code to replace temporarily.
-        newThreadIdNumbers.forEach((k,v) -> {
-            newThreadIdNumsWithEdge.put(k.hashCode() + v.hashCode(), Pair.of(k, v));
+        // TODO: here we can get the info about sucEdges, so we don't have to delay the computation of 'newThreadIdNumbersWithEdges'
+        //  to the 'strengthen' stage.
+        Iterable<CFAEdge> sucEdges = pNewLocs.getOutgoingEdges();
+        sucEdges.forEach(e -> {
+            String activeThread = getActiveThread2(pNewLocs, e);
+            newThreadIdNumsWithEdge.put(e.hashCode(), Pair.of(activeThread, newThreadIdNumbers.get(activeThread)));
         });
+//        newThreadIdNumbers.forEach((k,v) -> {
+//            newThreadIdNumsWithEdge.put(k.hashCode() + v.hashCode(), Pair.of(k, v));
+//        });
         return Pair.of(pOldThreadCounter, newThreadIdNumsWithEdge);
+    }
+
+    private String getActiveThread2(LocationsState pNewLoc, CFAEdge pEdge) {
+        Set<String> activeThreads = new HashSet<>();
+
+        for (Map.Entry<String, SingleThreadState> entry : pNewLoc.getMultiThreadState().getThreadLocations().entrySet()) {
+            if(entry.getValue().getLocation().equals(pEdge.getPredecessor())) {
+                activeThreads.add(entry.getKey());
+                break;
+            }
+        }
+
+        assert activeThreads.size() <= 1 : "multiple active threads are not allowed: " + activeThreads;
+        // then either the same function is called in different threads -> not supported.
+        // (or CompositeCPA and ThreadingCPA do not work together)
+
+        return activeThreads.isEmpty() ? null : Iterables.getOnlyElement(activeThreads);
     }
 
     @Override
@@ -237,27 +262,30 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         XPORState curXPORState = (XPORState) state;
 
         // get the outgoing edges of curThreadingState.
-        ArrayList<CFAEdge> sucEdges = new ArrayList<>();
-        curThreadingState.getOutgoingEdges().forEach(e -> sucEdges.add(e));
+//        ArrayList<CFAEdge> sucEdges = new ArrayList<>();
+//        curThreadingState.getOutgoingEdges().forEach(e -> sucEdges.add(e));
+        Iterable<CFAEdge> sucEdges = curThreadingState.getOutgoingEdges();
+//
+//        // TODO: compute the new threadIdNumbers for the state(curXPORState).
+//        // here, we have gotten the <main, 0>, just need to get the corresponding edge_hash.
+//        // { [edge_hash, <main, 0>], ... }
+//        ThreadingState tmpThreadingState = curThreadingState;
+//        Map<Integer, Pair<String, Integer>> oldThreadIdNums = curXPORState.getThreadIdNumbers(),
+//                threadIdNums = new HashMap<>();
+//        // get the map of ids & nums.
+//        Map<String, Integer> idNums = new HashMap<>();
+//        oldThreadIdNums.forEach((k, v) -> idNums.put(v.getFirstNotNull(), v.getSecondNotNull()));
+//        sucEdges.forEach(e -> {
+//            String eActiveThread = getActiveThread(e, tmpThreadingState);
+//            assert eActiveThread != null : "eActiveThread should not be null!";
+//            int num = idNums.containsKey(eActiveThread) ? idNums.get(eActiveThread) : -1;
+//            assert num != -1 : "can't find the eActiveThread in oldThreadIdNums!";
+//            threadIdNums.put(e.hashCode(), Pair.of(eActiveThread, num));
+//        });
+//        // replace the 'oldThreadIdNums' with 'threadIdNums'.
+//        curXPORState.setThreadIdNumbers(threadIdNums);
+        Map<Integer, Pair<String, Integer>> threadIdNums = curXPORState.getThreadIdNumbers();
 
-        // TODO: compute the new threadIdNumbers for the state(curXPORState).
-        // here, we have gotten the <main, 0>, just need to get the corresponding edge_hash.
-        // { [edge_hash, <main, 0>], ... }
-        ThreadingState tmpThreadingState = curThreadingState;
-        Map<Integer, Pair<String, Integer>> oldThreadIdNums = curXPORState.getThreadIdNumbers(),
-                threadIdNums = new HashMap<>();
-        // get the map of ids & nums.
-        Map<String, Integer> idNums = new HashMap<>();
-        oldThreadIdNums.forEach((k, v) -> idNums.put(v.getFirstNotNull(), v.getSecondNotNull()));
-        sucEdges.forEach(e -> {
-            String eActiveThread = getActiveThread(e, tmpThreadingState);
-            assert eActiveThread != null : "eActiveThread should not be null!";
-            int num = idNums.containsKey(eActiveThread) ? idNums.get(eActiveThread) : -1;
-            assert num != -1 : "can't find the eActiveThread in oldThreadIdNums!";
-            threadIdNums.put(e.hashCode(), Pair.of(eActiveThread, num));
-        });
-        // replace the 'oldThreadIdNums' with 'threadIdNums'.
-        curXPORState.setThreadIdNumbers(threadIdNums);
 
 
 //        // get the List of Triple<edge, tid, edge-hashCode>
@@ -270,16 +298,15 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
 
         if(!nEdges.isEmpty()) {
             // handle the case where nEdges exist.
-            // TODO: just let 'nEdgeToExplore = nEdges.get(0)' has some problem: if 'nEdgeToExplore' is endOfMainThread
-            // other edges removed wrong.
-            // CFAEdge nEdgeToExplore = nEdges.get(0);
-            CFAEdge nEdgeToExplore = getValidEdge(nEdges, tmpThreadingState);
+            // TODO: we first choose a valid 'nEdge'.
+            CFAEdge nEdgeToExplore = getValidEdge(nEdges, curThreadingState, curXPORState);
             if(nEdgeToExplore != null) {
+                // TODO: actually tid must be not equal for 'nEdges' that are not 'naEdges'.
                 int nEdgeExploreTid = threadIdNums.get(nEdgeToExplore.hashCode()).getSecondNotNull();
                 sucEdges.forEach(e -> {
                     int eTid = threadIdNums.get(e.hashCode()).getSecondNotNull();
                     if(!e.equals(nEdgeToExplore)
-                            && (eTid != nEdgeExploreTid)) {
+                            /* && eTid != nEdgeExploreTid */) {
                         // if one edge has the same tid with 'nEdgeToExplore', we don't add it to the isolatedSleepSet.
                         curXPORState.isolatedSleepSetAdd(Pair.of(eTid, e.hashCode()));
                     }
@@ -298,9 +325,9 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             sucEdges.forEach(e -> {
                 // we just explore the selected edge and its negative branch.
                 int eTid = threadIdNums.get(e.hashCode()).getSecondNotNull();
-                if(!e.equals(nAEdgeToExplore)
-                        && (!e.getPredecessor().equals(nAEdgeToExplore.getPredecessor()))
-                        && (nAEdgeToExploreTid != eTid)) {
+                // nAEdgeToExploreTid != eTid && e.getPredecessor() != nAEdgeToExplore.getPredecessor()
+                // TODO: just one is sufficient.
+                if(!e.equals(nAEdgeToExplore)&& (nAEdgeToExploreTid != eTid)) {
                     // if one edge has the same tid with 'nEdgeToExplore', we don't add it to the isolatedSleepSet.
                     curXPORState.isolatedSleepSetAdd(Pair.of(eTid, e.hashCode()));
                 }
@@ -327,10 +354,11 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                         },
                         sucEdges);
                 // if one edge has been in sleep set of curXPORState, then we don't consider it.
-                ImmutableList<CFAEdge> sucEdgesRemoveInSleepSet = from(sucEdgesSortedByTid)
-                        .filter(e -> !curXPORState.sleepSetContain(
-                                Pair.of(threadIdNums.get(e.hashCode()).getSecondNotNull(), e.hashCode())
-                        )).toList();
+                // TODO: this condition is not necessary, if other computation is right.
+//                ImmutableList<CFAEdge> sucEdgesRemoveInSleepSet = from(sucEdgesSortedByTid)
+//                        .filter(e -> !curXPORState.sleepSetContain(
+//                                Pair.of(threadIdNums.get(e.hashCode()).getSecondNotNull(), e.hashCode())
+//                        )).toList();
 
                 AbstractState curComputerState = null;
                 if (icComputer instanceof BDDICComputer) {
@@ -343,10 +371,10 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                     throw new CPATransferException("Unsupported ICComputer: " + icComputer.getClass().toString());
                 }
 
-                for(int i = 0; i < sucEdgesRemoveInSleepSet.size() - 1; i++) {
-                    CFAEdge AEdge = sucEdgesRemoveInSleepSet.get(i);
-                    for(int j = i + 1; j < sucEdgesRemoveInSleepSet.size(); j++) {
-                        CFAEdge BEdge = sucEdgesRemoveInSleepSet.get(j);
+                for(int i = 0; i < sucEdgesSortedByTid.size() - 1; i++) {
+                    CFAEdge AEdge = sucEdgesSortedByTid.get(i);
+                    for(int j = i + 1; j < sucEdgesSortedByTid.size(); j++) {
+                        CFAEdge BEdge = sucEdgesSortedByTid.get(j);
                         if(canSkip(AEdge, BEdge, curComputerState)) {
                             // if the AEdge and BEdge are independent at curComputerState.
                             // add the [<BEdge-tid, BEdge.hashCode()>, <AEdge-tid, AEdge.hashCode()>]
@@ -523,15 +551,29 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         throw new InvalidConfigurationException("could not find the CPA " + pClass + " from " + pCPA);
     }
 
-    private CFAEdge getValidEdge(List<CFAEdge> nEdges, ThreadingState threadingState) {
-        // get one nEdge that is not the endOfMainThread
+    private CFAEdge getValidEdge(List<CFAEdge> nEdges, ThreadingState threadingState, XPORState xporState) {
         CFAEdge result = null;
         for(int i = 0; i < nEdges.size(); i++) {
             CFAEdge e = nEdges.get(i);
 
+            // 1.handle the case: e is 'FunctionReturnEdge'.
+            if(e.getEdgeType().equals(CFAEdgeType.FunctionReturnEdge)) {
+                // if 'e' is the funcReturnEdge
+                String activeThread = xporState.getThreadIdNumbers().get(e.hashCode()).getFirstNotNull();
+                CallstackState callstackState = (CallstackState) threadingState.getThreadCallstack(activeThread);
+                CFANode callNode = e.getSuccessor().getEnteringSummaryEdge().getPredecessor();
+                if(!callstackState.getCallNode().equals(callNode)) {
+                    // this means that e is not the right return edge. cf 'CallstackTransferRelation' 135.
+                    continue;
+                }
+            }
+
+            // 2.handle the case: e's successor is the endOfMainThread.
             if(e.getSuccessor().equals(mainFunctionExitNode)) {
                 continue;
             }
+
+            // 3.handle the case: e is 'pthread_join'.
             // TODO: whether pthread_join() can be regarded as normal edge is determined by whether its successor is empty.
             if(e.getRawStatement().contains("pthread_join")) {
                 if(e.getEdgeType().equals(CFAEdgeType.StatementEdge)) {
@@ -564,13 +606,16 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                     }
                 }
             }
+
+            // 4.handle the case: e is 'pthread_exit'.
             if(e.getRawStatement().contains("pthread_exit")) {
                 continue;
             }
 
+            // 5.handle the case: there exist locks in 'threadingState'.
             // TODO: atomic lock problem, if the current edge's active thread doesn't held the lock, then we ignore it.
             // don't choose it, because threadingTransferRelation will prune it.
-            String activeThread = getActiveThread(e, threadingState);
+            String activeThread = xporState.getThreadIdNumbers().get(e.hashCode()).getFirstNotNull();
             if(threadingState.hasLock("__CPAchecker_atomic_lock__")
             && !threadingState.hasLock(activeThread, "__CPAchecker_atomic_lock__")) {
                 continue;
