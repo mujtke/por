@@ -184,7 +184,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             // else, successor's sleep set == curState's sleep set.
             // shallow copy have some problem.
             // successor.setSleepSet(curState.getSleepSet());
-            successor.getSleepSet().addAll(curState.getSleepSet());
+//            successor.getSleepSet().addAll(curState.getSleepSet());
         }
 
         return ImmutableList.of(successor);
@@ -319,10 +319,6 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
 
         if(!gvaEdges.isEmpty()) {
             // handle the case where gvaEdges exist.
-            // not important: if the nEdges is not empty, add the edges in it(should be the endOfMainFunction).
-//            if(!nEdges.isEmpty()) {
-//                nEdges.forEach(e -> curXPORState.isolatedSleepSetAdd(edgesWithTid.get(e)));
-//            }
             if(gvaEdges.size() > 1) {
                 // sort 'sucEdges' by Tid.
                 ImmutableList<CFAEdge> sucEdgesSortedByTid = ImmutableList.sortedCopyOf(
