@@ -11,13 +11,16 @@ import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 
+import java.util.Collection;
+
 @Options(prefix = "cpa.por.xpor")
-public class XPORCPA extends AbstractCPA {
+public class XPORCPA extends AbstractCPA implements StatisticsProvider {
 
 
     private final CFA cfa;
     private final Configuration config;
     private final LogManager logger;
+    private final XPORStatistics stats;
 
     @Option(
             secure = true,
@@ -37,7 +40,7 @@ public class XPORCPA extends AbstractCPA {
     public TransferRelation getTransferRelation() {
         // by call XPORTransferRelation(...), set the icComputer.
         try {
-            return new XPORTransferRelation(config, logger, cfa);
+            return new XPORTransferRelation(config, logger, cfa, stats);
         } catch (InvalidConfigurationException e) {
             e.printStackTrace();
         }
@@ -57,5 +60,11 @@ public class XPORCPA extends AbstractCPA {
         cfa = pCfa;
         config = pConfig;
         logger = pLogger;
+        stats = new XPORStatistics();
+    }
+
+    @Override
+    public void collectStatistics(Collection<Statistics> statsCollection) {
+        statsCollection.add(stats);
     }
 }
