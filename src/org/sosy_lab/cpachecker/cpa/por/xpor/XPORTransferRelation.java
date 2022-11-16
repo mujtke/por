@@ -34,6 +34,7 @@ import org.sosy_lab.cpachecker.cpa.por.pcdpor.AbstractICComputer;
 import org.sosy_lab.cpachecker.cpa.predicate.PredicateCPA;
 import org.sosy_lab.cpachecker.cpa.threading.ThreadingState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.exceptions.UnrecognizedCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.dependence.DGNode;
 import org.sosy_lab.cpachecker.util.dependence.conditional.CondDepConstraints;
@@ -184,7 +185,8 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             // else, successor's sleep set == curState's sleep set.
             // shallow copy have some problem.
             // successor.setSleepSet(curState.getSleepSet());
-//            successor.getSleepSet().addAll(curState.getSleepSet());
+            // TODO: if we should keep the sleep set from parent. Maybe not.
+            successor.getSleepSet().addAll(curState.getSleepSet());
         }
 
         return ImmutableList.of(successor);
@@ -326,16 +328,10 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                             public int compare(CFAEdge AEdge, CFAEdge BEdge) {
                                 int ATid = threadIdNums.get(AEdge.hashCode()).getSecondNotNull();
                                 int BTid = threadIdNums.get(BEdge.hashCode()).getSecondNotNull();
-                                return ATid - BTid;
+                                return BTid - ATid;
                             }
                         },
                         sucEdges);
-                // if one edge has been in sleep set of curXPORState, then we don't consider it.
-                // TODO: this condition is not necessary, if other computation is right.
-//                ImmutableList<CFAEdge> sucEdgesRemoveInSleepSet = from(sucEdgesSortedByTid)
-//                        .filter(e -> !curXPORState.sleepSetContain(
-//                                Pair.of(threadIdNums.get(e.hashCode()).getSecondNotNull(), e.hashCode())
-//                        )).toList();
 
                 AbstractState curComputerState = null;
                 if (icComputer instanceof BDDICComputer) {
@@ -569,6 +565,22 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
             && !threadingState.hasLock(activeThread, "__CPAchecker_atomic_lock__")) {
                 continue;
             }
+
+            // 6.handle the case: 'e' tries to get lock 'x', but the 'x' has been held by other thread.
+            if(e.getRawStatement().contains("pthread_mutex_lock")
+                    && e.getEdgeType().equals(CFAEdgeType.StatementEdge)) {
+                AStatement statement = ((AStatementEdge) e).getStatement();
+                assert statement instanceof AFunctionCallStatement : "unknown case: pthread_mutex_lock is not a function call!";
+                try {
+                    String lockId = extractLockId((AFunctionCallStatement) statement);
+                    if(threadingState.hasLock(lockId) && !threadingState.hasLock(activeThread, lockId)) {
+                        continue;
+                    }
+                } catch (UnrecognizedCodeException ex) {
+                    ex.printStackTrace();
+                }
+            }
+
             result = e;
             break;
         }
@@ -576,4 +588,16 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
         stats.xporSelectValidEdgeTimer.stop();
         return result;
     }
+
+    public String extractLockId(final AFunctionCallStatement statement) throws UnrecognizedCodeException {
+        // first check for some possible errors and unsupported parts
+        List<? extends AExpression> params = statement.getFunctionCallExpression().getParameterExpressions();
+        if (!(params.get(0) instanceof CUnaryExpression)) {
+            throw new UnrecognizedCodeException("unsupported thread locking", params.get(0));
+        }
+
+        String lockId = ((CUnaryExpression)params.get(0)).getOperand().toString();
+        return lockId;
+    }
+
 }
