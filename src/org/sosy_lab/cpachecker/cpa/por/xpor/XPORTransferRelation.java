@@ -281,17 +281,16 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
 
         if(!nEdges.isEmpty()) {
             // handle the case where nEdges exist.
-            // TODO: we first choose a valid 'nEdge'.
             CFAEdge nEdgeToExplore = getValidEdge(nEdges, curThreadingState, curXPORState);
             if(nEdgeToExplore != null) {
-                // TODO: actually tid must be not equal for 'nEdges' that are not 'naEdges'.
-                int nEdgeExploreTid = threadIdNums.get(nEdgeToExplore.hashCode()).getSecondNotNull();
                 sucEdges.forEach(e -> {
                     int eTid = threadIdNums.get(e.hashCode()).getSecondNotNull();
                     if(!e.equals(nEdgeToExplore)
                             /* && eTid != nEdgeExploreTid */) {
                         // if one edge has the same tid with 'nEdgeToExplore', we don't add it to the isolatedSleepSet.
                         curXPORState.isolatedSleepSetAdd(Pair.of(eTid, e.hashCode()));
+                        // TODO: if the e is also in sleep set, then we remove it from the sleep set of 'curXPORState'.
+                        curXPORState.getSleepSet().remove(List.of(Pair.of(eTid, e.hashCode())));
                     }
                 });
                 return Collections.singleton(state);
@@ -328,7 +327,7 @@ public class XPORTransferRelation extends SingleEdgeTransferRelation {
                             public int compare(CFAEdge AEdge, CFAEdge BEdge) {
                                 int ATid = threadIdNums.get(AEdge.hashCode()).getSecondNotNull();
                                 int BTid = threadIdNums.get(BEdge.hashCode()).getSecondNotNull();
-                                return BTid - ATid;
+                                return ATid - BTid;
                             }
                         },
                         sucEdges);
