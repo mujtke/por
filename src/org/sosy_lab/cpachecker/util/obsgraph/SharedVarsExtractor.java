@@ -181,7 +181,7 @@ public class SharedVarsExtractor {
             return List.of();
         }
         List<SharedEvent> results = from(gRVars)
-                .transform(var -> new SharedEvent(var, null, null, null, null, null))
+                .transform(var -> new SharedEvent(var, SharedEvent.AccessType.READ))
                 .toList();
 
         return results;
@@ -201,10 +201,10 @@ public class SharedVarsExtractor {
 
             List<SharedEvent> results = new ArrayList<>();
             gRVars.forEach(var -> {
-                results.add(new SharedEvent(var, null, null, null, null, null));
+                results.add(new SharedEvent(var, SharedEvent.AccessType.READ));
             });
             gWVars.forEach(var -> {
-                results.add(new SharedEvent(var, null, null, null, null, null));
+                results.add(new SharedEvent(var, SharedEvent.AccessType.WRITE));
             });
 
             return results;
@@ -221,10 +221,10 @@ public class SharedVarsExtractor {
                     gWVars = sharedVarsFilter.apply(vars.getSecond());
             List<SharedEvent> results = new ArrayList<>();
             gRVars.forEach(var -> {
-                results.add(new SharedEvent(var, null, null, null, null, null));
+                results.add(new SharedEvent(var, SharedEvent.AccessType.READ));
             });
             gWVars.forEach(var -> {
-                results.add(new SharedEvent(var, null, null, null, null, null));
+                results.add(new SharedEvent(var, SharedEvent.AccessType.WRITE));
             });
 
             return results;
@@ -241,7 +241,7 @@ public class SharedVarsExtractor {
                 // Note: the lhs variable is a built-in local variable (e.g., func::__retval__).
                 Set<Var> gRVars = sharedVarsFilter.apply(extract0(retAssignment.get()).getFirst());
                 List<SharedEvent> results = from(gRVars)
-                        .transform(var -> new SharedEvent(var, null, null, null, null, null))
+                        .transform(var -> new SharedEvent(var, SharedEvent.AccessType.READ))
                         .toList();
 
                 return results;
@@ -261,7 +261,7 @@ public class SharedVarsExtractor {
 
             // TODO: how to handle the fun calls like '__VERIFIER_atomic_xxx' and 'pthread_mutex_xxx'
             List<SharedEvent> results = new ArrayList<>();
-            gRVars.forEach(var -> results.add(new SharedEvent(var, null, null, null, null, null)));
+            gRVars.forEach(var -> results.add(new SharedEvent(var, SharedEvent.AccessType.READ)));
 
             return results;
         }
@@ -281,7 +281,7 @@ public class SharedVarsExtractor {
                 // Should be the w vars?
                 Set<Var> gWVars = sharedVarsFilter.apply(extract0(lshExpr).getSecond());
                 List<SharedEvent> results = from(gWVars)
-                        .transform(var -> new SharedEvent(var, null, null, null, null, null))
+                        .transform(var -> new SharedEvent(var, SharedEvent.AccessType.WRITE))
                         .toList();
 
                 return results;

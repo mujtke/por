@@ -149,21 +149,21 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
         // firstly, we need to update all the sleep set of all gvaSuccessors.
         if (!cpdporParState.isUpdated()) {
           if (gvaSuccessors.size() > 1) {
-//            ImmutableList<PCDPORState> updateGVASuccessors =
-//                from(gvaSuccessors)
-//                    .transform(s -> AbstractStates.extractStateByType(s, PCDPORState.class))
-//                    .toList();
-            // sorted by tid of 'transferInEdge'
             ImmutableList<PCDPORState> updateGVASuccessors =
-                    from(gvaSuccessors)
-                            .transform(s -> AbstractStates.extractStateByType(s, PCDPORState.class))
-                            .toSortedList(new Comparator<PCDPORState>() {
-                              public int compare(PCDPORState A, PCDPORState B) {
-                                int ATid = A.getCurrentTransferInEdgeThreadId(),
-                                        BTid = B.getCurrentTransferInEdgeThreadId();
-                                return BTid - ATid;
-                              }
-                            });
+                from(gvaSuccessors)
+                    .transform(s -> AbstractStates.extractStateByType(s, PCDPORState.class))
+                    .toList();
+            // sorted by tid of 'transferInEdge'
+//            ImmutableList<PCDPORState> updateGVASuccessors =
+//                    from(gvaSuccessors)
+//                            .transform(s -> AbstractStates.extractStateByType(s, PCDPORState.class))
+//                            .toSortedList(new Comparator<PCDPORState>() {
+//                              public int compare(PCDPORState A, PCDPORState B) {
+//                                int ATid = A.getCurrentTransferInEdgeThreadId(),
+//                                        BTid = B.getCurrentTransferInEdgeThreadId();
+//                                return ATid - BTid;
+//                              }
+//                            });
 
             // obtain parent computation state to determine the dependency of successor transitions.
             AbstractState parComputeState = null;

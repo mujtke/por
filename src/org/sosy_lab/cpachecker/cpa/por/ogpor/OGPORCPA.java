@@ -1,29 +1,34 @@
 package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
+import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.interfaces.CPAFactory;
-import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
-import org.sosy_lab.cpachecker.core.interfaces.StateSpacePartition;
+import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.util.Triple;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
+import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
 import org.sosy_lab.cpachecker.util.threading.SingleThreadState;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Logger;
 
 @Options(prefix = "cpa.ogpor")
 public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis {
 
     private final Configuration config;
     private final CFA cfa;
+    private final LogManager logger;
+    private final ShutdownNotifier shutdownNotifier;
 
    @Option(
            secure = true,
@@ -36,13 +41,21 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
 
     public static CPAFactory factory() {return AutomaticCPAFactory.forType(OGPORCPA.class); }
 
+    @Override
+    public PrecisionAdjustment getPrecisionAdjustment() {
+        return new OGPORPrecisionAdjustment(logger);
+    }
+
     public OGPORCPA(
         Configuration pConfig,
-        CFA pCfa) throws InvalidConfigurationException {
+        CFA pCfa, LogManager pLogger,
+        ShutdownNotifier pShutdownNotifier) throws InvalidConfigurationException {
         super("sep", "sep",
-            new OGPORTransferRelation(pConfig, pCfa));
+            new OGPORTransferRelation(pConfig, pCfa, pLogger, pShutdownNotifier));
         config = pConfig;
         cfa = pCfa;
+        logger = pLogger;
+        shutdownNotifier = pShutdownNotifier;
     }
     @Override
     public AbstractState getInitialState(CFANode node, StateSpacePartition partition) throws InterruptedException {
@@ -57,6 +70,9 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
         Map<String, Triple<Integer, Integer, Integer>> initThreadStatus = new HashMap<>();
         initThreadStatus.put(mainFuncName, Triple.of(-1, 0, 0));
         OGPORState initState = new OGPORState(initMultiState, initThreadStatus);
+
+        // initially, the first element of osgBiMap is set as 'initState <-> \empty'.
+        GlobalInfo.getInstance().getOgInfo().getBiOGMap().put(initState, new ArrayList<ObsGraph>());
 
         return initState;
     }

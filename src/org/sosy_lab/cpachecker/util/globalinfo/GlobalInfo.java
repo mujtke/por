@@ -39,6 +39,8 @@ public class GlobalInfo {
   private ApronManager apronManager;
   private LogManager apronLogger;
   private LogManager logger;
+  // add: 2023.03.01 by yzc.
+  private OGInfo ogInfo;
 
   private GlobalInfo() {
 
@@ -57,6 +59,20 @@ public class GlobalInfo {
 
   public synchronized Optional<CFAInfo> getCFAInfo() {
     return Optional.ofNullable(cfaInfo);
+  }
+
+  public OGInfo getOgInfo() {
+    return ogInfo;
+  }
+
+  public synchronized void buildOGInfo(final Configuration pConfig) {
+    Preconditions.checkState(pConfig != null);
+    try {
+      ogInfo = new OGInfo(pConfig);
+    } catch (InvalidConfigurationException e) {
+      logger.log(Level.SEVERE,
+                      "Failed to build the biMap of states and OGGraphs: " + e.getMessage());
+    }
   }
 
   public synchronized void

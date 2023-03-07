@@ -1,22 +1,37 @@
 package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
+import com.google.common.base.Function;
+import com.google.common.base.Optional;
+import com.google.common.collect.BiMap;
+import com.google.common.collect.ImmutableSet;
+import edu.umd.cs.findbugs.annotations.NonNull;
+import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
+import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
+import org.sosy_lab.cpachecker.util.obsgraph.*;
 import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
 import org.sosy_lab.cpachecker.util.threading.SingleThreadState;
 import org.sosy_lab.cpachecker.util.threading.ThreadOperator;
 
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Options(prefix="cpa.ogpor")
 public class OGPORTransferRelation extends SingleEdgeTransferRelation {
@@ -65,18 +80,45 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
     )
     private boolean useIncClonedFunc = false;
 
+    @Option(
+            secure = true,
+            description = "the set of functions which begin atomic areas."
+    )
+    private Set<String> atomicBlockBeginFuncs = ImmutableSet.of("__VERIFIER_atomic_begin");
+
+    @Option(
+            secure = true,
+            description = "the set of functions which end atomic areas."
+    )
+    private Set<String> atomicBlockEndFuncs = ImmutableSet.of("__VERIFIER_atomic_end");
+
+    @Option(
+            secure = true,
+            description = "the set of functions which acquire locks."
+    )
+    private Set<String> lockBeginFuncs = ImmutableSet.of("pthread_mutex_lock", "lock");
+
+    @Option(
+            secure = true,
+            description = "the set of functions which release locks."
+    )
+    private Set<String> lockEndFuncs = ImmutableSet.of("pthread_mutex_unlock", "unlock");
+
     private final String mainThreadId;
+    private final CFANode mainExitNode;
 
     // use ThreadOperator to update the thread info.
     private final ThreadOperator threadOptr;
 
+    private final LogManager logger;
+    private final ShutdownNotifier shutdownNotifier;
 
-    public OGPORTransferRelation (
-            Configuration pConfig,
-            CFA pCfa)
+    public OGPORTransferRelation (Configuration pConfig,CFA pCfa, LogManager pLogger,
+                                  ShutdownNotifier pShutdownNotifier)
     throws InvalidConfigurationException {
         pConfig.inject(this);
         mainThreadId = pCfa.getMainFunction().getFunctionName();
+        mainExitNode = pCfa.getMainFunction().getExitNode();
         threadOptr = new ThreadOperator(
                 forConcurrent,
                 allowMultipleLHS,
@@ -86,6 +128,8 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
                 useIncClonedFunc,
                 mainThreadId,
                 pCfa);
+        logger = pLogger;
+        shutdownNotifier = pShutdownNotifier;
     }
 
     @Override
@@ -93,17 +137,24 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
 
         OGPORState parOGPORState = (OGPORState) state;
 
-        // case1: there is not any obs graph w.r.t parState.
-
-        // if not the case, we first generate child state & update the thread info at the same time.
+        // generate the child state with thread info updated.
         OGPORState chOGPORState = genAndUpdateThreadInfo(parOGPORState, cfaEdge);
+        if (chOGPORState == null) {
+            return Collections.emptySet();
+        }
 
-        // case2: there are some obs graphs in parState, then we add all graphs that don't
-        // conflict with the cfaEdge to the new state after handling all events w.r.t the cfaEdge.
+        // check whether enter/exit/in block area and update the block status.
+        checkAndSetBlockStatus(parOGPORState.getBlockStatus(), chOGPORState, cfaEdge);
 
-        return chOGPORState == null ? Collections.emptySet() : Set.of(chOGPORState);
+        return Set.of(chOGPORState);
     }
 
+    /**
+     * The function update the threadStatusMap and threadLocations
+     * @param parState
+     * @param cfaEdge
+     * @return
+     */
     private OGPORState genAndUpdateThreadInfo(OGPORState parState, CFAEdge cfaEdge) {
 
         MultiThreadState parMultiThreadState = parState.getMultiThreadState();
@@ -164,4 +215,33 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
 
         return chOGPORState;
     }
+
+    private void checkAndSetBlockStatus(BlockStatus parBlockStatus, OGPORState chState,
+                                        CFAEdge cfaEdge) {
+        if (cfaEdge instanceof CFunctionCallEdge) {
+            // if cfaEdge is the fun call like '__VERIFIER_atomic_begin()',
+            // 'pthread_mutex_lock' or other block begin functions.
+            Optional<CFunctionCall> funCall = ((CFunctionCallEdge) cfaEdge).getRawAST();
+            assert funCall.isPresent() : "function edge should have a funCall expression";
+            String funcName =
+                    funCall.get().getFunctionCallExpression().getFunctionNameExpression().toASTString();
+            if (atomicBlockBeginFuncs.contains(funcName) || lockBeginFuncs.contains(funcName)) {
+                // block begin.
+                chState.setBlockStatus(BlockStatus.BLOCK_BEGIN);
+            } else if (atomicBlockEndFuncs.contains(funcName) || lockEndFuncs.contains(funcName)) {
+                // block end.
+                chState.setBlockStatus(BlockStatus.BLOCK_END);
+            }
+        } else {
+            // non-functionCallEdge.
+            if (parBlockStatus == BlockStatus.BLOCK_BEGIN || parBlockStatus == BlockStatus.BLOCK_INSIDE) {
+                // current cfaEdge is inside a block.
+                chState.setBlockStatus(BlockStatus.BLOCK_INSIDE);
+            } else {
+                // not in a block.
+                chState.setBlockStatus(BlockStatus.NOT_IN_BLOCK);
+            }
+        }
+    }
+
 }

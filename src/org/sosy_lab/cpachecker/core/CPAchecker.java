@@ -344,6 +344,8 @@ public class CPAchecker {
         cfa = parse(programDenotation, stats);
         GlobalInfo.getInstance().storeCFA(cfa);
         GlobalInfo.getInstance().buildEdgeInfo(config, shutdownNotifier);
+        // 23-03-06 added by yzc.
+        GlobalInfo.getInstance().buildOGInfo(config);
         shutdownNotifier.shutdownIfNecessary();
 
         ConfigurableProgramAnalysis cpa;

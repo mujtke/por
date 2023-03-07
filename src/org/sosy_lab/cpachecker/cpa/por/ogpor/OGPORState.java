@@ -4,6 +4,7 @@ package org.sosy_lab.cpachecker.cpa.por.ogpor;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
 import org.sosy_lab.cpachecker.util.Triple;
+import org.sosy_lab.cpachecker.util.obsgraph.BlockStatus;
 import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
 import org.sosy_lab.cpachecker.util.threading.ThreadInfoProvider;
 
@@ -19,6 +20,16 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
     // String :: thread id.
     // Triple :: threadStatus
     private final Map<String, Triple<Integer, Integer, Integer>> threadStatusMap;
+
+    private BlockStatus blockStatus = BlockStatus.NOT_IN_BLOCK;
+
+    public BlockStatus getBlockStatus() {
+        return blockStatus;
+    }
+
+    public void setBlockStatus(BlockStatus blockStatus) {
+        this.blockStatus = blockStatus;
+    }
 
     @Override
     public int hashCode() {
