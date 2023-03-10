@@ -196,8 +196,8 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
                     newThreadInfo.getSecondNotNull());
         }
 
-        // third: update the NO.x of transInThread & update the location which caused by cfaEdge.
-        // l0 --- cfaEdge ---> l1
+        // third: update the NO.x of transInThread & update the location whose change
+        // is caused by cfaEdge: l0 --- cfaEdge ---> l1
         Triple<Integer, Integer, Integer> oldThreadStatus = newThreadStatusMap.get(transInThread);
         int fir = oldThreadStatus.getFirst(), sec = oldThreadStatus.getSecond(), thi =
                 oldThreadStatus.getThird() + 1;

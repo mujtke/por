@@ -4,7 +4,9 @@ package org.sosy_lab.cpachecker.cpa.por.ogpor;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
 import org.sosy_lab.cpachecker.util.Triple;
+import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 import org.sosy_lab.cpachecker.util.obsgraph.BlockStatus;
+import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
 import org.sosy_lab.cpachecker.util.threading.ThreadInfoProvider;
 
@@ -23,6 +25,13 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
 
     private BlockStatus blockStatus = BlockStatus.NOT_IN_BLOCK;
 
+    // the table records all global vars' last accesses in a trace.
+    private final Map<Var, SharedEvent> lastAccessTable;
+
+    public Map<Var, SharedEvent> getLastAccessTable() {
+        return lastAccessTable;
+    }
+
     public BlockStatus getBlockStatus() {
         return blockStatus;
     }
@@ -38,7 +47,15 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
 
     @Override
     public boolean equals(Object obj) {
-        if (!(obj instanceof OGPORState) || obj == null) {
+        //debug.
+        // TODO: this influence the cover status.
+        if (true) {
+            return false;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (!(obj instanceof OGPORState)) {
             return false;
         }
         OGPORState other = (OGPORState) obj;
@@ -72,17 +89,20 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
         Map<String, Triple<Integer, Integer, Integer>> pThreadStatus) {
         multiThreadState = pState;
         threadStatusMap = pThreadStatus;
+        lastAccessTable = new HashMap<>();
     }
 
     public OGPORState(final OGPORState pOther) {
         assert pOther != null;
         MultiThreadState multiOther = pOther.getMultiThreadState();
         Map<String, Triple<Integer, Integer, Integer>> mapOther = pOther.getThreadStatusMap();
+        Map<Var, SharedEvent> tableOther = pOther.getLastAccessTable();
         // the 'locations' in MultiThreadState is a 'final' field, so the shallow copy will lead
         // all copies point to a same location.
         this.multiThreadState = new MultiThreadState(new HashMap<>(multiOther.getThreadLocations()),
                 multiOther.getTransThread(), multiOther.isFollowFunctionCalls());
         this.threadStatusMap = new HashMap<>(mapOther);
+        this.lastAccessTable = new HashMap<>(tableOther);
     }
 
     public Map<String, Triple<Integer, Integer, Integer>> getThreadStatusMap() {
