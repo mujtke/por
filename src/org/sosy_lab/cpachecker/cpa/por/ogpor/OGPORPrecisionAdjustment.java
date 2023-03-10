@@ -245,7 +245,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         // r --> w0 ==> r --> w1, in which w1 is traceBefore w0.
         // if w0 <hb r, then w1 shouldn't <hb w0 (<hb = happen before).
         // if w0 !<hb r, then there is no limit to w1.
-        SharedEvent w0 = r.getReadFrom(), w1 = w0;
+        SharedEvent w0 = r.getReadFrom(), w1;
         if (w0 == null) { // r doesn't read from any event till now.
             return;
         }
@@ -254,7 +254,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
                 rIndexInNode = lastNode.getEvents().indexOf(r);
         assert rNodeIndexInG >= 0 && rIndexInNode >= 0;
         do {
-            w1 = G.searchNewWEvent(w1);
+            w1 = G.searchNewWEvent(w0);
             if (w1 == null) { // no new WEvent that is before r and could be read by r.
                 break;
             }
@@ -266,13 +266,15 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
                     w1IndexInNode = w1.getOgNode().getEvents().indexOf(w1);
             ObsGraph newG= new ObsGraph(G);
             newG.setReadFrom4FR(rNodeIndexInG, rIndexInNode, w1NodeIndexInG, w1IndexInNode);
-            newG.resetLastNode(w1NodeIndexInG); // for newG, the last Node changes to w1Node.
-            ARGState targetARGState = w1.getOgNode().getPreARGState();
+            // for newG, the last Node changes to the predecessor of w0.
+            newG.resetLastNode(G.getNodes().indexOf(w0.getOgNode()));
+            ARGState targetARGState = w0.getOgNode().getPreARGState();
             if (results.get(targetARGState) != null) {
                 results.get(targetARGState).add(newG);
             } else {
                 results.put(targetARGState, List.of(newG));
             }
+            w0 = w1;
         } while (true);
     }
 
