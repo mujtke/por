@@ -11,7 +11,9 @@ import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
 import org.sosy_lab.cpachecker.util.threading.ThreadInfoProvider;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable {
 
@@ -26,10 +28,29 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
     private BlockStatus blockStatus = BlockStatus.NOT_IN_BLOCK;
 
     // the table records all global vars' last accesses in a trace.
-    private final Map<Var, SharedEvent> lastAccessTable;
+//    private final Map<Var, SharedEvent> lastAccessTable;
 
-    public Map<Var, SharedEvent> getLastAccessTable() {
-        return lastAccessTable;
+    // when a thread is newly created, we put its num into 'waitingForThreads' to represent that
+    // we still don't meet the first shared event of the thread.
+    private final Set<Integer> waitingThreads = new HashSet<>();
+
+    // indicate that whether we need to delay putting the state into the waitlist.
+    private boolean needDelay = false;
+
+    // TODO
+    public boolean graphsOriginallyEmpty = true;
+    public Triple<Integer, Integer, Integer> spawnThread = null;
+
+    public boolean isNeedDelay() {
+        return needDelay;
+    }
+
+    public void setNeedDelay(boolean needDelay) {
+        this.needDelay = needDelay;
+    }
+
+    public Set<Integer> getWaitingThreads() {
+        return waitingThreads;
     }
 
     public BlockStatus getBlockStatus() {
@@ -89,20 +110,20 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
         Map<String, Triple<Integer, Integer, Integer>> pThreadStatus) {
         multiThreadState = pState;
         threadStatusMap = pThreadStatus;
-        lastAccessTable = new HashMap<>();
+//        lastAccessTable = new HashMap<>();
     }
 
     public OGPORState(final OGPORState pOther) {
         assert pOther != null;
         MultiThreadState multiOther = pOther.getMultiThreadState();
         Map<String, Triple<Integer, Integer, Integer>> mapOther = pOther.getThreadStatusMap();
-        Map<Var, SharedEvent> tableOther = pOther.getLastAccessTable();
+//        Map<Var, SharedEvent> tableOther = pOther.getLastAccessTable();
         // the 'locations' in MultiThreadState is a 'final' field, so the shallow copy will lead
         // all copies point to a same location.
         this.multiThreadState = new MultiThreadState(new HashMap<>(multiOther.getThreadLocations()),
                 multiOther.getTransThread(), multiOther.isFollowFunctionCalls());
         this.threadStatusMap = new HashMap<>(mapOther);
-        this.lastAccessTable = new HashMap<>(tableOther);
+//        this.lastAccessTable = new HashMap<>(tableOther);
     }
 
     public Map<String, Triple<Integer, Integer, Integer>> getThreadStatusMap() {
@@ -116,5 +137,6 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
     @Override
     public void removeThreadId(String pThreadId) {
         multiThreadState.removeThreadId(pThreadId);
+        threadStatusMap.remove(pThreadId); // exit thread for threadStatusMap.
     }
 }

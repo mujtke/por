@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
+import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Triple;
@@ -20,7 +21,65 @@ public class ObsGraph {
     }
 
     public ObsGraph(final ObsGraph other) {
-        nodes = new ArrayList<>(other.getNodes());
+        // here we need guarantee the deep copy.
+        // we should also copy the order relations and trace orders.
+        nodes = new ArrayList<>();
+        for (OGNode n : other.getNodes()) {
+            OGNode nDeepCopy = n.copy();
+            nodes.add(nDeepCopy);
+        }
+
+        // copy the orders.
+        List<OGNode> oNodes = other.getNodes();
+        for (int i = 0; i < nodes.size(); i++) {
+            OGNode nCopy = nodes.get(i), nOther = oNodes.get(i);
+            // pre/suc of nCopy.
+            int preNIdx = oNodes.indexOf(nOther.getPredecessor()),
+                    sucNIdx = oNodes.indexOf(nOther.getSuccessor());
+            nCopy.setPredecessor(preNIdx < 0 ? null : nodes.get(preNIdx));
+            nCopy.setSuccessor(sucNIdx < 0 ? null : nodes.get(sucNIdx));
+
+            // order relations of events in nCopy.
+            List<SharedEvent> esCopy = nCopy.getEvents(), esOther = nOther.getEvents();
+            for (int j = 0; j < nCopy.getEventsNum(); j++) {
+                SharedEvent eCopy = esCopy.get(j), eOther = esOther.get(j);
+
+                // poAfter:
+                SharedEvent eOtherPa = eOther.getPoAfter();
+                if (eOtherPa != null) {
+                    int eOtherPaNdIdx = oNodes.indexOf(eOtherPa.getOgNode()),
+                            eOtherPaIdx = eOtherPa.getOgNode().getEvents().indexOf(eOtherPa);
+                    eCopy.setPoAfter(nodes.get(eOtherPaNdIdx).getEvents().get(eOtherPaIdx));
+                }
+                // poBefore:
+                List<SharedEvent> eOtherPb = eOther.getPoBefore();
+                if (eOtherPb != null && eOtherPb.size() > 0) {
+                    for (SharedEvent eOpb : eOtherPb) {
+                        int eOtherPbNdIdx = oNodes.indexOf(eOpb.getOgNode()), eOtherPbIdx =
+                                eOpb.getOgNode().getEvents().indexOf(eOpb);
+                        eCopy.getPoBefore().add(nodes.get(eOtherPbNdIdx).getEvents().get(eOtherPbIdx));
+                    }
+                }
+
+                // readFrom:
+                SharedEvent eOtherRf = eOther.getReadFrom();
+                if (eOtherRf != null) {
+                    int eOtherRfNodeIndex = oNodes.indexOf(eOtherRf.getOgNode()), eOtherRfIndex =
+                            eOtherRf.getOgNode().getEvents().indexOf(eOtherRf);
+                    eCopy.setReadFrom(nodes.get(eOtherRfNodeIndex).getEvents().get(eOtherRfIndex));
+                }
+                // readBy:
+                List<SharedEvent> eOtherRb = eOther.getReadBy();
+                if (eOtherRb != null && eOtherRb.size() > 0) {
+                    for (SharedEvent eOrb : eOtherRb) {
+                        int eOtherRbNdIdx = oNodes.indexOf(eOrb.getOgNode()), eOtherRbIdx =
+                                eOrb.getOgNode().getEvents().indexOf(eOrb);
+                        eCopy.getReadBy().add(nodes.get(eOtherRbNdIdx).getEvents().get(eOtherRbIdx));
+                    }
+                }
+
+            }
+        }
     }
 
     public List<OGNode> getNodes() {
@@ -37,6 +96,19 @@ public class ObsGraph {
 
     public void setLastNode(OGNode lastNode) {
         this.lastNode = lastNode;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ObsGraph obsGraph = (ObsGraph) o;
+        return needToRevisit == obsGraph.needToRevisit && Objects.equals(nodes, obsGraph.nodes) && Objects.equals(lastNode, obsGraph.lastNode);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(nodes, lastNode, needToRevisit);
     }
 
     public OGNode getLastNode() {
@@ -119,69 +191,120 @@ public class ObsGraph {
         }
     }
 
+    public void readd(@NonNull OGNode n) {
+        // re-add the node n to the graph (this).
+        // first: update the pre/suc relation.
+        assert lastNode != null;
+        n.setPredecessor(lastNode);
+        lastNode.setSuccessor(n);
+        lastNode = n; // n become the lastNode.
+
+        // second: update the po relation of the first event in n.
+        // NOTICE: the read from relations can't be updated, because we will use them to detect
+        // the conflicts.
+        SharedEvent e0 = n.getEvents().get(0), pbe0;
+        assert e0 != null;
+        pbe0 = searchPoBefore(e0, n.getThreadStatus());
+        if (pbe0 != null) {
+            e0.setPoAfter(pbe0);
+            pbe0.getPoBefore().add(e0);
+        }
+    }
+
+    public void removeNode(@NonNull OGNode n) {
+        // remove node n from the graph (this).
+        // in this step we perform the opposite operations of 'readd'.
+
+        // first: restore the pre/suc relation.
+        lastNode = n.getPredecessor();
+        assert lastNode != null;
+        lastNode.setSuccessor(null);
+        n.setPredecessor(null);
+
+        // second: restore the po relation.
+        // NOTICE: the read from relations still are preserved, we just remove the node 'n' from
+        // the trace.
+        SharedEvent e0 = n.getEvents().get(0), pbe0 = e0.getPoAfter();
+        if (pbe0 != null) {
+            e0.setPoAfter(null);
+            pbe0.getPoBefore().remove(e0);
+        }
+
+    }
+
     // search for the shared event that poBefore 'e'
     private SharedEvent searchPoBefore(SharedEvent e, Triple<Integer, Integer, Integer> ets) {
         assert ets.getFirst() != null && ets.getSecond() != null && ets.getThird() != null;
 
-        SharedEvent poBeforeE;
+        boolean isInFirstNodeOfOneThread = e.getOgNode().isFirstOneInThread();
+        SharedEvent poBeforeE = null;
         OGNode pre = e.getOgNode().getPredecessor();
-        if (ets.getThird() == 1) {
-            // the thread that e locates at is newly created.
-            if (pre == null) { // which means e is the first node globally.
-                return null;
-            }
-            int eParTid = ets.getFirst();
-            while (pre != null) {
-                assert pre.getThreadStatus().getSecond() != null;
-                if (pre.getThreadStatus().getSecond() == eParTid)  {
-                    // find the first ogNode that belongs to parent thread of e.
-                    // return the last event.
-                    poBeforeE = pre.getEvents().get(pre.getEventsNum() - 1);
-                    return poBeforeE;
-                }
-                pre = pre.getPredecessor();
-            }
-        }
-
-        // else, the thread that e in is not newly create.
         while (pre != null) {
             Triple<Integer, Integer, Integer> nts = pre.getThreadStatus();
             assert nts.getFirst() != null && nts.getSecond() != null && nts.getThird() != null;
-            if ((ets.getFirst().intValue() == nts.getFirst().intValue())
-                    && (ets.getSecond().intValue() == nts.getSecond().intValue()
-                    && (ets.getThird() > nts.getThird()))) {
-                // Note: there may be some non-shared events between ets and nts, so ets.getThird()
-                // may be more than 1 bigger than nts.getThird().
-                poBeforeE = pre.getEvents().get(pre.getEventsNum() - 1);
-                return poBeforeE;
+
+            if (!isInFirstNodeOfOneThread) {
+                // if the thread that e in is not newly create.
+                if ((ets.getFirst().intValue() == nts.getFirst().intValue())
+                        && (ets.getSecond().intValue() == nts.getSecond().intValue()
+                        && (ets.getThird() > nts.getThird()))) {
+                    // Note: there may be some non-shared events between ets and nts, so ets.getThird()
+                    // may be more than 1 bigger than nts.getThird().
+                    poBeforeE = pre.getEvents().get(pre.getEventsNum() - 1);
+                    break;
+                }
+            } else {
+                // else, the thread e in is newly create, i.e., e is the first shared event.
+                // if so, we should find the spawning point of the thread e as the result.
+                if ((ets.getFirst().intValue() == nts.getSecond().intValue())
+                        && (pre.spawnedThread != null)) {
+                    poBeforeE = pre.getEvents().get(pre.getEventsNum() - 1);
+                    break;
+                }
             }
+
             pre = pre.getPredecessor();
         }
 
-        return null;
+        return poBeforeE;
     }
 
     // search for the shared event that readBy 'e'.
     private SharedEvent searchReadFrom(SharedEvent e) {
 
-        OGPORState eOGPORState = AbstractStates.extractStateByType(e.getOgNode().getPreARGState(),
-                OGPORState.class);
-        assert eOGPORState != null;
-        return (eOGPORState.getLastAccessTable() == null) ? null :
-                eOGPORState.getLastAccessTable().get(e.getVar());
-//        OGNode pre = e.getOgNode().getPredecessor();
-//        while (pre != null) {
-//            List<SharedEvent> eventsInPre = pre.getEvents();
-//            for (int j = pre.getEventsNum() - 1; j >= 0; j--) {
-//                SharedEvent je = eventsInPre.get(j);
-//                if (je.getVar().equals(e.getVar())
-//                && je.getAType().equals(SharedEvent.AccessType.WRITE)) {
-//                    return je;
-//                }
-//            }
-//            pre = pre.getPredecessor();
-//        }
-//        return null;
+//        OGPORState eOGPORState = AbstractStates.extractStateByType(e.getOgNode().getPreARGState(),
+//                OGPORState.class);
+//        assert eOGPORState != null;
+//        // TODO: the OGNode that owns event returned from here has incorrect pre/suc info.
+//        return (eOGPORState.getLastAccessTable() == null) ? null :
+//                eOGPORState.getLastAccessTable().get(e.getVar());
+        return getLastWEvent(e);
+    }
+
+    // search the last w access for r event e in the graph that e is in.
+    public SharedEvent getLastWEvent(SharedEvent e) {
+        assert e.getOgNode() != null;
+        OGNode curNode = e.getOgNode(), preNode = curNode.getPredecessor();
+        SharedEvent lastW = null, tmp;
+        boolean find = false;
+        while (preNode != null) {
+            // TODO: in one ogNode, only the last event may be the w?
+            for (int i = preNode.getEventsNum() - 1; i >= 0; i--) {
+                tmp = preNode.getEvents().get(i);
+                if (tmp.getVar().equals(e.getVar())
+                        && tmp.getAType().equals(SharedEvent.AccessType.WRITE)) {
+                    lastW = tmp;
+                    find = true;
+                    break;
+                }
+            }
+            if (find) {
+                break;
+            }
+            preNode = preNode.getPredecessor();
+        }
+
+        return lastW;
     }
 
     public int contain(OGNode ogNode) {
@@ -226,18 +349,21 @@ public class ObsGraph {
     private boolean wConflict(SharedEvent w0, OGNode ogNode, OGPORState parState) {
 
         // if 'w0 <--- r0' and r0 has happened before w0    ===> conflict.
-        Var wVar = w0.getVar();
+//        Var wVar = w0.getVar();
         List<SharedEvent> r0s = w0.getReadBy();
         for (SharedEvent r0 : r0s) {
             if (r0.traceBefore(w0)) {
                 return true;
             }
         }
-        // when 'lastW <--- r', r hasn't happened before w0 ===> conflict.
-        SharedEvent lastW = parState.getLastAccessTable().get(wVar);
-        for (SharedEvent r : lastW.getReadBy()) {
-            if ((!r.traceBefore(w0))) {
-                return true;
+        // when 'lastW <--- r' and r hasn't happened before w0 ===> conflict.
+//        SharedEvent lastW = parState.getLastAccessTable().get(wVar);
+        SharedEvent lastW = getLastWEvent(w0);
+        if (lastW != null) {
+            for (SharedEvent r : lastW.getReadBy()) {
+                if ((!r.traceBefore(w0))) {
+                    return true;
+                }
             }
         }
 
@@ -248,9 +374,10 @@ public class ObsGraph {
 
         // if 'r0 ---> w0' but 'lastW != w0'     ===> conflict.
         // if 'r0 ---> null' but 'lastW != null' ===> conflict.
-        Var rVar = r0.getVar();
-        SharedEvent w0 = r0.getReadFrom(), lastW =
-                parState.getLastAccessTable().get(rVar);
+//        Var rVar = r0.getVar();
+        SharedEvent w0 = r0.getReadFrom();
+//        SharedEvent lastW = parState.getLastAccessTable().get(rVar);
+        SharedEvent lastW = getLastWEvent(r0);
         if ((w0 != null && !w0.equals(lastW)) || (w0 == null && lastW != null)) {
             return true;
         }
@@ -293,15 +420,28 @@ public class ObsGraph {
 
     public void resetLastNode(int newLastNodeIndex) {
         // all nodes after newLastNode need to change their numInTrace and predecessor/successor.
+        // at the same time, the po relations of the beginning events and the last events in these
+        // nodes need to be removed.
+
         // newLastNodeIndex = -1 represents that all nodes need to change.
         newLastNodeIndex = Math.max(newLastNodeIndex, 0);
         lastNode = nodes.get(newLastNodeIndex);
         assert lastNode != null;
         OGNode cur = lastNode, next = lastNode.getSuccessor();
+        SharedEvent firstE, lastE, pbFirstE;
         while (next != null) {
             cur.setSuccessor(null);
             next.setPredecessor(null);
             next.setNumInTrace(-1);
+            firstE = next.getEvents().get(0); // the first event in next.
+            pbFirstE = firstE.getPoAfter(); // the event poBefore firstE.
+            firstE.setPoAfter(null);
+            if (pbFirstE != null) {
+                pbFirstE.getPoBefore().remove(firstE);
+            }
+            lastE = next.getEvents().get(next.getEventsNum() - 1); // the last event in next.
+            lastE.getPoBefore().clear(); // the events poAfter lastE.
+
             cur = next;
             next = next.getSuccessor();
         }

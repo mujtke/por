@@ -14,14 +14,11 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
-import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
-import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
-import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
-import org.sosy_lab.cpachecker.util.obsgraph.SharedVarsExtractor;
-import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
+import org.sosy_lab.cpachecker.util.obsgraph.*;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -31,7 +28,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
 
     // the map of between states and list<og>s. And this just points to the map created in
     // GlobalInfo.
-    private final BiMap<AbstractState, List<ObsGraph>> ogsBiMap;
+    private final BiOGMap<AbstractState, List<ObsGraph>> ogsBiMap;
 
     private static final SharedVarsExtractor sharedVarsExtractor = new SharedVarsExtractor();
 
@@ -56,40 +53,57 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
             Function<AbstractState, AbstractState> stateProjection,
             AbstractState fullState) throws CPAException, InterruptedException {
 
-        //debug.
-//        if (true)
-//            return Optional.of(PrecisionAdjustmentResult.create(state, precision, PrecisionAdjustmentResult.Action.CONTINUE));
         assert fullState instanceof ARGState && state instanceof OGPORState;
         ARGState chArgState = (ARGState) fullState,
                 parArgState = chArgState.getParents().iterator().next(); // we think parents.size() <= 1 now.
         OGPORState chOgState = (OGPORState) state,
                 parOgState = AbstractStates.extractStateByType(parArgState, OGPORState.class);
         CFAEdge cfaEdge = parArgState.getEdgeToChild(chArgState);
+        assert cfaEdge != null && parOgState != null;
+
+        // debug.
+        int parStateId = parArgState.getStateId();
+        int a = parStateId;
+
+        // TODO: [s1, s2, .., sn], sn will be visited first, but the precision of s1 will be
+        //  adjusted first. How to deal with this?
 
         // 1. if there is not any obs graphs w.r.t. parOgState, then the exploration stops.
         if (ogsBiMap.get(parOgState) == null) {
             return Optional.empty();
         }
-        // TODO: [s1, s2, .., sn], sn will be visited first, but the precision of s1 will be
-        //  adjusted first. So we try to leave the ogGraphs for sn instead s1.
-        List<ARGState> siblings = new ArrayList<>(parArgState.getChildren());
-        if (!chArgState.equals(siblings.get(siblings.size() - 1))) {
-            return Optional.of(PrecisionAdjustmentResult.create(state, precision,
-                    PrecisionAdjustmentResult.Action.CONTINUE));
-        }
 
         // 2. if there are some obs graphs w.r.t. parState, then we associate all graphs that don't
         // conflict with the cfaEdge (from parArgState -> chArgState) with the chOgState.
+        if (ogsBiMap.get(parOgState).isEmpty()) {
+            // if it's the case that graph w.r.t. parOgState is empty originally.
+
+            // else, it's the case that all graphs w.r.t. parOgState have been transmitted.
+            if (!parOgState.graphsOriginallyEmpty) {
+                return Optional.of(PrecisionAdjustmentResult.create(state, precision,
+                        PrecisionAdjustmentResult.Action.CONTINUE));
+            }
+        }
+        parOgState.graphsOriginallyEmpty = false;
+
+        // 3. else, there are still some graphs w.r.t. in parOgState, we need to deal with them.
         // 1) firstly, extract shared vars' info from the cfaEdge.
         List<ObsGraph> parGraphs = ogsBiMap.get(parOgState);
         // check whether enter/exit/in block area.
         // checkAndSetBlockStatus(parOGPORState.getBlockStatus(), chOGPORState, cfaEdge);
         List<SharedEvent> sharedEvents = sharedVarsExtractor.extractSharedVarsInfo(cfaEdge);
-        updateLastAccessTable(sharedEvents, parOgState, chOgState); // update the last access table
+//        updateLastAccessTable(sharedEvents, parOgState, chOgState); // update the last access table
         if (sharedEvents.isEmpty()) {
             // no shared vars access, i.e., cfaEdge just access local vars.
             // in this case, we associate all graphs w.r.t. parOgState with chOgState directly.
-            ogsBiMap.inverse().put(parGraphs, chOgState);
+            // and set the chOgState as delayed.
+            // TODO: not sure for the reversePut method.
+//            ogsBiMap.reversePut(parGraphs, parOgState, chOgState);
+//            parOgState.setHasChildDelayed(true);
+            List<ObsGraph> chGraphs = new ArrayList<>(parGraphs);
+            parGraphs.clear();
+            ogsBiMap.put(chOgState, chGraphs);
+            chOgState.setNeedDelay(true); // need to delay, whenever the chGraphs is not null.
             return Optional.of(PrecisionAdjustmentResult.create(chOgState, precision,
                     PrecisionAdjustmentResult.Action.CONTINUE));
         }
@@ -97,8 +111,8 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         // 2) if the cfaEdge access global vars, then we generate a OGNode for it.
         OGNode newOGNode = genNewOGNode(sharedEvents, chOgState, parArgState);
 
-        // 3) update the graphs in parGraphs by using newOGNode, and associate the newly produced
-        // graphs with chOgState.
+        // 3) by using newOGNode, find the graphs that need to be associated with chOgState, and
+        // disassociating them with parOgState.
         List<ObsGraph> chGraphs = genAndUpdateObsGraphs(parGraphs, parOgState, newOGNode);
         if (chGraphs.isEmpty()) {
             // after the update, no new graphs produced because of the conflict, so the exploration
@@ -106,10 +120,10 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
             return Optional.empty();
         }
 
-        // else, we associate the chGraphs with chOgState (remember that, till now the chGraphs
-        // is associated with the parOgState).
-        // s0 <-> parGraphs  ====>  s1 <-> chGraphs.
-        ogsBiMap.inverse().put(chGraphs, chOgState);
+        // else, we associate the chGraphs with chOgState
+//        ogsBiMap.reversePut(chGraphs, parOgState, chOgState);
+        ogsBiMap.put(chOgState, chGraphs);
+        chOgState.setNeedDelay(true);
 
         // 3. when 'chGraphs' is not empty, we need to run all possible revisit processes, which
         // include: forward revisit (for R) and backward revisit (for W).
@@ -127,74 +141,97 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         return PrecisionAdjustment.super.strengthen(pState, pPrecision, otherStates);
     }
 
-    private void updateLastAccessTable(List<SharedEvent> sharedEvents, OGPORState parState,
-                                       OGPORState chState) {
-        List<SharedEvent> WEvents = from(sharedEvents)
-                .filter(e -> e.getAType().equals(SharedEvent.AccessType.WRITE))
-                .toList();
-        assert WEvents.size() <= 1 : "more than one W event in an edge is not supported now.";
-        SharedEvent WEvent = WEvents.isEmpty() ? null : WEvents.get(0);
-        Map<Var, SharedEvent> chTable = chState.getLastAccessTable();
-        chTable.putAll(parState.getLastAccessTable());
-        if (WEvent != null) {
-            chTable.put(WEvent.getVar(), WEvent);
-        }
-    }
+//    private void updateLastAccessTable(List<SharedEvent> sharedEvents, OGPORState parState,
+//                                       OGPORState chState) {
+//        List<SharedEvent> WEvents = from(sharedEvents)
+//                .filter(e -> e.getAType().equals(SharedEvent.AccessType.WRITE))
+//                .toList();
+//        assert WEvents.size() <= 1 : "more than one W event in an edge is not supported now.";
+//        SharedEvent WEvent = WEvents.isEmpty() ? null : WEvents.get(0);
+//        Map<Var, SharedEvent> chTable = chState.getLastAccessTable();
+//        chTable.putAll(parState.getLastAccessTable());
+//        if (WEvent != null) {
+//            chTable.put(WEvent.getVar(), WEvent);
+//        }
+//    }
 
-    private OGNode genNewOGNode(@NonNull List<SharedEvent> events, OGPORState state,
+    private OGNode genNewOGNode(@NonNull List<SharedEvent> events, OGPORState chState,
                                 ARGState preARGState) {
 
         assert !events.isEmpty() : "OGNode must contains access to global vars!";
-        String transInThread = state.getMultiThreadState().getTransThread();
+        String transInThread = chState.getMultiThreadState().getTransThread();
         assert transInThread != null : "transInThread must not be null!";
-        return new OGNode(events, state.getThreadStatusMap().get(transInThread),
-                state.getBlockStatus(), preARGState);
+
+        OGNode newOGNode = new OGNode(events, chState.getThreadStatusMap().get(transInThread),
+                chState.getBlockStatus(), preARGState, transInThread);
+
+        Integer transThreadNum = chState.getThreadStatusMap().get(transInThread).getSecond();
+        if (chState.getWaitingThreads().contains(transThreadNum)) {
+            // this means the newOGNode is the first node of transInThread.
+            newOGNode.setFirstOneInThread(true);
+            chState.getWaitingThreads().remove(transThreadNum);
+        }
+        if (chState.spawnThread != null) {
+            // if the inEdge of chState is the thread create edge, then we set the spawnedThread
+            // for the newOGNode.
+            newOGNode.spawnedThread = chState.spawnThread;
+        }
+
+        return newOGNode;
     }
 
     /**
-     * This method update the graphs in {@param oldGraphs} according to the new produced
-     * {@param ogNode}.
-     * @param oldGraphs the list of graphs that wait to update.
+     *
+     * @param parGraphs
      * @param parState
      * @param ogNode
-     * @return the list of updated graphs, could be empty.
+     * @return
      */
-    private List<ObsGraph> genAndUpdateObsGraphs(List<ObsGraph> oldGraphs, OGPORState parState,
+    private List<ObsGraph> genAndUpdateObsGraphs(List<ObsGraph> parGraphs, OGPORState parState,
                                           OGNode ogNode) {
 
-        if (oldGraphs.isEmpty()) {
-            // oldGraphs is empty means that there isn't any OGNode added still now, so we create a
-            // new graph which only contain the 'ogNode' and put the new graph into oldGraphs.
+        if (parGraphs.isEmpty()) {
+            // parGraphs is empty means that there isn't any OGNode added still now, so we create a
+            // new graph which only contain the 'ogNode' and put the new graph into parGraphs.
             ObsGraph newGraph = new ObsGraph();
-            // add ogNode to oldGraphs with update the order relations.
+            // add ogNode to parGraphs with update the order relations.
             newGraph.addNewNode(ogNode);
-            oldGraphs.add(newGraph);
+            parGraphs.add(newGraph);
 
-            return oldGraphs;
+            return parGraphs;
         }
 
         // else, there some graphs w.r.t. parState, for each of them, we need to handle different
         // cases.
-        Iterator<ObsGraph> it = oldGraphs.iterator();
+        Iterator<ObsGraph> it = parGraphs.iterator();
+        List<ObsGraph> chGraphs = new ArrayList<>();
         while(it.hasNext()) {
             ObsGraph G = it.next();
             OGNode nodeInG = G.get(ogNode); // handle the 'equals' method of OGNode carefully.
             // case1: the 'ogNode' has been in G.
             if (nodeInG != null) {
-                // update the nodeInG's threadStatus by 'ogNode'.
+                // update the nodeInG's threadStatus and preARGState by 'ogNode'.
                 nodeInG.setThreadStatus(ogNode.getThreadStatus());
+                nodeInG.setPreARGState(ogNode.getPreARGState());
+                G.readd(nodeInG); // re-add the nodeInG to restore the pre/suc and po relation.
                 if (G.hasConflict(nodeInG, parState)) {
-                    it.remove();
+                    G.removeNode(nodeInG); // on conflict, we need to remove nodeIG from G.
+                    continue; // having conflict, then dropping this graph.
                 }
+                chGraphs.add(G); // no conflict, add this graph to chGraphs.
+                it.remove(); // chGraphs add the G means we need remove it from parGraphs.
                 continue;
             }
             // case2: ogNode is not in G, then we need add it to G.
-            OGNode copyOfOgNode = ogNode.copy(); // deep copy.
+            // deep copy except for relations.
+            OGNode copyOfOgNode = it.hasNext() ? new OGNode(ogNode) : ogNode;
             G.addNewNode(copyOfOgNode);
             G.setNeedToRevisit(true);
+            chGraphs.add(G);
+            it.remove();
         }
 
-        return oldGraphs;
+        return chGraphs;
     }
 
     private Map<ARGState, List<ObsGraph>> revisit(List<ObsGraph> obsGraphs) {
@@ -267,12 +304,14 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
             ObsGraph newG= new ObsGraph(G);
             newG.setReadFrom4FR(rNodeIndexInG, rIndexInNode, w1NodeIndexInG, w1IndexInNode);
             // for newG, the last Node changes to the predecessor of w0.
-            newG.resetLastNode(G.getNodes().indexOf(w0.getOgNode()));
+            newG.resetLastNode(G.getNodes().indexOf(w0.getOgNode().getPredecessor()));
             ARGState targetARGState = w0.getOgNode().getPreARGState();
             if (results.get(targetARGState) != null) {
                 results.get(targetARGState).add(newG);
             } else {
-                results.put(targetARGState, List.of(newG));
+                ArrayList<ObsGraph> newGs = new ArrayList<>();
+                newGs.add(newG);
+                results.put(targetARGState, newGs);
             }
             w0 = w1;
         } while (true);
@@ -342,8 +381,14 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
             if (results.get(targetARGState) != null) {
                 results.get(targetARGState).add(newG);
             } else {
-                results.put(targetARGState, List.of(newG));
+//                results.put(targetARGState, List.of(newG)); // List.of return an immutable list.
+                ArrayList<ObsGraph> newGs = new ArrayList<>();
+                newGs.add(newG);
+                results.put(targetARGState, newGs);
             }
+
+            // update r0 to r.
+            r0 = r;
 
         } while (true);
     }
@@ -394,10 +439,10 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
                     } else {
                         chGraphs.addAll(pGraphs);
                     }
-                    continue;
+                    break; // short circuit, all graphs about parOgState associates with choOGState.
                 }
-                // else, sharedEvents is not empty, we should remove graphs that conflict with
-                // 'inEdge' from pGraphs.
+                // else, sharedEvents is not empty, we should move graphs that don't conflict with
+                // 'inEdge' from pGraphs to chGraphs.
                 OGNode ogNode = genNewOGNode(sharedEvents, chOGState, pARGState);
                 List<ObsGraph> nonConflictGraphs = genAndUpdateObsGraphs(pGraphs, pOGState, ogNode);
                 if (!nonConflictGraphs.isEmpty()) {
@@ -405,6 +450,11 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
                         ogsBiMap.put(chOGState, nonConflictGraphs);
                     } else {
                         chGraphs.addAll(nonConflictGraphs);
+                    }
+                    if (pGraphs.isEmpty()) {
+                        // all graphs about parOgState have been moved, so we don't have to think
+                        // about the left children.
+                        break;
                     }
                 }
             }

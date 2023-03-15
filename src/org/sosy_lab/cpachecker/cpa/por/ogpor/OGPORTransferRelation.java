@@ -157,23 +157,21 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
      */
     private OGPORState genAndUpdateThreadInfo(OGPORState parState, CFAEdge cfaEdge) {
 
-        MultiThreadState parMultiThreadState = parState.getMultiThreadState();
         Map<String, Triple<Integer, Integer, Integer>> newThreadStatusMap =
                 new HashMap<>(), oldThreadStatusMap = parState.getThreadStatusMap();
 
         // first: handle the exitThreads.
-        AbstractState chStateExitThreads = threadOptr.exitThreads(parState,
-                parState.getClass());
-        assert chStateExitThreads instanceof OGPORState && chStateExitThreads != null;
-        MultiThreadState chState = ((OGPORState) chStateExitThreads).getMultiThreadState();
+        OGPORState exitThreads = (OGPORState) threadOptr.exitThreads(parState,
+                parState.getClass()); // after exiting the thread, we still in parState.
+        MultiThreadState exitMultiThrState = exitThreads.getMultiThreadState();
         for (Iterator<String> it = oldThreadStatusMap.keySet().iterator(); it.hasNext();) {
             String tid = it.next();
-            if (chState.getThreadIds().contains(tid)) {
+            if (exitMultiThrState.getThreadIds().contains(tid)) {
                 newThreadStatusMap.put(tid, oldThreadStatusMap.get(tid));
             }
         }
 
-        String transInThread = threadOptr.getThreadIdThroughEdge(parMultiThreadState, cfaEdge);
+        String transInThread = threadOptr.getThreadIdThroughEdge(exitMultiThrState, cfaEdge);
         if (transInThread == null) {
             return null;
         }
@@ -183,35 +181,43 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         // <SingleThreadState> = <cfaNode, thread_num>.
         Pair<String, SingleThreadState> newThreadInfo = null;
         try {
-            newThreadInfo = threadOptr.genNewThreadTransferInfo(parMultiThreadState, cfaEdge);
+            // note, here we should use the exitMultiThrState that has exited the terminated
+            // threads, instead of the original one.
+            newThreadInfo = threadOptr.genNewThreadTransferInfo(exitMultiThrState, cfaEdge);
         } catch (Exception e) {
             e.printStackTrace();
         }
         if (newThreadInfo != null) {
             // a new thread created.
-            int parThreadNum = parMultiThreadState.getThreadLocations().get(transInThread).getNum();
+            int parThreadNum =
+                    exitMultiThrState.getThreadLocations().get(transInThread).getNum();
             newThreadStatusMap.put(newThreadInfo.getFirstNotNull(), Triple.of(parThreadNum,
                     newThreadInfo.getSecondNotNull().getNum(), 1));
-            chState.getThreadLocations().put(newThreadInfo.getFirstNotNull(),
+            exitMultiThrState.getThreadLocations().put(newThreadInfo.getFirstNotNull(),
                     newThreadInfo.getSecondNotNull());
         }
 
-        // third: update the NO.x of transInThread & update the location whose change
-        // is caused by cfaEdge: l0 --- cfaEdge ---> l1
+        // third: update the event number of the transInThread
         Triple<Integer, Integer, Integer> oldThreadStatus = newThreadStatusMap.get(transInThread);
         int fir = oldThreadStatus.getFirst(), sec = oldThreadStatus.getSecond(), thi =
                 oldThreadStatus.getThird() + 1;
         newThreadStatusMap.put(transInThread, Triple.of(fir, sec, thi));
 
-        // update location.
-        SingleThreadState transInThreadState = chState.getThreadLocations().get(transInThread);
+        // fourth: update the location whose change is caused by cfaEdge: l0 --- cfaEdge ---> l1
+        SingleThreadState transInThreadState = exitMultiThrState.getThreadLocations().get(transInThread);
         SingleThreadState newSingleThreadState = new SingleThreadState(cfaEdge.getSuccessor(),
                 transInThreadState.getNum());
-        chState.getThreadLocations().put(transInThread, newSingleThreadState);
-        chState.setTransThread(transInThread);
-        OGPORState chOGPORState = new OGPORState(chState, newThreadStatusMap);
-//         debug.
-//        System.out.println(cfaEdge + "\n" + chOGPORState.getMultiThreadState().toString());
+        exitMultiThrState.getThreadLocations().put(transInThread, newSingleThreadState);
+        exitMultiThrState.setTransThread(transInThread);
+        OGPORState chOGPORState = new OGPORState(exitMultiThrState, newThreadStatusMap);
+
+        // fifth: if the newThreadInfo != null, then we put the newly create thread into the
+        // waitingThreads of chOGPORState.
+        chOGPORState.getWaitingThreads().addAll(parState.getWaitingThreads());
+        if (newThreadInfo != null) {
+            chOGPORState.getWaitingThreads().add(newThreadInfo.getSecondNotNull().getNum());
+            chOGPORState.spawnThread = newThreadStatusMap.get(newThreadInfo.getFirstNotNull());
+        }
 
         return chOGPORState;
     }

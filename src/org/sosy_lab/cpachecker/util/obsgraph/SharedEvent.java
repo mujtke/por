@@ -1,6 +1,5 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 
 import java.util.ArrayList;
@@ -78,6 +77,11 @@ public class SharedEvent {
         poBefore.add(e);
     }
 
+    @Override
+    public String toString() {
+        return aType + "(" + var + "), preARGState: "  + ogNode.getPreARGState().getStateId();
+    }
+
     public SharedEvent (
             Var pVar,
             AccessType pAccessType) {
@@ -129,7 +133,7 @@ public class SharedEvent {
         boolean isHbOther = false;
         for (SharedEvent e : this.getPoBefore()) {
             OGNode eNode = e.getOgNode();
-            isHbOther = isHbOther || eNode.hb(otherNode);
+            isHbOther |= eNode.hb(otherNode);
             if (isHbOther) {
                 break;
             }

@@ -10,16 +10,12 @@ package org.sosy_lab.cpachecker.core.algorithm;
 
 import com.google.common.base.Functions;
 import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
+
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.configuration.ClassOption;
@@ -49,6 +45,7 @@ import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGMergeJoinCPAEnabledAnalysis;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ipcdpor.IPCDPORState;
+import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
@@ -57,6 +54,7 @@ import org.sosy_lab.cpachecker.util.statistics.StatCounter;
 import org.sosy_lab.cpachecker.util.statistics.StatHist;
 import org.sosy_lab.cpachecker.util.statistics.StatInt;
 import org.sosy_lab.cpachecker.util.statistics.StatisticsWriter;
+import static com.google.common.collect.Iterables.any;
 
 public class CPAAlgorithm implements Algorithm, StatisticsProvider {
 
@@ -315,21 +313,23 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       }
     }
 
-//    System.out.println(((ARGState) state).getStateId());
-    if (((ARGState) state).getStateId() > 0) {
-      AbstractState ipcdporState = AbstractStates.extractStateByType(state, IPCDPORState.class);
-//      System.out.println("");
-    }
+    int argCurStateId = ((ARGState) state).getStateId();
+    System.out.println("" + argCurStateId);
+    System.out.println(reachedSet.getWaitlist()
+            .stream()
+            .map(s -> ((ARGState) s).getStateId())
+            .collect(Collectors.toList()));
 
 //     if (!((ARGState) state).getParents().isEmpty()) {
 //     ARGState argParState = ((ARGState) state).getParents().iterator().next();
 //     CFAEdge edge = argParState.getEdgeToChild((ARGState) state);
 //
 //     int curStateId = ((ARGState) state).getStateId(), parStateId = argParState.getStateId();
+//     String color = any(((ARGState) state).getWrappedStates(), AbstractStates::isTargetState) ? "red" : "cornflowerblue";
 //     System.out.println(
 //     ""
 //     + curStateId
-//     + " [fillcolor=\"cornflowerblue\" shape=\"box\" label=\"s"
+//     + " [fillcolor=\"" + color + "\" shape=\"box\" label=\"s"
 //     + curStateId
 //     + "\" id=\""
 //     + curStateId
@@ -349,8 +349,16 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
 
     stats.transferTimer.start();
     Collection<? extends AbstractState> successors;
+    // 351+3: added by yzc-23-03-14.
+    // in OGPOR, this records the state that needs to put into waitlist later.
+    List<AbstractState> delayedStates = new ArrayList<>();
+    List<Precision> delayedStatePrecisions = new ArrayList<>();
     try {
       successors = transferRelation.getAbstractSuccessors(state, precision);
+      // 358+3: added by yzc-23-03-14.
+      ArrayList<AbstractState> reverseSuccessor = new ArrayList<>(successors);
+      Collections.reverse(reverseSuccessor);
+      successors = reverseSuccessor;
     } finally {
       stats.transferTimer.stop();
     }
@@ -489,10 +497,22 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       } else {
         logger.log(Level.FINER, "No need to stop, adding successor to waitlist");
 
+        // 500+6: added by yzc-23-03-14.
+        OGPORState ogState = AbstractStates.extractStateByType(successor, OGPORState.class);
+        if (ogState.isNeedDelay()) {
+          delayedStates.add(successor);
+          delayedStatePrecisions.add(precision);
+          continue;
+        }
         stats.addTimer.start();
         reachedSet.add(successor, successorPrecision);
         stats.addTimer.stop();
       }
+    }
+    // 512+4: added by yzc-23-03-14.
+    // we add the delayed state to the reached set.
+    for (int i = 0; i < delayedStates.size(); i++) {
+      reachedSet.add(delayedStates.get(i), delayedStatePrecisions.get(i));
     }
 
     return false;

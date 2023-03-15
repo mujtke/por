@@ -7,6 +7,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.util.obsgraph.BiOGMap;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 
 import java.util.List;
@@ -18,7 +19,7 @@ public class OGInfo {
      * biOGMap :: store the states and list<og>. One state may own multiple ogs, so we use list to
      * store them.
      */
-    private BiMap<AbstractState, List<ObsGraph>> biOGMap;
+    private BiOGMap<AbstractState, List<ObsGraph>> biOGMap;
 
     @Option(
             secure = true,
@@ -30,13 +31,13 @@ public class OGInfo {
     public OGInfo(Configuration pConfig) throws InvalidConfigurationException {
         pConfig.inject(this);
         if (useBiOGMap) {
-            biOGMap = HashBiMap.create();
+            biOGMap = new BiOGMap<>();
         } else {
             biOGMap = null;
         }
     }
 
-    public BiMap<AbstractState, List<ObsGraph>> getBiOGMap() {
+    public BiOGMap<AbstractState, List<ObsGraph>> getBiOGMap() {
         return biOGMap;
     }
 }
