@@ -313,12 +313,12 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       }
     }
 
-    int argCurStateId = ((ARGState) state).getStateId();
-    System.out.println("" + argCurStateId);
-    System.out.println(reachedSet.getWaitlist()
-            .stream()
-            .map(s -> ((ARGState) s).getStateId())
-            .collect(Collectors.toList()));
+//    int argCurStateId = ((ARGState) state).getStateId();
+//    System.out.println("" + argCurStateId);
+//    System.out.println(reachedSet.getWaitlist()
+//            .stream()
+//            .map(s -> ((ARGState) s).getStateId())
+//            .collect(Collectors.toList()));
 
 //     if (!((ARGState) state).getParents().isEmpty()) {
 //     ARGState argParState = ((ARGState) state).getParents().iterator().next();
@@ -498,12 +498,12 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
         logger.log(Level.FINER, "No need to stop, adding successor to waitlist");
 
         // 500+6: added by yzc-23-03-14.
-        OGPORState ogState = AbstractStates.extractStateByType(successor, OGPORState.class);
-        if (ogState.isNeedDelay()) {
-          delayedStates.add(successor);
-          delayedStatePrecisions.add(precision);
-          continue;
-        }
+//        OGPORState ogState = AbstractStates.extractStateByType(successor, OGPORState.class);
+//        if (ogState.isNeedDelay()) {
+//          delayedStates.add(successor);
+//          delayedStatePrecisions.add(precision);
+//          continue;
+//        }
         stats.addTimer.start();
         reachedSet.add(successor, successorPrecision);
         stats.addTimer.stop();
@@ -511,9 +511,9 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     }
     // 512+4: added by yzc-23-03-14.
     // we add the delayed state to the reached set.
-    for (int i = 0; i < delayedStates.size(); i++) {
-      reachedSet.add(delayedStates.get(i), delayedStatePrecisions.get(i));
-    }
+//    for (int i = 0; i < delayedStates.size(); i++) {
+//      reachedSet.add(delayedStates.get(i), delayedStatePrecisions.get(i));
+//    }
 
     return false;
   }
