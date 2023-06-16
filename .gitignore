@@ -18,7 +18,7 @@ a.out
 *.txt
 
 /.checkstyle
-.classpath
+# /.classpath
 /.factorypath.template
 /.flake8
 /.gitlab-ci.yml
