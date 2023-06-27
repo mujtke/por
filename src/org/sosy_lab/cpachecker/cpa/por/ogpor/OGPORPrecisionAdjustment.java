@@ -1,3 +1,4 @@
+
 package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
 import static com.google.common.collect.FluentIterable.from;
@@ -28,7 +29,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
 
     // the map of between states and list<og>s. And this just points to the map created in
     // GlobalInfo.
-    private final BiOGMap<AbstractState, List<ObsGraph>> ogsBiMap;
+    // private final BiOGMap<AbstractState, List<ObsGraph>> ogsBiMap;
 
     private static final SharedVarsExtractor sharedVarsExtractor = new SharedVarsExtractor();
 
@@ -42,7 +43,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
             logger.log(Level.SEVERE, "When using OGPORCPA, the option 'utils.globalInfo.OGInfo" +
                     ".useBiMap' must be set as true!");
         }
-        ogsBiMap = ogInfo.getBiOGMap();
+        // ogsBiMap = ogInfo.getBiOGMap();
     }
 
     @Override
@@ -61,6 +62,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         CFAEdge cfaEdge = parArgState.getEdgeToChild(chArgState);
         assert cfaEdge != null && parOgState != null;
 
+        /*
         // debug.
         int parStateId = parArgState.getStateId();
         int a = parStateId;
@@ -131,33 +133,25 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
 
         // 4. according to the revisitResults, update the ogsBiMap.
         updateObsBiMapForRevisit(reachedSet, revisitResults);
+        */
 
         return Optional.of(PrecisionAdjustmentResult.create(chOgState,
                 precision, PrecisionAdjustmentResult.Action.CONTINUE));
     }
 
     @Override
-    public Optional<? extends AbstractState> strengthen(AbstractState pState, Precision pPrecision, Iterable<AbstractState> otherStates) throws CPAException, InterruptedException {
+    public Optional<? extends AbstractState> strengthen(AbstractState pState, 
+            Precision pPrecision, 
+            Iterable<AbstractState> otherStates) 
+            throws CPAException, InterruptedException {
         return PrecisionAdjustment.super.strengthen(pState, pPrecision, otherStates);
     }
 
-//    private void updateLastAccessTable(List<SharedEvent> sharedEvents, OGPORState parState,
-//                                       OGPORState chState) {
-//        List<SharedEvent> WEvents = from(sharedEvents)
-//                .filter(e -> e.getAType().equals(SharedEvent.AccessType.WRITE))
-//                .toList();
-//        assert WEvents.size() <= 1 : "more than one W event in an edge is not supported now.";
-//        SharedEvent WEvent = WEvents.isEmpty() ? null : WEvents.get(0);
-//        Map<Var, SharedEvent> chTable = chState.getLastAccessTable();
-//        chTable.putAll(parState.getLastAccessTable());
-//        if (WEvent != null) {
-//            chTable.put(WEvent.getVar(), WEvent);
-//        }
-//    }
 
     private OGNode genNewOGNode(@NonNull List<SharedEvent> events, OGPORState chState,
                                 ARGState preARGState) {
 
+        /*
         assert !events.isEmpty() : "OGNode must contains access to global vars!";
         String transInThread = chState.getMultiThreadState().getTransThread();
         assert transInThread != null : "transInThread must not be null!";
@@ -178,6 +172,8 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         }
 
         return newOGNode;
+         */
+        return null;
     }
 
     /**
@@ -187,6 +183,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
      * @param ogNode
      * @return
      */
+    /*
     private List<ObsGraph> genAndUpdateObsGraphs(List<ObsGraph> parGraphs, OGPORState parState,
                                           OGNode ogNode) {
 
@@ -233,7 +230,9 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
 
         return chGraphs;
     }
+     */
 
+    /*
     private Map<ARGState, List<ObsGraph>> revisit(List<ObsGraph> obsGraphs) {
         assert !obsGraphs.isEmpty();
 
@@ -263,6 +262,8 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         return results;
     }
 
+     */
+
     /**
      * This method performs the revisit for the given R event in the lastNode on the graph G. The
      * result of one revisit is a pair of targetARGState s0 and graph G0, in which s0 is the
@@ -276,6 +277,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
      * location in {@param G} and copy a new graph 'newG' which we will finally put into the
      * results. We actually perform revisit in 'newG' instead {@param G}.
      */
+    /*
     private void forwardRevisit(ObsGraph G, OGNode lastNode, SharedEvent r, Map<ARGState,
             List<ObsGraph>> results) {
 
@@ -317,6 +319,9 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         } while (true);
     }
 
+     */
+
+    /*
     private void backwardRevisit(ObsGraph G, OGNode lastNode, SharedEvent w, Map<ARGState,
             List<ObsGraph>> results) {
 
@@ -393,6 +398,8 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         } while (true);
     }
 
+     */
+
     /**
      * This method associate the graphs produced in revisit processes with some OGPORStates.
      * Assume that the revisit processes produce graphs ogs = {G1, G2, ..., Gn}, and these graphs
@@ -405,6 +412,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
      * @implNote the list<ObsGraph> in revisitResults shouldn't be the shallow copy of one in
      * ogsBiMap's values. And any list<ObsGraph> shouldn't contain two same element.
      */
+    /*
     private void updateObsBiMapForRevisit(UnmodifiableReachedSet reachedSet, Map<ARGState,
             List<ObsGraph>> revisitResults) {
 
@@ -462,6 +470,9 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         }
     }
 
+     */
+
+     /* 
     private @NonNull ARGState getTargetARGState(UnmodifiableReachedSet reachedSet, ARGState p) {
 
         OGPORState pOgState = AbstractStates.extractStateByType(p, OGPORState.class);
@@ -509,4 +520,5 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
 
         return minIdCh;
     }
+    */
 }

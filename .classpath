@@ -71,6 +71,6 @@
 	<classpathentry kind="lib" path="lib/java/runtime/CVC4.jar"/>
 	<classpathentry kind="lib" path="lib/java/runtime/princess_2.13.jar"/>
 	<classpathentry kind="lib" path="lib/java/runtime/scala-library.jar"/>
-	<classpathentry kind="lib" path="/home/lapulatos/Documents/Codes/Java/cpachecker-versions/2.0/cpachecker-tag-cpachecker-2.0-base/lib/java/runtime/jdd.jar"/>
+	<classpathentry kind="lib" path="lib/java/runtime/jdd.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

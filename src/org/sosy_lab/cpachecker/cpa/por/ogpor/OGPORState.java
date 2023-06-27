@@ -15,8 +15,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable {
+public class OGPORState implements AbstractState, Graphable {
 
+    /*
     // record the info: transferInEdge's threadId, threadLocations
     private final MultiThreadState multiThreadState;
 
@@ -37,38 +38,20 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
     // indicate that whether we need to delay putting the state into the waitlist.
     private boolean needDelay = false;
 
-    // TODO
-    public boolean graphsOriginallyEmpty = true;
     public Triple<Integer, Integer, Integer> spawnThread = null;
 
-    public boolean isNeedDelay() {
-        return needDelay;
-    }
+     */
 
-    public void setNeedDelay(boolean needDelay) {
-        this.needDelay = needDelay;
-    }
-
-    public Set<Integer> getWaitingThreads() {
-        return waitingThreads;
-    }
-
-    public BlockStatus getBlockStatus() {
-        return blockStatus;
-    }
-
-    public void setBlockStatus(BlockStatus blockStatus) {
-        this.blockStatus = blockStatus;
-    }
+    private int num;
+    private Map<String, String> threads;
 
     @Override
     public int hashCode() {
-        return multiThreadState.hashCode() + threadStatusMap.hashCode();
+        return threads.hashCode();
     }
 
     @Override
     public boolean equals(Object obj) {
-        //debug.
         // TODO: this influence the cover status.
         if (true) {
             return false;
@@ -80,23 +63,19 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
             return false;
         }
         OGPORState other = (OGPORState) obj;
-        return other.getMultiThreadState().equals(this.multiThreadState)
-                && other.getThreadStatusMap().equals(this.threadStatusMap);
+        return num == other.num && threads.equals(other.threads);
     }
 
     @Override
     public String toString() {
-        return multiThreadState.getThreadLocations().toString() + threadStatusMap.toString();
+        return threads.toString();
     }
 
     @Override
     public String toDOTLabel() {
         StringBuilder str = new StringBuilder();
-        str.append(threadStatusMap.toString());
+        str.append(threads.toString());
         str.append("\n");
-        str.append(multiThreadState.getThreadLocations().toString());
-        str.append("\n");
-        str.append("active thread: " + multiThreadState.getTransThread());
         return str.toString();
     }
 
@@ -105,38 +84,15 @@ public class OGPORState implements AbstractState, ThreadInfoProvider, Graphable 
         return true;
     }
 
-    public OGPORState(
-        MultiThreadState pState,
-        Map<String, Triple<Integer, Integer, Integer>> pThreadStatus) {
-        multiThreadState = pState;
-        threadStatusMap = pThreadStatus;
-//        lastAccessTable = new HashMap<>();
+    public OGPORState(int pNum) {
+        num = pNum;
     }
 
-    public OGPORState(final OGPORState pOther) {
-        assert pOther != null;
-        MultiThreadState multiOther = pOther.getMultiThreadState();
-        Map<String, Triple<Integer, Integer, Integer>> mapOther = pOther.getThreadStatusMap();
-//        Map<Var, SharedEvent> tableOther = pOther.getLastAccessTable();
-        // the 'locations' in MultiThreadState is a 'final' field, so the shallow copy will lead
-        // all copies point to a same location.
-        this.multiThreadState = new MultiThreadState(new HashMap<>(multiOther.getThreadLocations()),
-                multiOther.getTransThread(), multiOther.isFollowFunctionCalls());
-        this.threadStatusMap = new HashMap<>(mapOther);
-//        this.lastAccessTable = new HashMap<>(tableOther);
+    public Map<String, String> getThreads() {
+        return threads;
     }
 
-    public Map<String, Triple<Integer, Integer, Integer>> getThreadStatusMap() {
-        return threadStatusMap;
-    }
-
-    public MultiThreadState getMultiThreadState() {
-        return multiThreadState;
-    }
-
-    @Override
-    public void removeThreadId(String pThreadId) {
-        multiThreadState.removeThreadId(pThreadId);
-        threadStatusMap.remove(pThreadId); // exit thread for threadStatusMap.
+    public int getNum() {
+        return num;
     }
 }

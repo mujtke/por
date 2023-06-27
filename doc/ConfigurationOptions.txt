@@ -1981,6 +1981,23 @@ cpa.octagon.octagonLibrary = "INT"
 # seconds or specify a unit; 0 for infinite)
 cpa.octagon.refiner.timeForOctagonFeasibilityCheck = 0ns
 
+# the set of functions which begin atomic areas.
+cpa.ogpor.atomicBlockBeginFuncs = {"__VERIFIER_atomic_begin"}
+
+# the set of functions which end atomic areas.
+cpa.ogpor.atomicBlockEndFuncs = {"__VERIFIER_atomic_end"}
+
+# With this option enabled, function calls that occur in the CFA are
+# followed. By disabling this option one can traverse a function without
+# following function calls (in this case FunctionSummaryEdges are used).
+cpa.ogpor.followFunctionCall = true
+
+# the set of functions which acquire locks.
+cpa.ogpor.lockBeginFuncs = {"pthread_mutex_lock", "lock"}
+
+# the set of functions which release locks.
+cpa.ogpor.lockEndFuncs = {"pthread_mutex_unlock", "unlock"}
+
 # which merge operator to use for PointerCPA
 cpa.pointer2.merge = "JOIN"
   allowed values: [JOIN, SEP]
@@ -2061,6 +2078,23 @@ cpa.por.pcdpor.regardThreadCreationAsNormalEdge = false
 # followed. By disabling this option one can traverse a function without
 # following function calls (in this case FunctionSummaryEdges are used)
 cpa.por.ppor.followFunctionCalls = true
+
+# Which type of state should be used to compute the constrained dependency at
+# certain state?
+# - bdd: BDDState (default)
+# - predicate: PredicateAbstractState
+# NOTICE: Corresponding CPA should be used!
+cpa.por.xpor.depComputationStateType = "BDD"
+  allowed values: [BDD, PREDICATE]
+
+# With this option enabled, function calls that occur in the CFA are
+# followed. By disabling this option one can traverse a function without
+# following function calls (in this case FunctionSummaryEdges are used)
+cpa.por.xpor.followFunctionCalls = true
+
+# With this option enabled, thread creation edge will be regarded as a
+# normaledge, which may reduces the redundant interleavings
+cpa.por.xpor.regardThreadCreationAsNormalEdge = false
 
 # Whether to give up immediately if a very large array is encountered
 # (heuristic, often we would just waste time otherwise)
@@ -4523,6 +4557,9 @@ useCompositionAnalysis = false
 
 # build constrained dependency graph (only for partial-order reduction)
 utils.edgeinfo.buildDepGraph = false
+
+# this option is enabled iff we use OGPORCPA. When enabled
+utils.globalInfo.OGInfo.useOG = false
 
 # File for exporting the witness automaton in DOT format.
 witness.automatonDumpFile = no default value

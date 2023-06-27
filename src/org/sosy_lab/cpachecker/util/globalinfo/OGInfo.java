@@ -1,43 +1,53 @@
 package org.sosy_lab.cpachecker.util.globalinfo;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.util.obsgraph.BiOGMap;
+import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
+import org.sosy_lab.cpachecker.util.obsgraph.OGNodeBuilder;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Options(prefix = "utils.globalInfo.OGInfo")
 public class OGInfo {
 
     /**
-     * biOGMap :: store the states and list<og>. One state may own multiple ogs, so we use list to
-     * store them.
+     * biOGMap :: store the states num and list<og>. One state may own more than one og,
+     * so we use list to store them.
      */
-    private BiOGMap<AbstractState, List<ObsGraph>> biOGMap;
+    private Map<Integer, List<ObsGraph>> OGMap;
 
-    @Option(
-            secure = true,
-            description = "this option is enabled iff we use OGPORCPA. When enabled, we build a " +
-                    "biMap to store the relation between state and ObsGraphs"
-    )
-    private boolean useBiOGMap = false;
+    private Map<Integer, OGNode> nodeMap;
 
-    public OGInfo(Configuration pConfig) throws InvalidConfigurationException {
+    private OGNodeBuilder nodeBuilder;
+
+    @Option(secure = true,
+            description = "this option is enabled iff we use OGPORCPA. When enabled")
+    private boolean useOG = false;
+
+    public OGInfo(final Configuration pConfig, final CFA pCfa)
+            throws InvalidConfigurationException {
         pConfig.inject(this);
-        if (useBiOGMap) {
-            biOGMap = new BiOGMap<>();
+        if (useOG) {
+            OGMap = new HashMap<>();
+            nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
+            nodeMap = nodeBuilder.build();
         } else {
-            biOGMap = null;
+            OGMap = null;
+            nodeMap = null;
         }
     }
 
-    public BiOGMap<AbstractState, List<ObsGraph>> getBiOGMap() {
-        return biOGMap;
+    public Map<Integer, List<ObsGraph>> getOGMap() {
+        return OGMap;
+    }
+
+    public Map<Integer, OGNode> getNodeMap() {
+        return nodeMap;
     }
 }

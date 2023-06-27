@@ -60,19 +60,21 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
     @Override
     public AbstractState getInitialState(CFANode node, StateSpacePartition partition) throws InterruptedException {
 
-        SingleThreadState initMainState = new SingleThreadState(node, 0);
-        Map<String, SingleThreadState> initMainThreadLoc = new HashMap<>();
+//        SingleThreadState initMainState = new SingleThreadState(node, 0);
+//        Map<String, SingleThreadState> initMainThreadLoc = new HashMap<>();
         String mainFuncName = cfa.getMainFunction().getFunctionName();
-        initMainThreadLoc.put(mainFuncName, initMainState);
-        MultiThreadState initMultiState = new MultiThreadState(initMainThreadLoc, mainFuncName,
-                followFunctionCall);
+//        initMainThreadLoc.put(mainFuncName, initMainState);
+//        MultiThreadState initMultiState = new MultiThreadState(initMainThreadLoc, mainFuncName,
+//                followFunctionCall);
 
-        Map<String, Triple<Integer, Integer, Integer>> initThreadStatus = new HashMap<>();
-        initThreadStatus.put(mainFuncName, Triple.of(-1, 0, 0));
-        OGPORState initState = new OGPORState(initMultiState, initThreadStatus);
+//        Map<String, Triple<Integer, Integer, Integer>> initThreadStatus = new HashMap<>();
+//        initThreadStatus.put(mainFuncName, Triple.of(-1, 0, 0));
+        OGPORState initState = new OGPORState(0);
+        initState.getThreads().put(mainFuncName, "N" + node.getNodeNumber());
 
-        // initially, the first element of osgBiMap is set as 'initState <-> \empty'.
-        GlobalInfo.getInstance().getOgInfo().getBiOGMap().put(initState, new ArrayList<ObsGraph>());
+        // initially, the first element of osgBiMap is set as 'initState.num <-> \empty'.
+        GlobalInfo.getInstance().getOgInfo().getOGMap().put(initState.getNum(),
+                new ArrayList<ObsGraph>());
 
         return initState;
     }
