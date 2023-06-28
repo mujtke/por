@@ -20,7 +20,10 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
+import org.sosy_lab.cpachecker.cpa.threading.ThreadingState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
@@ -29,6 +32,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.*;
 import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
 import org.sosy_lab.cpachecker.util.threading.SingleThreadState;
 import org.sosy_lab.cpachecker.util.threading.ThreadOperator;
+import org.sosy_lab.cpachecker.cpa.location.LocationState;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -61,9 +65,11 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
     private final LogManager logger;
     private final ShutdownNotifier shutdownNotifier;
 
-    public OGPORTransferRelation (Configuration pConfig,CFA pCfa, LogManager pLogger,
-                                  ShutdownNotifier pShutdownNotifier)
-    throws InvalidConfigurationException {
+    public OGPORTransferRelation(Configuration pConfig, 
+            CFA pCfa, 
+            LogManager pLogger,
+            ShutdownNotifier pShutdownNotifier)
+            throws InvalidConfigurationException {
         pConfig.inject(this);
         mainThreadId = pCfa.getMainFunction().getFunctionName();
         mainExitNode = pCfa.getMainFunction().getExitNode();
@@ -78,10 +84,9 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
     }
 
     @Override
-    public Collection<? extends AbstractState>
-    getAbstractSuccessorsForEdge(AbstractState state,
-                                 Precision precision,
-                                 CFAEdge cfaEdge)
+    public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(AbstractState state,
+            Precision precision,
+            CFAEdge cfaEdge)
             throws CPATransferException, InterruptedException {
 
         OGPORState parOGState = (OGPORState) state;
@@ -93,12 +98,24 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
     }
 
     @Override
-    public Collection<? extends AbstractState>
-    strengthen(AbstractState state,
-               Iterable<AbstractState> otherStates,
-               @Nullable CFAEdge cfaEdge,
-               Precision precision)
+    public Collection<? extends AbstractState> strengthen(AbstractState state,
+            Iterable<AbstractState> otherStates,
+            @Nullable CFAEdge cfaEdge,
+            Precision precision)
             throws CPATransferException, InterruptedException {
-        return super.strengthen(state, otherStates, cfaEdge, precision);
+                OGPORState ogState = (OGPORState) state;
+                for (AbstractState s : otherStates) {
+                    if (s instanceof ThreadingState) {
+                        ThreadingState threadingState = (ThreadingState) s;
+                        threadingState.getThreadIds().forEach(tid -> {
+                            ogState.getThreads().put(tid,
+                                    threadingState.getThreadLocation(tid)
+                                            .getLocationNode()
+                                            .toString());
+                        });
+                    }
+                }
+
+                return Set.of(state);
     }
 }

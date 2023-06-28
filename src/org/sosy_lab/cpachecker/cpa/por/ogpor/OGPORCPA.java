@@ -30,16 +30,14 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
     private final LogManager logger;
     private final ShutdownNotifier shutdownNotifier;
 
-   @Option(
-           secure = true,
+   @Option(secure = true,
            description = "With this option enabled, function calls that occur in the CFA are "
                + "followed. By disabling this option one can traverse a function without "
-               + "following function calls (in this case FunctionSummaryEdges are used)."
-   )
+               + "following function calls (in this case FunctionSummaryEdges are used).")
     private boolean followFunctionCall = true;
 
 
-    public static CPAFactory factory() {return AutomaticCPAFactory.forType(OGPORCPA.class); }
+    public static CPAFactory factory() { return AutomaticCPAFactory.forType(OGPORCPA.class); }
 
     @Override
     public PrecisionAdjustment getPrecisionAdjustment() {
@@ -57,6 +55,7 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
         logger = pLogger;
         shutdownNotifier = pShutdownNotifier;
     }
+
     @Override
     public AbstractState getInitialState(CFANode node, StateSpacePartition partition) throws InterruptedException {
 
