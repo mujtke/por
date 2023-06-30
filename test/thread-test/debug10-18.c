@@ -11,15 +11,24 @@ extern void __VERIFIER_atomic_end();
 int x = -1, y = -1, z = -1;
 
 void *P0(void *arg) {
+
 	__VERIFIER_atomic_begin();
 	x = 0;
+    y = 1;
+    z = x;
 	__VERIFIER_atomic_end();
+
+	return NULL;
 }
 
 void *P1(void *arg) {
+
 	__VERIFIER_atomic_begin();
 	y = x + 1;
+    z = y + 1;
 	__VERIFIER_atomic_end();
+
+	return NULL;
 }
 
 int main() {
@@ -30,6 +39,7 @@ int main() {
 
 	__VERIFIER_atomic_begin();
 	z = x + 1;
+	__VERIFIER_assert(y);
 	__VERIFIER_atomic_end();
 
 	__VERIFIER_assert(z);

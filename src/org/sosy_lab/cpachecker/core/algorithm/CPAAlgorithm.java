@@ -257,7 +257,7 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       stats.countIterations++;
 
       // Pick next state using strategy
-      // BFS, DFS or top sort according to the configuration
+      // BFS, DFS or topological sort according to the configuration
       int size = reachedSet.getWaitlist().size();
       if (size >= stats.maxWaitlistSize) {
         stats.maxWaitlistSize = size;
@@ -313,8 +313,8 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
       }
     }
 
-//    int argCurStateId = ((ARGState) state).getStateId();
-//    System.out.println("" + argCurStateId);
+    // int argCurStateId = ((ARGState) state).getStateId();
+    // System.out.println("" + argCurStateId);
 //    System.out.println(reachedSet.getWaitlist()
 //            .stream()
 //            .map(s -> ((ARGState) s).getStateId())
@@ -351,14 +351,14 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
     Collection<? extends AbstractState> successors;
     // 351+3: added by yzc-23-03-14.
     // in OGPOR, this records the state that needs to put into waitlist later.
-    List<AbstractState> delayedStates = new ArrayList<>();
-    List<Precision> delayedStatePrecisions = new ArrayList<>();
+    // List<AbstractState> delayedStates = new ArrayList<>();
+    // List<Precision> delayedStatePrecisions = new ArrayList<>();
     try {
       successors = transferRelation.getAbstractSuccessors(state, precision);
       // 358+3: added by yzc-23-03-14.
-      ArrayList<AbstractState> reverseSuccessor = new ArrayList<>(successors);
-      Collections.reverse(reverseSuccessor);
-      successors = reverseSuccessor;
+      // ArrayList<AbstractState> reverseSuccessor = new ArrayList<>(successors);
+      // Collections.reverse(reverseSuccessor);
+      // successors = reverseSuccessor;
     } finally {
       stats.transferTimer.stop();
     }

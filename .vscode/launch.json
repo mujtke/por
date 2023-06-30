@@ -17,7 +17,18 @@
             "mainClass": "org.sosy_lab.cpachecker.cmdline.CPAMain",
             "projectName": "por_b8eac397",
             "cwd": "${workspaceFolder}",
-            "args": ""
+            "args": "-config config/myAnalysis-concurrency-bdd-pcdpor.properties  test/thread-test/debug10-18.i",
+            "preLaunchTask": "ant build"
+        },
+        {
+            "type": "java",
+            "name": "ogpor",
+            "request": "launch",
+            "mainClass": "org.sosy_lab.cpachecker.cmdline.CPAMain",
+            "projectName": "por_b8eac397",
+            "cwd": "${workspaceFolder}",
+            "args": "-config config/myAnalysis-concurrency-bdd-ogpor.properties  test/thread-test/debug10-18.i",
+            "preLaunchTask": "ant build"
         },
     ]
 }

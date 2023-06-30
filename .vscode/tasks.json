@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+        {
+            "type": "shell",
+            "problemMatcher": [],
+            "label": "ant build",
+            "command": "ant build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+        }
+    ]
+}

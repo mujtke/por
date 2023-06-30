@@ -286,6 +286,11 @@ public class SharedVarsExtractor {
 
                 return results;
             }
+            if (funSummaryExpr instanceof CFunctionCallStatement) {
+                // TODO: It seems that access to argument should have been recorded when make a fun call.
+                // just return empty list? 
+                return List.of();
+            }
         }
 
         throw new AssertionError("this method is not implemented in subclass" + funRetEdge.getClass().getSimpleName());
