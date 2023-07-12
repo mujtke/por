@@ -4,9 +4,11 @@ import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
+import org.sosy_lab.common.annotations.ReturnValuesAreNonnullByDefault;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -34,6 +36,7 @@ import org.sosy_lab.cpachecker.util.threading.SingleThreadState;
 import org.sosy_lab.cpachecker.util.threading.ThreadOperator;
 import org.sosy_lab.cpachecker.cpa.location.LocationState;
 
+import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -57,7 +60,10 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
             description = "the set of functions which release locks.")
     private Set<String> lockEndFuncs = ImmutableSet.of("pthread_mutex_unlock", "unlock");
 
+    // Map: stateId -> List of OG.
     private final Map<Integer, List<ObsGraph>> OGMap;
+
+    // Map: edge.hashCode() -> OGNode.
     private final Map<Integer, OGNode> nodeMap;
     private final String mainThreadId;
     private final CFANode mainExitNode;
@@ -98,24 +104,50 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
     }
 
     @Override
-    public Collection<? extends AbstractState> strengthen(AbstractState state,
-            Iterable<AbstractState> otherStates,
-            @Nullable CFAEdge cfaEdge,
-            Precision precision)
+    @ParametersAreNonnullByDefault
+    @ReturnValuesAreNonnullByDefault
+    public Collection<? extends AbstractState>
+    strengthen(AbstractState state,
+               Iterable<AbstractState> otherStates,
+               @Nullable CFAEdge cfaEdge,
+               Precision precision)
             throws CPATransferException, InterruptedException {
-                OGPORState ogState = (OGPORState) state;
-                for (AbstractState s : otherStates) {
-                    if (s instanceof ThreadingState) {
-                        ThreadingState threadingState = (ThreadingState) s;
-                        threadingState.getThreadIds().forEach(tid -> {
-                            ogState.getThreads().put(tid,
-                                    threadingState.getThreadLocation(tid)
-                                            .getLocationNode()
-                                            .toString());
-                        });
-                    }
-                }
+        OGPORState ogState = (OGPORState) state;
+        // Update threads.
+        for (AbstractState s : otherStates) {
+            if (s instanceof ThreadingState) {
+                ThreadingState threadingState = (ThreadingState) s;
+                // Set 'threads' for ogState.
+                threadingState.getThreadIds().forEach(tid -> {
+                    ogState.getThreads().put(tid,
+                            threadingState.getThreadLocation(tid)
+                                    .getLocationNode()
+                                    .toString());
+                });
+                // Set 'inThread'.
+                ogState.setInThread(getActiveThread(cfaEdge, threadingState));
+            }
+        }
 
-                return Set.of(state);
+        return Set.of(state);
+    }
+
+    @Nullable
+    private String getActiveThread(final CFAEdge pEdge,
+                                   final ThreadingState threadingState) {
+        Set<String> activeThreads = new HashSet<>();
+        for (String tid : threadingState.getThreadIds()) {
+            if (Iterables.contains(
+                    /* Get all outgoing edges for thread location of thread tid. */
+                    threadingState.getThreadLocation(tid).getOutgoingEdges(),
+                    /* If one of them matches pEdge, then tid should be active thread. */
+                    pEdge)) {
+                activeThreads.add(tid);
+            }
+        }
+        assert activeThreads.size() <= 1:
+                "multiple active threads are not allowed: " + activeThreads;
+
+        return activeThreads.isEmpty() ? null : Iterables.getOnlyElement(activeThreads);
     }
 }

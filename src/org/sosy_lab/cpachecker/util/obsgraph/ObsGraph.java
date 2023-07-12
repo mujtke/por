@@ -8,29 +8,30 @@ import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 
 import java.util.*;
 
-public class ObsGraph {
+public class ObsGraph implements Copier<ObsGraph> {
 
-    public List<OGNode> nodes;
+    private final List<OGNode> nodes = new ArrayList<>();
 
-    public OGNode lastNode = null;
+    private OGNode lastNode = null;
 
-    public boolean needToRevisit = false;
+    private boolean needToRevisit = false;
 
-    public int traceLen;
+    private int traceLen;
 
     public ObsGraph() {
-        nodes = new ArrayList<>();
         traceLen = 0;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ObsGraph obsGraph = (ObsGraph) o;
-        return needToRevisit == obsGraph.needToRevisit
-                && Objects.equals(nodes, obsGraph.nodes)
-                && Objects.equals(lastNode, obsGraph.lastNode);
+        if (o instanceof ObsGraph) {
+            ObsGraph other = (ObsGraph) o;
+            return needToRevisit == other.needToRevisit
+                    && Objects.equals(nodes, other.nodes)
+                    && Objects.equals(lastNode, other.lastNode);
+        }
+        return false;
     }
 
     @Override
@@ -38,4 +39,52 @@ public class ObsGraph {
         return Objects.hash(nodes, lastNode, needToRevisit);
     }
 
+    public List<OGNode> getNodes() {
+        return nodes;
+    }
+
+    public OGNode getLastNode() {
+        return lastNode;
+    }
+
+    public boolean isNeedToRevisit() {
+        return needToRevisit;
+    }
+
+    public int getTraceLen() {
+        return traceLen;
+    }
+
+    public void setLastNode(OGNode lastNode) {
+        this.lastNode = lastNode;
+    }
+
+    public void setNeedToRevisit(boolean needToRevisit) {
+        this.needToRevisit = needToRevisit;
+    }
+
+    public void setTraceLen(int traceLen) {
+        this.traceLen = traceLen;
+    }
+
+    @Override
+    public ObsGraph deepCopy(Map<Object, Object> memo) {
+        if (memo.containsKey(this)) {
+            assert memo.get(this) instanceof ObsGraph;
+            return (ObsGraph) memo.get(this);
+        }
+
+        ObsGraph nGraph = new ObsGraph();
+        // Copy nodes.
+        this.nodes.forEach(n -> {
+            OGNode nN = n.deepCopy(memo);
+            nGraph.nodes.add(nN);
+        });
+
+        nGraph.lastNode = this.lastNode.deepCopy(memo);
+        nGraph.needToRevisit = this.needToRevisit;
+        nGraph.traceLen = this.traceLen;
+
+        return nGraph;
+    }
 }

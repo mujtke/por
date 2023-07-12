@@ -18,6 +18,7 @@ import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
 import org.sosy_lab.cpachecker.util.threading.SingleThreadState;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -59,21 +60,13 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
     @Override
     public AbstractState getInitialState(CFANode node, StateSpacePartition partition) throws InterruptedException {
 
-//        SingleThreadState initMainState = new SingleThreadState(node, 0);
-//        Map<String, SingleThreadState> initMainThreadLoc = new HashMap<>();
         String mainFuncName = cfa.getMainFunction().getFunctionName();
-//        initMainThreadLoc.put(mainFuncName, initMainState);
-//        MultiThreadState initMultiState = new MultiThreadState(initMainThreadLoc, mainFuncName,
-//                followFunctionCall);
-
-//        Map<String, Triple<Integer, Integer, Integer>> initThreadStatus = new HashMap<>();
-//        initThreadStatus.put(mainFuncName, Triple.of(-1, 0, 0));
         OGPORState initState = new OGPORState(0);
         initState.getThreads().put(mainFuncName, "N" + node.getNodeNumber());
 
-        // initially, the first element of osgBiMap is set as 'initState.num <-> \empty'.
+        // initially, the first element of OGMap is set to be 'initState.num <-> \empty'.
         GlobalInfo.getInstance().getOgInfo().getOGMap().put(initState.getNum(),
-                new ArrayList<ObsGraph>());
+                new ArrayList<>(Collections.singleton(new ObsGraph())));
 
         return initState;
     }

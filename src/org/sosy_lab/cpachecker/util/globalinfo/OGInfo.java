@@ -5,6 +5,8 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
+import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNodeBuilder;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
@@ -20,9 +22,13 @@ public class OGInfo {
      * biOGMap :: store the states num and list<og>. One state may own more than one og,
      * so we use list to store them.
      */
-    private Map<Integer, List<ObsGraph>> OGMap;
+    private static Map<Integer, List<ObsGraph>> OGMap;
 
-    private Map<Integer, OGNode> nodeMap;
+    private static Map<Integer, OGNode> nodeMap;
+
+    private static OGTransfer transfer;
+
+    private static OGRevisitor revisitor;
 
     private OGNodeBuilder nodeBuilder;
 
@@ -37,6 +43,8 @@ public class OGInfo {
             OGMap = new HashMap<>();
             nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
             nodeMap = nodeBuilder.build();
+            transfer = new OGTransfer(OGMap, nodeMap);
+            revisitor = new OGRevisitor(OGMap, nodeMap);
         } else {
             OGMap = null;
             nodeMap = null;
@@ -49,5 +57,13 @@ public class OGInfo {
 
     public Map<Integer, OGNode> getNodeMap() {
         return nodeMap;
+    }
+
+    public OGTransfer getTransfer() {
+        return transfer;
+    }
+
+    public OGRevisitor getRevisitor() {
+       return revisitor;
     }
 }

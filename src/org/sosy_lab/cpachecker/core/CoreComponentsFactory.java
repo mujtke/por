@@ -52,6 +52,7 @@ import org.sosy_lab.cpachecker.core.algorithm.explainer.Explainer;
 import org.sosy_lab.cpachecker.core.algorithm.impact.ImpactAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.mpv.MPVAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.mpv.MPVReachedSet;
+import org.sosy_lab.cpachecker.core.algorithm.og.OGAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.parallel_bam.ParallelBAMAlgorithm;
 import org.sosy_lab.cpachecker.core.algorithm.pcc.AlgorithmWithPropertyCheck;
 import org.sosy_lab.cpachecker.core.algorithm.pcc.ConfigReadingProofCheckAlgorithm;
@@ -333,6 +334,13 @@ public class CoreComponentsFactory {
       description = "Use fault localization with distance metrics")
   private boolean useFaultLocalizationWithDistanceMetrics = false;
 
+  // Added by yzc: 341.
+  @Option(
+          secure = true,
+          description = "Use observer graphs based algorithm"
+  )
+  private boolean useOGAlgorithm = false;
+
   private final Configuration config;
   private final LogManager logger;
   private final @Nullable ShutdownManager shutdownManager;
@@ -473,7 +481,13 @@ public class CoreComponentsFactory {
           shutdownNotifier,
           specification,
           cfa);
-    } else {
+    }
+    // Added by yzc:
+    else if (useOGAlgorithm) {
+        algorithm = new OGAlgorithm(cpa, logger, shutdownNotifier);
+    }
+
+    else {
       algorithm = CPAAlgorithm.create(cpa, logger, config, shutdownNotifier);
 
       if (constructResidualProgram) {

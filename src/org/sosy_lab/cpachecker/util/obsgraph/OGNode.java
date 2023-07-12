@@ -4,7 +4,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import java.util.*;
 
-public class OGNode {
+public class OGNode implements Copier<OGNode> {
 
     private final CFAEdge blockStartEdge;
     private final List<CFAEdge> blockEdges;
@@ -17,35 +17,40 @@ public class OGNode {
     private ARGState preState;
     private ARGState sucState;
 
-    // thread status: <parent_idNum, self_thread_idNum, NO.x_in_selfThread>.
-    // public Triple<Integer, Integer, Integer> threadStatus;
     private String inThread;
+    // Use 'threadLoc' to recognize the OGNodes that have the same edges
+    // but belong to different program locations.
+    private Map<String, String> threadLoc;
 
     private boolean isFirstNodeInThread = false;
 
     // the predecessor and successor in OG.
     private OGNode predecessor;
-    private List<OGNode> successors;
+    private final List<OGNode> successors = new ArrayList<>();
 
     // read from.
-    private OGNode readFrom;
-    private List<OGNode> readBy;
+    private final List<OGNode> readFrom = new ArrayList<>();
+    private final List<OGNode> readBy = new ArrayList<>();
 
     // modification order.
-    private OGNode moBefore;
-    private OGNode moAfter;
+    private final List<OGNode> moBefore = new ArrayList<>();
+    private final List<OGNode> moAfter = new ArrayList<>();
 
     // write before.
-    private List<OGNode> wBefore;
-    private List<OGNode> wAfter;
+    private final List<OGNode> wBefore = new ArrayList<>();
+    private final List<OGNode> wAfter = new ArrayList<>();
 
     // from read.
-    private List<OGNode> fromRead;
-    private List<OGNode> fromReadBy;
+    private final List<OGNode> fromRead = new ArrayList<>();
+    private final List<OGNode> fromReadBy = new ArrayList<>();
 
     // trace order.
     private OGNode trBefore;
     private OGNode trAfter;
+
+    // Indicate whether this node is in a graph.
+    // Here, in a graph means this node is in the trace of that graph.
+    private boolean inGraph;
 
     public OGNode(final CFAEdge pBlockStartEdge,
                   final List<CFAEdge> pBlockEdges,
@@ -61,24 +66,130 @@ public class OGNode {
         Ws = pWs;
     }
 
-    // return true if 'this' is happen-before for o.
-    public boolean hb(OGNode o) {
-        return false;
+    /**
+     *
+     * @param memo Store the original object and its copied object.
+     * @return The deep copy of this OGNode.
+     */
+    public OGNode deepCopy(Map<Object, Object> memo) {
+        if (memo.containsKey(this)) {
+            // If current object has been copied.
+            assert memo.get(this) instanceof OGNode;
+            return (OGNode) memo.get(this);
+        }
+        // Else, try copying 'this' to a new object.
+        OGNode nNode = new OGNode(
+                this.blockStartEdge,    /* Shallow copy. */
+                this.blockEdges,        /* Shallow copy. */
+                this.simpleNode,        /* Shallow copy. */
+                this.containNonDetVar,  /* Shallow copy. */
+                new HashSet<>(),
+                new HashSet<>());
+
+        // The threadsLoc and inThread is used to distinguish different OGNodes that has
+        // the same 'blockEdges', so they should be copied deeply.
+        // Because String is immutable, so shallow copy has the same effect with a deep
+        // one.
+        nNode.inThread = this.inThread;
+        nNode.threadLoc = this.threadLoc; /* Deep copy */
+        // This variable is not in use now.
+        nNode.isFirstNodeInThread = this.isFirstNodeInThread;
+        nNode.inGraph = this.inGraph;
+
+        // The left part will need to be copied in a deep way.
+        /* Rs & Ws. */
+        this.Rs.forEach(r -> {
+            SharedEvent nr = r.deepCopy(memo);
+            nNode.Rs.add(nr);
+        });
+        this.Ws.forEach(w -> {
+            SharedEvent nw = w.deepCopy(memo);
+            nNode.Ws.add(w);
+        });
+
+        /* preState & sucState */
+        ARGState nPreState = this.preState, /* Shallow copy. */
+                nSucState = this.sucState;  /* Shallow copy. */
+        nNode.preState = nPreState;
+        nNode.sucState = nSucState;
+
+        /* predecessor & successors */
+        OGNode nPredecessor = this.predecessor.deepCopy(memo);
+        nNode.predecessor = nPredecessor;
+        this.successors.forEach(suc -> {
+            OGNode nSuc = suc.deepCopy(memo);
+            nNode.successors.add(nSuc);
+        });
+
+        /* readFrom & fromRead */
+        this.readFrom.forEach(rf -> {
+            OGNode nRf = rf.deepCopy(memo);
+            nNode.readFrom.add(nRf);
+        });
+        this.fromRead.forEach(rb -> {
+            OGNode nRb = rb.deepCopy(memo);
+            nNode.readBy.add(nRb);
+        });
+
+        /* Modification order */
+        this.moBefore.forEach(mb -> {
+            OGNode nMb = mb.deepCopy(memo);
+            nNode.moBefore.add(nMb);
+        });
+        this.moAfter.forEach(ma -> {
+            OGNode nMa = ma.deepCopy(memo);
+            nNode.moAfter.add(nMa);
+        });
+
+        /* Write before */
+        this.wBefore.forEach(wb -> {
+            OGNode nWb = wb.deepCopy(memo);
+            nNode.wBefore.add(nWb);
+        });
+        this.wAfter.forEach(wa -> {
+            OGNode nWa = wa.deepCopy(memo);
+            nNode.wAfter.add(nWa);
+        });
+
+        /* From read */
+        this.fromRead.forEach(fr -> {
+            OGNode nFr = fr.deepCopy(memo);
+            nNode.fromRead.add(nFr);
+        });
+        this.fromReadBy.forEach(frb -> {
+            OGNode nFrb = frb.deepCopy(memo);
+            nNode.fromReadBy.add(nFrb);
+        });
+
+        /* Trace order */
+        OGNode nTrBefore = this.trBefore.deepCopy(memo),
+                nTrAfter = this.trAfter.deepCopy(memo);
+        nNode.trBefore = nTrBefore;
+        nNode.trAfter = nTrAfter;
+
+        // Put the result into memo.
+        memo.put(this, nNode);
+
+        return nNode;
     }
 
     @Override
-    public boolean equals(Object o) { // handle this carefully.
+    public boolean equals(Object o) { // Handle this carefully.
         if (this == o) return true;
         if (o == null || this.getClass() != o.getClass()) return false;
         OGNode oNode = (OGNode) o;
-        return Rs.equals(oNode.Rs)
-                && Ws.equals(oNode.Ws)
-                && inThread.equals(oNode.inThread);
+        // Use 'blockEdges', 'inThread' and 'threadsLoc' to distinguish two
+        // different OGNodes.
+        return blockEdges.equals(oNode.blockEdges)
+                && inThread.equals(oNode.inThread)
+                && threadLoc.equals(oNode.threadLoc);
     }
 
+    // If we override the 'equals' method, then we should also
+    // override the 'hashCode()' to make sure they behave consistently.
     @Override
     public int hashCode() {
-        return Objects.hash(Rs, Ws, inThread);
+        return Objects.hash(blockEdges, inThread, threadLoc);
     }
 
     @Override
@@ -156,72 +267,36 @@ public class OGNode {
         return this.successors;
     }
 
-    public void setSuccessors(List<OGNode> successors) {
-        this.successors = successors;
-    }
-
-    public OGNode getReadFrom() {
+    public List<OGNode> getReadFrom() {
         return this.readFrom;
-    }
-
-    public void setReadFrom(OGNode readFrom) {
-        this.readFrom = readFrom;
     }
 
     public List<OGNode> getReadBy() {
         return this.readBy;
     }
 
-    public void setReadBy(List<OGNode> readBy) {
-        this.readBy = readBy;
-    }
-
-    public OGNode getMoBefore() {
+    public List<OGNode> getMoBefore() {
         return this.moBefore;
     }
 
-    public void setMoBefore(OGNode moBefore) {
-        this.moBefore = moBefore;
-    }
-
-    public OGNode getMoAfter() {
+    public List<OGNode> getMoAfter() {
         return this.moAfter;
-    }
-
-    public void setMoAfter(OGNode moAfter) {
-        this.moAfter = moAfter;
     }
 
     public List<OGNode> getWBefore() {
         return this.wBefore;
     }
 
-    public void setWBefore(List<OGNode> wBefore) {
-        this.wBefore = wBefore;
-    }
-
     public List<OGNode> getWAfter() {
         return this.wAfter;
-    }
-
-    public void setWAfter(List<OGNode> wAfter) {
-        this.wAfter = wAfter;
     }
 
     public List<OGNode> getFromRead() {
         return this.fromRead;
     }
 
-    public void setFromRead(List<OGNode> fromRead) {
-        this.fromRead = fromRead;
-    }
-
     public List<OGNode> getFromReadBy() {
         return this.fromReadBy;
-    }
-
-    public void setFromReadBy(List<OGNode> fromReadBy) {
-        this.fromReadBy = fromReadBy;
     }
 
     public OGNode getTrBefore() {
@@ -238,5 +313,28 @@ public class OGNode {
 
     public void setTrAfter(OGNode trAfter) {
         this.trAfter = trAfter;
+    }
+
+    public Map<String, String> getThreadLoc() {
+        return this.threadLoc;
+    }
+
+    public void setThreadsLoc(Map<String, String> pThreadLoc) {
+       this.threadLoc = pThreadLoc;
+    }
+
+    public boolean isInGraph() {
+        return this.inGraph;
+    }
+
+    public void setInGraph(boolean pInGraph) {
+        this.inGraph = pInGraph;
+    }
+
+    public CFAEdge getLastBlockEdge() {
+        if (simpleNode) return blockStartEdge;
+        int edgeNum = blockEdges.size();
+        assert edgeNum > 1:"Non simple block OG node should have more than one edge";
+        return blockEdges.get(edgeNum - 1);
     }
 }

@@ -1,80 +1,52 @@
 package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
 
+import org.sosy_lab.common.annotations.ReturnValuesAreNonnullByDefault;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
-import org.sosy_lab.cpachecker.util.Triple;
-import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
-import org.sosy_lab.cpachecker.util.obsgraph.BlockStatus;
-import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
-import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
-import org.sosy_lab.cpachecker.util.threading.ThreadInfoProvider;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class OGPORState implements AbstractState, Graphable {
 
-    /*
-    // record the info: transferInEdge's threadId, threadLocations
-    private final MultiThreadState multiThreadState;
-
-    // record the thread status by using map.
-    // String :: thread id.
-    // Triple :: threadStatus
-    private final Map<String, Triple<Integer, Integer, Integer>> threadStatusMap;
-
-    private BlockStatus blockStatus = BlockStatus.NOT_IN_BLOCK;
-
-    // the table records all global vars' last accesses in a trace.
-//    private final Map<Var, SharedEvent> lastAccessTable;
-
-    // when a thread is newly created, we put its num into 'waitingForThreads' to represent that
-    // we still don't meet the first shared event of the thread.
-    private final Set<Integer> waitingThreads = new HashSet<>();
-
-    // indicate that whether we need to delay putting the state into the waitlist.
-    private boolean needDelay = false;
-
-    public Triple<Integer, Integer, Integer> spawnThread = null;
-
-     */
-
-    private int num;
-    private Map<String, String> threads;
+    private final int num;
+    // Assume there is an edge: sn -- Ei --> sm, then the value of 'inThread' will be
+    // the activeThread of 'Ei', which comes from the threadingState in sn. We set
+    // its value in strengthen process.
+    private String inThread;
+    private final Map<String, String> threads;
+    // For a block, we record its preState when we meet its start edge. By doing so, we
+    // could avoid to backtrack along the path.
+    private AbstractState preservedState;
 
     @Override
     public int hashCode() {
-        return threads.hashCode();
+        return Objects.hash(num, inThread, threads);
     }
 
     @Override
     public boolean equals(Object obj) {
-        // TODO: this influence the cover status.
-        if (true) {
-            return false;
+        if (this == obj) {
+            return true;
         }
-        if (obj == null) {
-            return false;
+        if (obj instanceof OGPORState) {
+            OGPORState other = (OGPORState) obj;
+            return num == other.num
+                    && inThread.equals(other.inThread)
+                    && threads.equals(other.threads);
         }
-        if (!(obj instanceof OGPORState)) {
-            return false;
-        }
-        OGPORState other = (OGPORState) obj;
-        return num == other.num && threads.equals(other.threads);
+        return false;
     }
 
     @Override
     public String toString() {
-        return threads.toString();
+        return "[" + num + "] " + inThread + "@" + threads.get(inThread);
     }
 
     @Override
     public String toDOTLabel() {
         StringBuilder str = new StringBuilder();
-        str.append(threads.toString());
+        str.append(threads);
         str.append("\n");
         return str.toString();
     }
@@ -95,5 +67,21 @@ public class OGPORState implements AbstractState, Graphable {
 
     public int getNum() {
         return num;
+    }
+
+    public String getInThread() {
+        return this.inThread;
+    }
+
+    public void setInThread(String thread) {
+        this.inThread = thread;
+    }
+
+    public AbstractState getPreservedState() {
+        return preservedState;
+    }
+
+    public void setPreservedState(AbstractState preservedState) {
+        this.preservedState = preservedState;
     }
 }
