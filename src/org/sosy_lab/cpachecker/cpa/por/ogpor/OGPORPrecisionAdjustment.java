@@ -74,14 +74,8 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
             inNode.setThreadsLoc(parOGState.getThreads());
         }
 
-        /*
         // Perform all possible single step transfer.
         // I.e., transfer graphs from parent to its children.
-        AbstractState preservedState = chOGState.getPreservedState();
-        assert preservedState instanceof ARGState;
-        ARGState newPreState = (ARGState) preservedState,
-                newSucState = chState; // chState as the newSucState
-        */
         List<ObsGraph> toRemove = new ArrayList<>();
         for (ObsGraph parGraph : parGraphs) {
             ObsGraph chGraph =
@@ -97,6 +91,8 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         }
         // Remove transferred graphs.
         parGraphs.removeAll(toRemove);
+        // If no graphs in parState, set its graphs to be null?
+        if (parGraphs.isEmpty()) OGMap.put(parState.getStateId(), null);
 
         return Optional.of(PrecisionAdjustmentResult.create(state,
                 precision, PrecisionAdjustmentResult.Action.CONTINUE));

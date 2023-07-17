@@ -75,12 +75,15 @@ public class ObsGraph implements Copier<ObsGraph> {
         }
 
         ObsGraph nGraph = new ObsGraph();
+        // Put the copy into memo.
+        memo.put(this, nGraph);
         // Copy nodes.
         this.nodes.forEach(n -> {
             OGNode nN = n.deepCopy(memo);
             nGraph.nodes.add(nN);
         });
 
+        assert this.lastNode != null;
         nGraph.lastNode = this.lastNode.deepCopy(memo);
         nGraph.needToRevisit = this.needToRevisit;
         nGraph.traceLen = this.traceLen;

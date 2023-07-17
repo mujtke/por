@@ -51,8 +51,11 @@ public class SharedEvent implements Copier<SharedEvent> {
         }
 
         SharedEvent nEvent = new SharedEvent(this.var, this.aType);
+        memo.put(this, nEvent);
+
         /* Read from & read by. */
-        SharedEvent nReadFrom = this.readFrom.deepCopy(memo);
+        SharedEvent nReadFrom = this.readFrom != null
+                ? this.readFrom.deepCopy(memo) : null;
         nEvent.readFrom = nReadFrom;
         this.readBy.forEach(rb -> {
             SharedEvent nRb = rb.deepCopy(memo);
@@ -60,8 +63,10 @@ public class SharedEvent implements Copier<SharedEvent> {
         });
 
         /* Modification order */
-        SharedEvent nMoBefore = this.moBefore.deepCopy(memo);
-        SharedEvent nMoAfter = this.moAfter.deepCopy(memo);
+        SharedEvent nMoBefore = this.moBefore != null
+                ? this.moBefore.deepCopy(memo) : null;
+        SharedEvent nMoAfter = this.moAfter != null
+                ? this.moAfter.deepCopy(memo) : null;
         nEvent.moBefore = nMoBefore;
         nEvent.moAfter = nMoAfter;
 
@@ -87,8 +92,6 @@ public class SharedEvent implements Copier<SharedEvent> {
 
         OGNode nInNode = this.inNode.deepCopy(memo);
         nEvent.inNode = nInNode;
-
-        memo.put(this, nEvent);
 
         return nEvent;
     }
@@ -147,6 +150,10 @@ public class SharedEvent implements Copier<SharedEvent> {
 
     public Var getVar() {
         return this.var;
+    }
+
+    public AccessType getAType() {
+        return aType;
     }
 
     public boolean accessSameVarWith(SharedEvent other) {

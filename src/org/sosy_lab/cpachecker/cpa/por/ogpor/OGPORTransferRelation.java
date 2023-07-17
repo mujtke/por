@@ -138,8 +138,10 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         Set<String> activeThreads = new HashSet<>();
         for (String tid : threadingState.getThreadIds()) {
             if (Iterables.contains(
-                    /* Get all outgoing edges for thread location of thread tid. */
-                    threadingState.getThreadLocation(tid).getOutgoingEdges(),
+                    // Get all Ingoing edges (because the threading state is in the
+                    // child OGPORState, so we should get the Ingoing edges) for thread
+                    // location of thread tid.
+                    threadingState.getThreadLocation(tid).getIngoingEdges(),
                     /* If one of them matches pEdge, then tid should be active thread. */
                     pEdge)) {
                 activeThreads.add(tid);

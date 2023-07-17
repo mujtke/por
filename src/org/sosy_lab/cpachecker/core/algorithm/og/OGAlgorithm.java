@@ -3,6 +3,7 @@ package org.sosy_lab.cpachecker.core.algorithm.og;
 import com.google.common.base.Functions;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
 import org.sosy_lab.cpachecker.core.interfaces.*;
@@ -66,6 +67,8 @@ public class OGAlgorithm implements Algorithm {
             InterruptedException,
             CPAEnabledAnalysisPropertyViolationException {
         try {
+            // Initialize the waitlist we define.
+            waitlist.addAll(reachedSet.getWaitlist());
             return run0(reachedSet);
         } finally {
 
@@ -78,6 +81,8 @@ public class OGAlgorithm implements Algorithm {
 
             // final AbstractState state = reachedSet.popFromWaitlist();
             final AbstractState state = waitlist.lastElement();
+            // Remove the popped state.
+            waitlist.remove(state);
             final Precision precision = reachedSet.getPrecision(state);
 
             logger.log(Level.FINER, "Retrieved state from watilist");
@@ -114,9 +119,26 @@ public class OGAlgorithm implements Algorithm {
     throws InterruptedException, CPAException {
         logger.log(Level.ALL, "Current state is ", state, " with precision", precision);
 
+        // debug.
+        int curStateId = ((ARGState) state).getStateId();
         Collection<? extends AbstractState>  successors;
         try {
             successors = transferRelation.getAbstractSuccessors(state, precision);
+
+            // debug.
+            boolean debug = false;
+            debug = true;
+            if (debug) {
+                ARGState pars = (ARGState) state;
+                for (AbstractState ch : successors) {
+                    ARGState chs = (ARGState) ch;
+                    CFAEdge chtp = pars.getEdgeToChild(chs);
+                    System.out.println("s" + pars.getStateId()
+                            + " -> s" + chs.getStateId()
+                            + " [label=\"" + chtp + "\"]");
+                }
+            }
+
         } finally {
             // Stop timer for transfer.
         }

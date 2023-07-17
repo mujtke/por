@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
+import com.google.common.base.Preconditions;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.util.Pair;
@@ -12,6 +13,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer.getHb;
+import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDot;
+import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
 
 public class OGRevisitor {
 
@@ -131,7 +134,8 @@ public class OGRevisitor {
             // AffectedNode shouldn't happen before node0, except that node0 reads from
             // AffectedNode directly or AffectedNode is the direct predecessor of node0.
             if (!node0.getReadFrom().contains(affectedNode)
-                    && !node0.getPredecessor().equals(affectedNode)) {
+                    // Here, use '==' to check whether affectedNode is node0's predecessor
+                    && !(node0.getPredecessor() == affectedNode)) {
                 if (happenBefore(affectedNode, node0)) {
                     return null;
                 }
@@ -141,7 +145,7 @@ public class OGRevisitor {
         ObsGraph g = copier.deepCopy(g0);
         node0 = g.getNodes().get(node0Index);
         affectedNode = affectedNodeIndex >= 0 ? g.getNodes().get(affectedNodeIndex) : null;
-        OGNode nodei = g.getNodes().get(node0Index);
+        OGNode nodei = g.getNodes().get(nodeiIndex);
         assert node0 != null && nodei != null;
 
         List<OGNode> delete = new ArrayList<>();
@@ -157,7 +161,11 @@ public class OGRevisitor {
         // Delete the nodes in 'delete' if necessary.
         removeDelete(g, delete, affectedNodeIndex);
         // Update relations after removing the delete part.
-        updateRelation(node0, nodei, affectedNode);
+//        getDot(g);
+//        System.out.println("");
+        updateRelation(node0, nodei, affectedNode, g);
+//        getDot(g);
+//        System.out.println("");
         // Check the consistency of the new graph, if not satisfied, return null;
         if (!consistent(g)) {
             return null;
@@ -221,7 +229,7 @@ public class OGRevisitor {
 
     private boolean isCyclic(ObsGraph g, int i, boolean[] visited, boolean[] inTrace) {
         // mark g.getNodes().get(i) as visited and in trace.
-        assert i > 0 && i < visited.length && i < inTrace.length;
+        Preconditions.checkState(i >= 0 && i < visited.length && i < inTrace.length);
         visited[i] = true;
         inTrace[i] = true;
 
@@ -253,7 +261,9 @@ public class OGRevisitor {
         return false;
     }
 
-    private void updateRelation(OGNode node0, OGNode nodei, OGNode affectedNode) {
+    private void updateRelation(OGNode node0, OGNode nodei, OGNode affectedNode,
+                                /* debug. */
+                                ObsGraph graph) {
         // 1. affectedNode.
         if (affectedNode != null) {
             List<SharedEvent> chrfrs = new ArrayList<>();
@@ -264,7 +274,7 @@ public class OGRevisitor {
                 removeOldWb(affectedNode, node0, r);
             }
             // Read from.
-            chReadFrom(chrfrs, affectedNode.getWs(), affectedNode, node0);
+            chReadFrom(chrfrs, node0.getWs(), affectedNode, node0);
             // From read.
             updateFromRead(affectedNode);
             // add new wb.
@@ -287,7 +297,11 @@ public class OGRevisitor {
             }
         }
         // From read.
+        getAllDot(graph);
+        System.out.printf("");
         updateFromRead(node0);
+        getAllDot(graph);
+        System.out.printf("");
         // Add new wb.
         for (SharedEvent r : chrfrs) {
             if (r.getReadFrom() == null) continue;
@@ -395,8 +409,9 @@ public class OGRevisitor {
     private boolean maximallyAdded(ObsGraph g, List<OGNode> delete, OGNode node0,
                                    OGNode affectedNode) {
         // Maximality check should include affectedNode.
-        delete.add(affectedNode);
-        for (OGNode dn : delete) {
+        List<OGNode> checkList = new ArrayList<>(delete);
+        checkList.add(affectedNode);
+        for (OGNode dn : checkList) {
             List<OGNode> previous = new ArrayList<>();
             for (OGNode n : g.getNodes()) {
                 boolean cond1 =
@@ -451,7 +466,7 @@ public class OGRevisitor {
                            OGNode node0, List<OGNode> delete) {
         int h = g.getNodes().size() - 1,
                 l = g.getNodes().indexOf(affectedNode);
-        for (; h >= l; h--) {
+        for (; h > l; h--) {
             OGNode nodek = g.getNodes().get(h);
             if (nodek == node0) continue;
             if (happenBefore(nodek, node0)) continue;

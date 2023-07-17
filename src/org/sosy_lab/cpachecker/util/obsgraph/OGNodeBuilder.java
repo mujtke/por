@@ -9,7 +9,7 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
-
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -70,7 +70,7 @@ public class OGNodeBuilder {
                     }
 
                     // debug
-                    //System.out.println(edge);
+//                    System.out.println(edge);
 
                     if (withBlock.contains(pre)) {
                         OGNode preNode = blockNodeMap.get(pre);
@@ -78,7 +78,14 @@ public class OGNodeBuilder {
                                         "edge: %s", edge.getRawStatement());
                         if (!hasAtomicEnd(edge)) {
                             withBlock.add(suc);
-                            handleEdge(edge, preNode);
+                            List<SharedEvent> sharedEvents =
+                                    extractor.extractSharedVarsInfo(edge);
+                            if (sharedEvents == null || sharedEvents.isEmpty()) {
+                                visitedEdges.add(edge.hashCode());
+                                waitlist.add(suc);
+                                continue;
+                            }
+                            handleEvents(sharedEvents, preNode);
                         }
                         preNode.getBlockEdges().add(edge);
                         ogNodes.put(edge.hashCode(), preNode);
@@ -98,13 +105,21 @@ public class OGNodeBuilder {
                             blockNodeMap.put(suc, newBlockNode);
                         } else {
                             // else, normal edge not in a block.
+                            // If no shared events, just skip.
+                            List<SharedEvent> sharedEvents =
+                                    extractor.extractSharedVarsInfo(edge);
+                            if (sharedEvents == null || sharedEvents.isEmpty()) {
+                                visitedEdges.add(edge.hashCode());
+                                waitlist.add(suc);
+                                continue;
+                            }
                             OGNode newNonBlockNode = new OGNode(edge,
                                     List.of(edge),
                                     true,
                                     false,
                                     new HashSet<SharedEvent>(),
                                     new HashSet<SharedEvent>());
-                            handleEdge(edge, newNonBlockNode);
+                            handleEvents(sharedEvents, newNonBlockNode);
                             ogNodes.put(edge.hashCode(), newNonBlockNode);
                             blockNodeMap.put(suc, newNonBlockNode);
                         }
@@ -121,43 +136,44 @@ public class OGNodeBuilder {
         return ogNodes;
     }
 
-    private void handleEdge(CFAEdge edge, OGNode ogNode) {
-
-        List<SharedEvent> sharedEvents = extractor.extractSharedVarsInfo(edge);
-        
-        if (sharedEvents == null || sharedEvents.isEmpty()) return;
+    private void handleEvents(List<SharedEvent> sharedEvents, OGNode ogNode) {
 
         sharedEvents.forEach(e -> {
-            switch (e.aType) {
+            switch (e.getAType()) {
                 case READ:
                     // for the same read var, only the first read will be added.
                     Set<SharedEvent> sameR = ogNode.getRs()
                             .stream()
-                            .filter(r -> {
-                                return r.var.getName().equals(e.var.getName()); })
+                            .filter(r -> r.getVar().getName().equals(e.getVar().getName()))
                             .collect(Collectors.toSet());
                     if (!sameR.isEmpty()) {
                         break;
                     } else {
                         ogNode.getRs().add(e);
+                        e.setInNode(ogNode);
                     }
+                    break;
                 case WRITE:
                     // for the same write var, only the last write will be added.
                     Set<SharedEvent> sameW = ogNode.getWs()
                             .stream()
-                            .filter(w -> {
-                                return w.var.getName().equals(e.var.getName()); })
+                            .filter(w -> w.getVar().getName().equals(e.getVar().getName()))
                             .collect(Collectors.toSet());
                     if (!sameW.isEmpty()) {
                         ogNode.getWs().removeAll(sameW);
                     }
                     ogNode.getWs().add(e);
+                    e.setInNode(ogNode);
                 default:
             }
         });
     }
 
     boolean hasAtomicBegin(CFAEdge edge) {
+        // Skip the declaration.
+        if (edge instanceof CDeclarationEdge) {
+            return false;
+        }
         return edge.getRawStatement().contains(THREAD_MUTEX_LOCK)
                 || edge.getRawStatement().contains(VERIFIER_ATOMIC_BEGIN);
     }
@@ -168,7 +184,7 @@ public class OGNodeBuilder {
     }
 
     private void export(Map<Integer, OGNode> nodes) {
-        Path dotPath = Paths.get("output/ogNodesTable.dot");
+        Path dotPath = Paths.get("output/ogNodesTable");
         try {
             FileWriter fw = new FileWriter(dotPath.toFile(), Charset.defaultCharset());
             Iterator<Map.Entry<Integer, OGNode>> it = nodes.entrySet().iterator();

@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
+import de.uni_freiburg.informatik.ultimate.util.ScopeUtils;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
@@ -11,6 +12,8 @@ import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 import java.util.*;
 
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.happenBefore;
+import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
+import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDot;
 
 public class OGTransfer {
 
@@ -43,20 +46,12 @@ public class OGTransfer {
                                        CFAEdge edge,
                                        ARGState parState, /* lead state */
                                        ARGState chState) {
+        OGNode node = nodeMap.get(edge.hashCode());
         // If the edge is in a bock but not the last one of it, then we just transfer
         // simply. Also, for the edge that doesn't access global variables.
-        OGNode node = nodeMap.get(edge.hashCode());
-        //
         if (node == null /* No OGNode for the edge. */
                 || (!node.isSimpleNode() && !node.getLastBlockEdge().equals(edge))) {
-            // Transfer graph from parState to chSate simply.
-            List<ObsGraph> chGraph = OGMap.computeIfAbsent(chState.getStateId(),
-                    k -> new ArrayList<>()),
-                    parGraph = OGMap.get(parState.getStateId());
-            chGraph.add(graph);
-            assert parGraph != null && parGraph.contains(graph);
-            parGraph.remove(graph);
-            if (parGraph.isEmpty()) OGMap.put(parState.getStateId(), null);
+            // Transfer graph from parState to chSate simply. I.e., just return the graph.
             // Update the preState and SucStat for the node, if it's not null;
             if (node != null) {
                 // Here, the node must not be simple.
@@ -94,9 +89,13 @@ public class OGTransfer {
             // Add the node to the graph.
             // If we add a new node to the graph, we should use its deep copy.
             OGNode newNode = copier.deepCopy(node);
+//            getDot(graph);
+//            System.out.println("");
             addNewNode(graph, newNode,
                     node.isSimpleNode() ? parState : node.getPreState(),
                     chState);
+//            getDot(graph);
+//            System.out.println("");
         }
 
         return graph;
@@ -286,18 +285,29 @@ public class OGTransfer {
                    continue;
                }
            }
-           addRfFrWb(n, node, rFlag, wFlag, wbFlag);
+//            getAllDot(graph);
+//            System.out.println("");
+            addRfFrWb(n, node, rFlag, wFlag, wbFlag);
+//            getAllDot(graph);
+//            System.out.println("");
+            n = n.getTrAfter();
         }
         // 2. Deduce wb from rf and fr.
+//        getAllDot(graph);
+//        System.out.println("");
         deduceWb(node);
+//        getAllDot(graph);
+//        System.out.println("");
         // 3. Add the new node to the graph.
         node.setPreState(newPreState);
         node.setSucState(newSucState);
         node.setInGraph(true);
         graph.getNodes().add(node);
         graph.setNeedToRevisit(true);
-        graph.getLastNode().setTrBefore(node);
-        node.setTrAfter(graph.getLastNode());
+        if (graph.getLastNode() != null) {
+            graph.getLastNode().setTrBefore(node);
+            node.setTrAfter(graph.getLastNode());
+        }
         graph.setLastNode(node);
         graph.setTraceLen(graph.getTraceLen() + 1);
     }
@@ -355,7 +365,7 @@ public class OGTransfer {
                             newNode.getWAfter().add(n);
                         }
                         if (!n.getWBefore().contains(newNode)) {
-                            n.getWBefore().add(n);
+                            n.getWBefore().add(newNode);
                         }
                         toRemove.add(k);
 
@@ -375,8 +385,9 @@ public class OGTransfer {
                                             if (!newNode.getFromReadBy().contains(n)) {
                                                 newNode.getFromReadBy().add(n);
                                             }
-                                            if (!n.getFromRead().contains(newNode)) {
-                                                n.getFromRead().add(newNode);
+                                            OGNode rbn = rb.getInNode();
+                                            if (!rbn.getFromRead().contains(newNode)) {
+                                                rbn.getFromRead().add(newNode);
                                             }
                                         }
                                         nwps.addAll(wp.getWAfter());
@@ -389,13 +400,15 @@ public class OGTransfer {
                     }
                 }
             }
+            wbFlag.removeAll(toRemove);
+            toRemove.clear();
         }
     }
 
     private void deduceWb(OGNode n0) {
-        List<OGNode> rfs = n0.getReadFrom();
-        for (OGNode rf : rfs) {
-            deducewb0(n0, rf);
+        List<OGNode> rfns = n0.getReadFrom();
+        for (OGNode rfn : rfns) {
+            deduceWb0(n0, rfn);
         }
     }
 
@@ -409,10 +422,10 @@ public class OGTransfer {
      * @param nA
      * @param nB nA reads from nB.
      */
-    private void deducewb0(OGNode nA, OGNode nB) {
+    private void deduceWb0(OGNode nA, OGNode nB) {
         Set<SharedEvent> rfs = new HashSet<>();
         nA.getRs().forEach(r -> {
-            if (nB.getReadBy().contains(r)) {
+            if (nB.getWs().contains(r)) {
                 rfs.add(r);
             }
         });

@@ -85,6 +85,8 @@ public class OGNode implements Copier<OGNode> {
                 this.containNonDetVar,  /* Shallow copy. */
                 new HashSet<>(),
                 new HashSet<>());
+        // Put the copy into memo.
+        memo.put(this, nNode);
 
         // The threadsLoc and inThread is used to distinguish different OGNodes that has
         // the same 'blockEdges', so they should be copied deeply.
@@ -104,7 +106,7 @@ public class OGNode implements Copier<OGNode> {
         });
         this.Ws.forEach(w -> {
             SharedEvent nw = w.deepCopy(memo);
-            nNode.Ws.add(w);
+            nNode.Ws.add(nw);
         });
 
         /* preState & sucState */
@@ -114,7 +116,8 @@ public class OGNode implements Copier<OGNode> {
         nNode.sucState = nSucState;
 
         /* predecessor & successors */
-        OGNode nPredecessor = this.predecessor.deepCopy(memo);
+        OGNode nPredecessor = this.predecessor != null
+                ? this.predecessor.deepCopy(memo) : null;
         nNode.predecessor = nPredecessor;
         this.successors.forEach(suc -> {
             OGNode nSuc = suc.deepCopy(memo);
@@ -162,13 +165,10 @@ public class OGNode implements Copier<OGNode> {
         });
 
         /* Trace order */
-        OGNode nTrBefore = this.trBefore.deepCopy(memo),
-                nTrAfter = this.trAfter.deepCopy(memo);
+        OGNode nTrBefore = this.trBefore != null ? this.trBefore.deepCopy(memo) : null,
+                nTrAfter = this.trAfter != null ? this.trAfter.deepCopy(memo) : null;
         nNode.trBefore = nTrBefore;
         nNode.trAfter = nTrAfter;
-
-        // Put the result into memo.
-        memo.put(this, nNode);
 
         return nNode;
     }
