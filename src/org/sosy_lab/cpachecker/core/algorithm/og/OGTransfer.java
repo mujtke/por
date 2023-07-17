@@ -63,6 +63,8 @@ public class OGTransfer {
                     node.setSucState(chState);
                 }
             }
+            // In this case, needn't revisit the graph.
+            graph.setNeedToRevisit(false);
 
             return graph;
         }
@@ -80,6 +82,8 @@ public class OGTransfer {
             updateLastNode(graph, idx,
                     node.isSimpleNode() ? parState : node.getPreState(),
                     chState);
+            // In this case, needn't revisit the graph.
+            graph.setNeedToRevisit(false);
         } else {
             // The node is not in the graph.
             if (isConflict(graph, node, -1)) {

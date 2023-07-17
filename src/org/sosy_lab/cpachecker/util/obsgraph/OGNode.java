@@ -124,14 +124,14 @@ public class OGNode implements Copier<OGNode> {
             nNode.successors.add(nSuc);
         });
 
-        /* readFrom & fromRead */
+        /* readFrom & readBy */
         this.readFrom.forEach(rf -> {
             OGNode nRf = rf.deepCopy(memo);
             nNode.readFrom.add(nRf);
         });
         this.fromRead.forEach(rb -> {
-            OGNode nRb = rb.deepCopy(memo);
-            nNode.readBy.add(nRb);
+            OGNode nrb = rb.deepCopy(memo);
+            nNode.readBy.add(nrb);
         });
 
         /* Modification order */

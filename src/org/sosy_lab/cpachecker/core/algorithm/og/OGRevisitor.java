@@ -142,7 +142,11 @@ public class OGRevisitor {
             }
         }
 
+        getAllDot(g0);
+        System.out.printf("");
         ObsGraph g = copier.deepCopy(g0);
+        getAllDot(g);
+        System.out.printf("");
         node0 = g.getNodes().get(node0Index);
         affectedNode = affectedNodeIndex >= 0 ? g.getNodes().get(affectedNodeIndex) : null;
         OGNode nodei = g.getNodes().get(nodeiIndex);
@@ -278,7 +282,11 @@ public class OGRevisitor {
             // From read.
             updateFromRead(affectedNode);
             // add new wb.
+            getAllDot(graph);
+            System.out.printf("");
             updateWriteBefore(affectedNode, node0);
+            getAllDot(graph);
+            System.out.printf("");
         }
 
         // 2. node0.
@@ -297,11 +305,7 @@ public class OGRevisitor {
             }
         }
         // From read.
-        getAllDot(graph);
-        System.out.printf("");
         updateFromRead(node0);
-        getAllDot(graph);
-        System.out.printf("");
         // Add new wb.
         for (SharedEvent r : chrfrs) {
             if (r.getReadFrom() == null) continue;
