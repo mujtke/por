@@ -9,7 +9,7 @@ import java.util.*;
 
 public class OGPORState implements AbstractState, Graphable {
 
-    private final int num;
+    private int num;
     // Assume there is an edge: sn -- Ei --> sm, then the value of 'inThread' will be
     // the activeThread of 'Ei', which comes from the threadingState in sn. We set
     // its value in strengthen process.
@@ -83,5 +83,9 @@ public class OGPORState implements AbstractState, Graphable {
 
     public void setPreservedState(AbstractState preservedState) {
         this.preservedState = preservedState;
+    }
+
+    public void setNum(int pNum) {
+        this.num = pNum;
     }
 }

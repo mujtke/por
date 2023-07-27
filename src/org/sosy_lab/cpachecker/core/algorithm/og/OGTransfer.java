@@ -10,6 +10,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.happenBefore;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
@@ -47,31 +48,35 @@ public class OGTransfer {
                                        ARGState parState, /* lead state */
                                        ARGState chState) {
         OGNode node = nodeMap.get(edge.hashCode());
-        // If the edge is in a bock but not the last one of it, then we just transfer
-        // simply. Also, for the edge that doesn't access global variables.
-        if (node == null /* No OGNode for the edge. */
-                || (!node.isSimpleNode() && !node.getLastBlockEdge().equals(edge))) {
+        // If the edge is in a block but not the first one of it, then we just transfer
+        // the graph simply. Also, for the edge that doesn't access global variables.
+        // For a block, the first edge decides whether we could transfer the graph.
+        if (node == null /* No OGNode for the edge. */) {
             // Transfer graph from parState to chSate simply. I.e., just return the graph.
-            // Update the preState and SucStat for the node, if it's not null;
-            if (node != null) {
-                // Here, the node must not be simple.
-                // For block, only set preState for the start edge.
-                if (!edge.equals(node.getBlockStartEdge())) {
-                    node.setSucState(chState);
-                } else {
-                    node.setPreState(parState);
-                    node.setSucState(chState);
-                }
-            }
-            // In this case, needn't revisit the graph.
             graph.setNeedToRevisit(false);
-
             return graph;
+        }
+        if (node.isSimpleNode() /* Simple node. */) {
+            // Update the preState and SucStat for the node, if it's not null;
+            node.setPreState(parState);
+            node.setSucState(chState);
+        } else { // Not simple node.
+            if (edge.equals(node.getBlockStartEdge())) {
+                node.setPreState(parState);
+            }
+            else if (edge.equals(node.getLastBlockEdge())) {
+                node.setSucState(chState);
+            } else {
+                return graph;
+            }
         }
 
         int idx = contain(graph, node);
         if (idx > 0) {
             // The graph has contained the node.
+            if (!node.isSimpleNode() && !edge.equals(node.getBlockStartEdge())) {
+                return graph;
+            }
             if (isConflict(graph, node, idx)) {
                 // If some other nodes should be 'added' to the graph before the node but
                 // still not be, then the transfer is not allowed.
@@ -85,10 +90,16 @@ public class OGTransfer {
             // In this case, needn't revisit the graph.
             graph.setNeedToRevisit(false);
         } else {
-            // The node is not in the graph.
-            if (isConflict(graph, node, -1)) {
-                // Some other nodes should happen before the node.
-                return null;
+            if (node.isSimpleNode() || edge.equals(node.getBlockStartEdge())) {
+                // The node is not in the graph.
+                if (isConflict(graph, node, -1)) {
+                    // Some other nodes should happen before the node.
+                    return null;
+                }
+            }
+            if (!node.isSimpleNode() && !edge.equals(node.getLastBlockEdge())) {
+                graph.setNeedToRevisit(false);
+                return graph;
             }
             // Add the node to the graph.
             // If we add a new node to the graph, we should use its deep copy.
@@ -113,11 +124,40 @@ public class OGTransfer {
     public void multiStepTransfer(Vector<AbstractState> waitlist,
                                   ARGState leadState,
                                   ObsGraph graph) {
-        for (ARGState chState : leadState.getChildren()) {
+        // Divide children of leadState into two parts: in waitlist and not.
+        List<ARGState> inWait = new ArrayList<>(), notInWait = new ArrayList<>();
+        leadState.getChildren().forEach(s -> {
+            if (waitlist.contains(s)) inWait.add(s);
+            else notInWait.add(s);
+        });
+        // Handle states in the waitlist first.
+        for (ARGState chState : inWait) {
             CFAEdge etp = leadState.getEdgeToChild(chState);
             assert etp != null;
             OGNode node = nodeMap.get(etp.hashCode());
-            assert node != null: "Could find OGNode for edge " + etp;
+            // assert node != null: "Could not find OGNode for edge " + etp;
+            ObsGraph chGraph = singleStepTransfer(graph, etp, leadState, chState);
+            if (chGraph != null) {
+                if (waitlist.contains(chState)) {
+                    // Transfer stop, we have found the target state.
+                    List<ObsGraph> chGraphs = OGMap.computeIfAbsent(chState.getStateId(),
+                            k -> new ArrayList<>());
+                    chGraphs.add(chGraph);
+                    // Adjust waitlist to ensure chState will be explored before its
+                    // siblings that has no graphs.
+                    adjustWaitlist(OGMap, waitlist, chState);
+                    return;
+                }
+                // Else, find target state recursively.
+                multiStepTransfer(waitlist, chState, chGraph);
+            }
+        }
+        // Handel states not in the waitlist.
+        for (ARGState chState : notInWait) {
+            CFAEdge etp = leadState.getEdgeToChild(chState);
+            assert etp != null;
+            OGNode node = nodeMap.get(etp.hashCode());
+            // assert node != null: "Could not find OGNode for edge " + etp;
             ObsGraph chGraph = singleStepTransfer(graph, etp, leadState, chState);
             if (chGraph != null) {
                 if (waitlist.contains(chState)) {

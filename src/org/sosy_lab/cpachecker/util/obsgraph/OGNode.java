@@ -129,7 +129,7 @@ public class OGNode implements Copier<OGNode> {
             OGNode nRf = rf.deepCopy(memo);
             nNode.readFrom.add(nRf);
         });
-        this.fromRead.forEach(rb -> {
+        this.readBy.forEach(rb -> {
             OGNode nrb = rb.deepCopy(memo);
             nNode.readBy.add(nrb);
         });
@@ -178,18 +178,18 @@ public class OGNode implements Copier<OGNode> {
         if (this == o) return true;
         if (o == null || this.getClass() != o.getClass()) return false;
         OGNode oNode = (OGNode) o;
-        // Use 'blockEdges', 'inThread' and 'threadsLoc' to distinguish two
+        // Use 'blockEdges', 'inThread' and 'threadsLoc[inThread]' to distinguish two
         // different OGNodes.
         return blockEdges.equals(oNode.blockEdges)
                 && inThread.equals(oNode.inThread)
-                && threadLoc.equals(oNode.threadLoc);
+                && threadLoc.get(inThread).equals(oNode.threadLoc.get(oNode.inThread));
     }
 
     // If we override the 'equals' method, then we should also
     // override the 'hashCode()' to make sure they behave consistently.
     @Override
     public int hashCode() {
-        return Objects.hash(blockEdges, inThread, threadLoc);
+        return Objects.hash(blockEdges, inThread, threadLoc.get(inThread));
     }
 
     @Override

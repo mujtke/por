@@ -97,8 +97,11 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
 
         OGPORState parOGState = (OGPORState) state;
 
-        // generate the child state with thread info updated.
-        OGPORState chOGState = new OGPORState(parOGState.getNum() + 1);
+        if (OGMap.get(parOGState.getNum()) == null) {
+            return Set.of();
+        }
+        // Update the num when adjusting precision.
+        OGPORState chOGState = new OGPORState(-1);
 
         return Set.of(chOGState);
     }

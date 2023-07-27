@@ -52,16 +52,19 @@ public class OGRevisitor {
     private List<Pair<AbstractState, ObsGraph>> revisit(ObsGraph g) {
         List<Pair<AbstractState, ObsGraph>> result = new ArrayList<>();
         List<OGNode> nodes = g.getNodes();
-        int nodeNum = nodes.size();
         OGNode node0 = g.getLastNode();
+        int nodeNum = nodes.size();
         assert node0 != null && node0.equals(nodes.get(nodeNum - 1));
 
         List<ObsGraph> gs = new ArrayList<>();
         gs.add(g);
         // Backtracking along the order ndoes added?
         // TODO: maybe it's better to use trace order.
-        for (int i = nodeNum - 2; i >= 0; i--) {
-            OGNode nodei = nodes.get(i);
+        OGNode nodei = node0.getTrAfter();
+//        for (int i = nodeNum - 2; i >= 0; i--) {
+        for (; nodei != null; nodei = nodei.getTrAfter()) {
+//            OGNode nodei = nodes.get(i);
+            int i = nodes.indexOf(nodei);
             int affectedNodeIndex = -1;
             if (mayReadFrom(nodei, node0)) {
                 // If nodei may reads from node0, then we update the affectedNode as
@@ -108,8 +111,10 @@ public class OGRevisitor {
      * @param graph
      */
     private void updateTraceOrder(ObsGraph graph) {
+        getAllDot(graph);
+        System.out.printf("");
         OGNode tan = graph.getLastNode().getTrBefore();
-        graph.getLastNode().setTrAfter(null);
+        graph.getLastNode().setTrBefore(null);
         int trL = graph.getTraceLen();
         while (tan != null) {
             trL -= 1;
@@ -120,6 +125,8 @@ public class OGRevisitor {
             tan = tmptb;
         }
         graph.setTraceLen(trL);
+        getAllDot(graph);
+        System.out.printf("");
     }
 
     private Pair<AbstractState, ObsGraph> revisit0(
@@ -128,28 +135,42 @@ public class OGRevisitor {
             int node0Index,
             int nodeiIndex) {
         OGNode node0 = g0.getNodes().get(node0Index),
+                nodei = g0.getNodes().get(nodeiIndex),
                 affectedNode = affectedNodeIndex >= 0 ?
                         g0.getNodes().get(affectedNodeIndex) : null;
         if (affectedNode != null) {
             // AffectedNode shouldn't happen before node0, except that node0 reads from
             // AffectedNode directly or AffectedNode is the direct predecessor of node0.
             if (!node0.getReadFrom().contains(affectedNode)
-                    // Here, use '==' to check whether affectedNode is node0's predecessor
-                    && !(node0.getPredecessor() == affectedNode)) {
+                    // Here, use '!=' to check whether affectedNode is node0's predecessor
+                    && node0.getPredecessor() != affectedNode) {
                 if (happenBefore(affectedNode, node0)) {
                     return null;
                 }
             }
+        } else {
+            // affectedNode == null.
+            boolean hasNewValueToRead = false;
+            for (SharedEvent r : node0.getRs()) {
+                for (SharedEvent w : nodei.getWs()) {
+                    if (r.getReadFrom() == w) {
+                        if (w.getMoAfter() != null) {
+                            hasNewValueToRead = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasNewValueToRead) break;
+            }
+            if (!hasNewValueToRead) return null;
         }
 
-        getAllDot(g0);
-        System.out.printf("");
         ObsGraph g = copier.deepCopy(g0);
         getAllDot(g);
         System.out.printf("");
         node0 = g.getNodes().get(node0Index);
         affectedNode = affectedNodeIndex >= 0 ? g.getNodes().get(affectedNodeIndex) : null;
-        OGNode nodei = g.getNodes().get(nodeiIndex);
+        nodei = g.getNodes().get(nodeiIndex);
         assert node0 != null && nodei != null;
 
         List<OGNode> delete = new ArrayList<>();
@@ -165,13 +186,16 @@ public class OGRevisitor {
         // Delete the nodes in 'delete' if necessary.
         removeDelete(g, delete, affectedNodeIndex);
         // Update relations after removing the delete part.
-//        getDot(g);
-//        System.out.println("");
+        getAllDot(g);
+        System.out.printf("");
         updateRelation(node0, nodei, affectedNode, g);
-//        getDot(g);
-//        System.out.println("");
+        getAllDot(g);
+        System.out.printf("");
         // Check the consistency of the new graph, if not satisfied, return null;
         if (!consistent(g)) {
+            getAllDot(g);
+            System.out.printf("");
+            consistent(g);
             return null;
         }
 
@@ -228,7 +252,7 @@ public class OGRevisitor {
             if (isCyclic(g, i, visited, inTrace))
                 return false;
         }
-        return false;
+        return true;
     }
 
     private boolean isCyclic(ObsGraph g, int i, boolean[] visited, boolean[] inTrace) {
@@ -270,30 +294,35 @@ public class OGRevisitor {
                                 ObsGraph graph) {
         // 1. affectedNode.
         if (affectedNode != null) {
-            List<SharedEvent> chrfrs = new ArrayList<>();
+            getAllDot(graph);
+            System.out.println("");
             // Get chrfrs.
-            chrfrs = getJoin(affectedNode.getRs(), node0.getWs());
+            List<SharedEvent> chrfrs = getJoin(affectedNode.getRs(), node0.getWs());
             // Remove old wb.
             for (SharedEvent r : chrfrs) {
                 removeOldWb(affectedNode, node0, r);
             }
             // Read from.
+            getAllDot(graph);
+            System.out.printf("");
             chReadFrom(chrfrs, node0.getWs(), affectedNode, node0);
+            getAllDot(graph);
+            System.out.printf("");
             // From read.
             updateFromRead(affectedNode);
+            getAllDot(graph);
+            System.out.printf("");
             // add new wb.
-            getAllDot(graph);
-            System.out.printf("");
             updateWriteBefore(affectedNode, node0);
-            getAllDot(graph);
-            System.out.printf("");
         }
 
         // 2. node0.
         // Read from.
         // Only performed for node0.getRs() \wedge nodei.getWs().
+        getAllDot(graph);
+        System.out.printf("");
         List<SharedEvent> chrfrs = getJoin(node0.getRs(), nodei.getWs());
-        for (SharedEvent r : node0.getRs()) {
+        for (SharedEvent r : chrfrs) {
             for (SharedEvent w: nodei.getWs()) {
                 if (r.accessSameVarWith(w)) {
                     if (w.getMoAfter() != null) {
@@ -305,12 +334,18 @@ public class OGRevisitor {
             }
         }
         // From read.
+        getAllDot(graph);
+        System.out.printf("");
         updateFromRead(node0);
+        getAllDot(graph);
+        System.out.printf("");
         // Add new wb.
         for (SharedEvent r : chrfrs) {
             if (r.getReadFrom() == null) continue;
             updateWriteBefore(node0, r.getReadFrom().getInNode());
         }
+        getAllDot(graph);
+        System.out.printf("");
     }
 
     private void removeDelete(ObsGraph g, List<OGNode> delete, int affectedNodeIndex) {
@@ -319,6 +354,14 @@ public class OGRevisitor {
             OGNode n = g.getNodes().get(i);
             if (!delete.contains(n)) continue;
             // For nodes in delete, we need to remove all relations.
+            // TODO: when remove rf and rb, should we also remove wb deduced?
+            removeDeducedWb(n);
+            getAllDot(g);
+            System.out.println("");
+            // Deduce new relations before remove the node 'n'.
+            deduceRelations(n, g);
+            getAllDot(g);
+            System.out.println("");
             // 1. predecessor and successors.
             if (n.getPredecessor() != null){
                 n.getPredecessor().getSuccessors().remove(n);
@@ -326,6 +369,8 @@ public class OGRevisitor {
             }
             n.getSuccessors().forEach(suc -> suc.setPredecessor(null));
             n.getSuccessors().clear();
+            getAllDot(g);
+            System.out.println("");
             // 2. read from and read by.
             n.getReadFrom().forEach(rf -> rf.getReadBy().remove(n));
             n.getReadFrom().clear();
@@ -340,11 +385,15 @@ public class OGRevisitor {
             n.getWs().forEach(w -> {
                 if (!w.getReadBy().isEmpty()) {
                     w.getReadBy().forEach(rb -> {
-                        rb.setReadFrom(null);
+                        // rb may have changed its read from when deducing relations.
+                        if (w == rb.getReadFrom())
+                            rb.setReadFrom(null);
                     });
                     w.getReadBy().clear();
                 }
             });
+            getAllDot(g);
+            System.out.println("");
             // 3. from read and from read by.
             n.getFromRead().forEach(fr -> fr.getFromReadBy().remove(n));
             n.getFromRead().clear();
@@ -362,20 +411,16 @@ public class OGRevisitor {
                     w.getFromReadBy().clear();
                 }
             });
+            getAllDot(g);
+            System.out.println("");
             // 4. mo before and mo after.
             n.getMoBefore().forEach(mb -> mb.getMoAfter().remove(n));
             n.getMoBefore().clear();
             n.getMoAfter().forEach(ma -> ma.getMoBefore().remove(n));
             n.getMoAfter().clear();
             n.getWs().forEach(w -> {
-                if (w.getMoAfter() != null) {
-                    w.getMoAfter().setMoBefore(null);
-                    w.setMoAfter(null);
-                }
-                if (w.getMoBefore() != null) {
-                    w.getMoBefore().setMoAfter(null);
-                    w.setMoBefore(null);
-                }
+                w.setMoAfter(null);
+                w.setMoBefore(null);
             });
             // 5. wb and wa.
             n.getWBefore().forEach(wb -> wb.getWAfter().remove(n));
@@ -398,6 +443,150 @@ public class OGRevisitor {
             n.setTrBefore(null);
             g.getNodes().remove(n);
             g.setTraceLen(g.getTraceLen() - 1);
+        }
+    }
+
+    private void deduceRelations(OGNode n,
+                                 ObsGraph g /* debug. */) {
+        // Deduce new rf when remove an old one.
+        for (SharedEvent w : n.getWs()) {
+            if (w.getMoAfter() != null) {
+                SharedEvent wa = w.getMoAfter();
+                for (SharedEvent rb : w.getReadBy()) {
+                    rb.setReadFrom(wa);
+                    wa.getReadBy().add(rb);
+                    OGNode rbn = rb.getInNode(), wan = wa.getInNode();
+                    if (!wan.getReadBy().contains(rbn)) wan.getReadBy().add(rbn);
+                    if (!rbn.getReadFrom().contains(wan)) rbn.getReadFrom().add(wan);
+                }
+            }
+        }
+
+        // Deduce new mo when remove old ones.
+        for (SharedEvent w : n.getWs()) {
+            SharedEvent ma = w.getMoAfter(), mb = w.getMoBefore();
+            if (ma != null && mb != null) {
+                ma.setMoBefore(mb);
+                mb.setMoAfter(ma);
+                OGNode man = ma.getInNode(), mbn = mb.getInNode();
+                if (!man.getMoBefore().contains(mbn)) man.getMoBefore().add(mbn);
+                if (!mbn.getMoAfter().contains(man)) mbn.getMoAfter().add(man);
+            }
+        }
+
+        // Deduce new wb when remove old ones.
+        for (SharedEvent w : n.getWs()) {
+            List<SharedEvent> was = w.getWAfter(), wbs = w.getWBefore();
+            if (!was.isEmpty() && !wbs.isEmpty()) {
+                for (SharedEvent wa : was) {
+                    for (SharedEvent wb : wbs) {
+                        wa.getWBefore().add(wb);
+                        wb.getWAfter().add(wa);
+                        OGNode wan = wa.getInNode(), wbn = wb.getInNode();
+                        if (!wan.getWBefore().contains(wbn))
+                            wan.getWBefore().add(wbn);
+                        if (!wbn.getWAfter().contains(wan))
+                            wbn.getWAfter().add(wan);
+                        for (SharedEvent rb : wa.getReadBy()) {
+                            OGNode rbn = rb.getInNode();
+                            if (rbn != wbn) {
+                                // rb and wb may be in the same node.
+                                rb.getFromRead().add(wb);
+                                wb.getFromReadBy().add(rb);
+                                if (!rbn.getFromRead().contains(wbn))
+                                    rbn.getFromRead().add(wbn);
+                                if (!wbn.getFromReadBy().contains(rbn))
+                                    wbn.getFromReadBy().add(rbn);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Similar with 'removeOldWb'.
+     * @param n
+     */
+    private void removeDeducedWb(OGNode n) {
+        // Handle rf-deduced wb.
+        for (SharedEvent r : n.getRs()) {
+            SharedEvent rf = r.getReadFrom();
+            List<SharedEvent> causalRs = rf.getReadBy()
+                    .stream()
+                    .filter(cr -> (cr != r)
+                    && r.accessSameVarWith(cr)
+                    && (happenBefore(cr.getInNode(), n) || happenBefore(n,
+                            cr.getInNode())))
+                    .collect(Collectors.toList());
+            if (!causalRs.isEmpty()) {
+                // R is not the only reason that causes the wb. So we don't remove the
+                // wb.
+                continue;
+            }
+
+            for (SharedEvent wa : rf.getWAfter()) {
+                OGNode wan = wa.getInNode(), rfn = rf.getInNode();
+                // Wa relations in the same thread are stable.
+                if (wan.getInThread().equals(rfn.getInThread())) continue;
+                if (wa.accessSameVarWith(r)
+                        && happenBefore(wan, n)
+                        && !porf(wan, rfn)) {
+                    // R reads from rf is the only reason that wa write before rf.
+                    rf.getWAfter().remove(wa);
+                    wa.getWBefore().remove(rf);
+                    removeWbIfNecessary(wan, rfn);
+                }
+
+                for (SharedEvent w :
+                        getJoin(r.getFromRead(), Collections.singleton(rf))) {
+                    if (wan.getInThread().equals(w.getInNode().getInThread())) continue;
+                    if (wa.accessSameVarWith(r) && happenBefore(wan, n)) {
+                        if (w.getWAfter().contains(wa)) {
+                            w.getWAfter().remove(wa);
+                            wa.getWBefore().remove(w);
+                            removeWbIfNecessary(wan, w.getInNode());
+                        }
+                    }
+                }
+            }
+        }
+        /*
+        // Handle rb-deduced wb.
+        for (SharedEvent w : n.getWs()) {
+            for (SharedEvent rb : w.getReadBy()) {
+                List<SharedEvent> causalRs = w.getReadBy()
+                        .stream()
+                        .filter(cr -> (cr != rb)
+                                && rb.accessSameVarWith(cr)
+                                && (happenBefore(rb.getInNode(), cr.getInNode())
+                                || happenBefore(cr.getInNode(), rb.getInNode())))
+                        .collect(Collectors.toList());
+                if (!causalRs.isEmpty()) continue;
+                // Handle rf.
+            }
+        }
+        */
+    }
+
+    /**
+     * Remove n1 from n2.getWAfter() if allowed.
+     * @param n1 writes before n2.
+     * @param n2 writes after n1.
+     */
+    private void removeWbIfNecessary(OGNode n1, OGNode n2) {
+        Set<OGNode> wans = new HashSet<>();
+        n2.getWs().forEach(w -> {
+            for (SharedEvent wa : w.getWAfter()) {
+                wans.add(wa.getInNode());
+            }
+        });
+        if (!wans.contains(n1)) {
+            // If n2.WAfter doesn't contain n1 any longer,
+            // remove n1 from wAfter of n2.
+            n2.getWAfter().remove(n1);
+            n1.getWBefore().remove(n2);
         }
     }
 
@@ -534,7 +723,7 @@ public class OGRevisitor {
         SharedEvent rf = r.getReadFrom();
         assert rf != null;
         OGNode rfn = rf.getInNode();
-        // if there are some Rs in rf.readBy() happen before/after r and happen
+        // If there are some Rs in rf.readBy() happen before/after r and happen
         // after rf, then the corresponding wa in rf.wa shouldn't be removed.
         List<SharedEvent> causalRs = rf.getReadBy()
                 .stream()
@@ -543,8 +732,9 @@ public class OGRevisitor {
                 && (happenBefore(cr.getInNode(), A) || happenBefore(A, cr.getInNode()))
                 && happenBefore(B, cr.getInNode()))
                 .collect(Collectors.toList());
-        if (causalRs.isEmpty()) return;
+        if (!causalRs.isEmpty()) return;
 
+        List<SharedEvent> rmwas = new ArrayList<>();
         for (SharedEvent wa : rf.getWAfter()) {
             OGNode wan = wa.getInNode();
             // Wa relations in the same thread are stable.
@@ -555,13 +745,12 @@ public class OGRevisitor {
                     && happenBefore(wan, A)
                     && !porf(wan, rfn)) {
                 // r reads from rf is the only reason that wa writes before rf.
-                rf.getWAfter().remove(wa);
-                wa.getWBefore().remove(rf);
+//                rf.getWAfter().remove(wa);
+//                wa.getWBefore().remove(rf);
+                rmwas.add(wa);
                 Set<SharedEvent> rfwas = new HashSet<>();
-                rfn.getWs().forEach(w -> {
-                    rfwas.addAll(w.getWAfter());
-                });
-                if (!getJoin(rfwas, wan.getWs()).isEmpty()) {
+                rfn.getWs().forEach(w -> rfwas.addAll(w.getWAfter()));
+                if (getJoin(rfwas, wan.getWs()).isEmpty()) {
                     // No w in rf's inNode writes after w' in wa's inNode, this means
                     // we could remove wa's inNode from wAfter of rf's inNode.
                     rfn.getWAfter().remove(wan);
@@ -589,6 +778,8 @@ public class OGRevisitor {
                 }
             }
         }
+        rf.getWAfter().removeAll(rmwas);
+        rmwas.forEach(wa -> wa.getWBefore().remove(rf));
     }
 
     /**
@@ -627,6 +818,8 @@ public class OGRevisitor {
                     if (rf != null) {
                         assert rf.getReadBy().contains(r);
                         rf.getReadBy().remove(r);
+                        r.setReadFrom(w);
+                        w.getReadBy().add(r);
                         OGNode A = rf.getInNode();
                         if (A.getReadBy().contains(B)) {
                         // When no R in B reads from A, we remove A from B.read_from.
@@ -642,8 +835,6 @@ public class OGRevisitor {
                                 A.getReadBy().remove(B);
                             }
                         }
-                        r.setReadFrom(w);
-                        w.getReadBy().add(r);
                     }
 
                 }

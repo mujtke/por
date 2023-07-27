@@ -45,16 +45,9 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
 
         assert fullState instanceof ARGState;
         ARGState chState =  (ARGState) fullState;
-        // One only parent is required in OG based algorithm.
+        // Only one parent exists is required in OG based algorithm.
         assert chState.getParents().size() == 1;
         ARGState parState = chState.getParents().iterator().next();
-
-        // If no graph in parState, 'state' shouldn't exist.
-        // NOTE: 'parGraphs == null' != 'parGraphs.isEmpty()'
-        List<ObsGraph> parGraphs = OGMap.get(parState.getStateId());
-        if (parGraphs == null) {
-            return Optional.empty();
-        }
 
         CFAEdge edge = parState.getEdgeToChild(chState);
         assert edge != null;
@@ -70,29 +63,15 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         // nodeMap, is it fine to do so? Although we update them whenever we meet
         // a node. TODO.
         if (inNode != null) {
-            inNode.setInThread(chOGState.getInThread());
-            inNode.setThreadsLoc(parOGState.getThreads());
-        }
-
-        // Perform all possible single step transfer.
-        // I.e., transfer graphs from parent to its children.
-        List<ObsGraph> toRemove = new ArrayList<>();
-        for (ObsGraph parGraph : parGraphs) {
-            ObsGraph chGraph =
-                    transfer.singleStepTransfer(parGraph, edge, parState, chState);
-            if (chGraph != null) {
-                // If parGraph could be transferred to chState, we should relate chGraph
-                // with chState.
-                List<ObsGraph> chGraphs = OGMap.computeIfAbsent(chState.getStateId(),
-                        k -> new ArrayList<>());
-                chGraphs.add(chGraph);
-                toRemove.add(parGraph);
+            // For complex node, set thread loc info only when we meet the start edge.
+            if (inNode.isSimpleNode() || edge.equals(inNode.getBlockStartEdge())) {
+                inNode.setInThread(chOGState.getInThread());
+                inNode.setThreadsLoc(parOGState.getThreads());
             }
         }
-        // Remove transferred graphs.
-        parGraphs.removeAll(toRemove);
-        // If no graphs in parState, set its graphs to be null?
-        if (parGraphs.isEmpty()) OGMap.put(parState.getStateId(), null);
+
+        // Here, set the num for chOGState.
+        chOGState.setNum(chState.getStateId());
 
         return Optional.of(PrecisionAdjustmentResult.create(state,
                 precision, PrecisionAdjustmentResult.Action.CONTINUE));

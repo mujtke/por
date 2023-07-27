@@ -10,6 +10,8 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
+import scala.concurrent.impl.FutureConvertersImpl;
+
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -145,8 +147,16 @@ public class OGNodeBuilder {
                     Set<SharedEvent> sameR = ogNode.getRs()
                             .stream()
                             .filter(r -> r.getVar().getName().equals(e.getVar().getName()))
-                            .collect(Collectors.toSet());
+                            .collect(Collectors.toSet()),
+                            sameW = ogNode.getWs()
+                                    .stream()
+                                    .filter(w -> w.getVar().getName().equals(e.getVar().getName()))
+                                    .collect(Collectors.toSet());
                     if (!sameR.isEmpty()) {
+                        break;
+                    } else if(!sameW.isEmpty()) {
+                        // If there is a w writes the same var with r, then r could be
+                        // ignored, because it will always read the same value.
                         break;
                     } else {
                         ogNode.getRs().add(e);
@@ -155,7 +165,7 @@ public class OGNodeBuilder {
                     break;
                 case WRITE:
                     // for the same write var, only the last write will be added.
-                    Set<SharedEvent> sameW = ogNode.getWs()
+                    sameW = ogNode.getWs()
                             .stream()
                             .filter(w -> w.getVar().getName().equals(e.getVar().getName()))
                             .collect(Collectors.toSet());

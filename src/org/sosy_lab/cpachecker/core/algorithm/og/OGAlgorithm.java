@@ -17,6 +17,7 @@ import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
+import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -145,6 +146,7 @@ public class OGAlgorithm implements Algorithm {
 
         List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),
                 noGraphs = new ArrayList<>();
+        ARGState parState = (ARGState) state, chState;
 
         // Precision adjustment and Split children into two parts if possible.
         for (Iterator<? extends AbstractState> it = successors.iterator(); it.hasNext(); ) {
@@ -155,9 +157,7 @@ public class OGAlgorithm implements Algorithm {
                 Optional<PrecisionAdjustmentResult>  precisionAdjustmentOptional =
                         precisionAdjustment.prec(s, precision, reachedSet,
                                 Functions.identity(), s);
-                if (!precisionAdjustmentOptional.isPresent()) {
-                    continue;
-                }
+                assert precisionAdjustmentOptional.isPresent();
                 precAdjustmentResult = precisionAdjustmentOptional.orElseThrow();
             } finally {
                 // Stop time for precision adjustment.
@@ -165,25 +165,41 @@ public class OGAlgorithm implements Algorithm {
 
             AbstractState suc = precAdjustmentResult.abstractState();
             Precision pre = precAdjustmentResult.precision();
-            Action action = precAdjustmentResult.action();
+            chState = (ARGState) suc;
 
-            // TODO: handle the case where action == BREAK.
-            // Whole algorithm stop here?
-            if (action == Action.BREAK) {
-                logger.log(Level.FINER, "Break signalled, OGAlgorithm will stop.");
-                reachedSet.add(suc, pre);
-                if (it.hasNext()) {
-                    // Copy from CPAAlgorithm.
-                    // TODO: Algorithm stops here, so it doesn't matter
-                    // to re-add 'state' to waitlist?
-                    waitlist.add(state);
-                    reachedSet.reAddToWaitlist(state);
-                }
-
-                return true;
+            // Perform all possible single step transfer.
+            // I.e., transfer graphs from parent to its children.
+            // NOTE: 'parGraphs == null' != 'parGraphs.isEmpty()'
+            CFAEdge edge = parState.getEdgeToChild(chState);
+            assert edge != null;
+            List<ObsGraph> parGraphs = OGMap.get(parState.getStateId()),
+                    toRemove = new ArrayList<>();
+            if (parGraphs == null) {
+                // This means all graphs in parState have been transferred.
+                noGraphs.add(Pair.of(suc, pre));
+                continue;
             }
+            for (ObsGraph parGraph : parGraphs) {
+                getAllDot(parGraph);
+                System.out.println("");
+                ObsGraph chGraph =
+                        transfer.singleStepTransfer(parGraph, edge, parState, chState);
+                if (chGraph != null) {
+                    // If parGraph could be transferred to chState, we should relate chGraph
+                    // with chState.
+                    List<ObsGraph> chGraphs =
+                            OGMap.computeIfAbsent(((ARGState) suc).getStateId(),
+                            k -> new ArrayList<>());
+                    chGraphs.add(chGraph);
+                    toRemove.add(parGraph);
+                }
+            }
+            // Remove transferred graphs.
+            parGraphs.removeAll(toRemove);
+            // If no graphs in parState, set its graphs to be null?
+            if (parGraphs.isEmpty()) OGMap.put(parState.getStateId(), null);
 
-            if (OGMap.get(((ARGState)suc).getStateId()) != null) {
+            if (OGMap.get(chState.getStateId()) != null) {
                 // There are some graphs relate with 'suc'.
                 withGraphs.add(Pair.of(suc, pre));
             } else {
@@ -222,6 +238,8 @@ public class OGAlgorithm implements Algorithm {
             assert aoPair.getFirstNotNull() instanceof ARGState;
             ARGState leadState = (ARGState) aoPair.getFirstNotNull();
             ObsGraph graph = aoPair.getSecondNotNull();
+            getAllDot(graph);
+            System.out.printf("");
             transfer.multiStepTransfer(waitlist, leadState, graph);
         }
 
