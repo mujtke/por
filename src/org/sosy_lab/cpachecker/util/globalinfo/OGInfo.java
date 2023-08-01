@@ -26,6 +26,9 @@ public class OGInfo {
 
     private static Map<Integer, OGNode> nodeMap;
 
+    // For debugging.
+    private static Map<Integer, List<String>> fullOGMap;
+
     private static OGTransfer transfer;
 
     private static OGRevisitor revisitor;
@@ -43,6 +46,7 @@ public class OGInfo {
             OGMap = new HashMap<>();
             nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
             nodeMap = nodeBuilder.build();
+            fullOGMap = new HashMap<>();
             transfer = new OGTransfer(OGMap, nodeMap);
             revisitor = new OGRevisitor(OGMap, nodeMap);
         } else {
@@ -65,5 +69,9 @@ public class OGInfo {
 
     public OGRevisitor getRevisitor() {
        return revisitor;
+    }
+
+    public Map<Integer, List<String>> getFullOGMap() {
+        return fullOGMap;
     }
 }

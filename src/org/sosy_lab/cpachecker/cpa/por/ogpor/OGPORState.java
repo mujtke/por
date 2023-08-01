@@ -58,7 +58,7 @@ public class OGPORState implements AbstractState, Graphable {
 
     public OGPORState(int pNum) {
         num = pNum;
-        threads = new HashMap<String, String>();
+        threads = new HashMap<>();
     }
 
     public Map<String, String> getThreads() {

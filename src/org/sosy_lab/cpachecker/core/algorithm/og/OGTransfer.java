@@ -1,20 +1,20 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
-import de.uni_freiburg.informatik.ultimate.util.ScopeUtils;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
+import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.DeepCopier;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.happenBefore;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
-import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDot;
+import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class OGTransfer {
 
@@ -54,6 +54,8 @@ public class OGTransfer {
         if (node == null /* No OGNode for the edge. */) {
             // Transfer graph from parState to chSate simply. I.e., just return the graph.
             graph.setNeedToRevisit(false);
+            // Debug.
+            addGraphToFull(graph, chState.getStateId());
             return graph;
         }
         if (node.isSimpleNode() /* Simple node. */) {
@@ -67,6 +69,8 @@ public class OGTransfer {
             else if (edge.equals(node.getLastBlockEdge())) {
                 node.setSucState(chState);
             } else {
+                // Debug.
+                addGraphToFull(graph, chState.getStateId());
                 return graph;
             }
         }
@@ -75,6 +79,8 @@ public class OGTransfer {
         if (idx > 0) {
             // The graph has contained the node.
             if (!node.isSimpleNode() && !edge.equals(node.getBlockStartEdge())) {
+                // Debug.
+                addGraphToFull(graph, chState.getStateId());
                 return graph;
             }
             if (isConflict(graph, node, idx)) {
@@ -99,6 +105,8 @@ public class OGTransfer {
             }
             if (!node.isSimpleNode() && !edge.equals(node.getLastBlockEdge())) {
                 graph.setNeedToRevisit(false);
+                // Debug.
+                addGraphToFull(graph, chState.getStateId());
                 return graph;
             }
             // Add the node to the graph.
@@ -113,6 +121,8 @@ public class OGTransfer {
 //            System.out.println("");
         }
 
+        // Debug.
+        addGraphToFull(graph, chState.getStateId());
         return graph;
     }
 
@@ -581,5 +591,15 @@ public class OGTransfer {
         hbn.addAll(n.getReadFrom());
         hbn.addAll(n.getFromReadBy());
         hbn.addAll(n.getWAfter());
+    }
+
+    // Debug.
+    private void addGraphToFull(ObsGraph graph, Integer stateId) {
+        String gStr = getDotStr(graph);
+        OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
+        assert ogInfo != null;
+        List<String> ogs = ogInfo.getFullOGMap().computeIfAbsent(stateId,
+                k -> new ArrayList<>());
+        ogs.add(gStr);
     }
 }

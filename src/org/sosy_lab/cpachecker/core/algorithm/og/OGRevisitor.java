@@ -13,7 +13,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer.getHb;
-import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDot;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
 
 public class OGRevisitor {

@@ -18,6 +18,7 @@ import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
+import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.dumpToJson;
 
 import java.util.*;
 import java.util.logging.Level;
@@ -72,7 +73,8 @@ public class OGAlgorithm implements Algorithm {
             waitlist.addAll(reachedSet.getWaitlist());
             return run0(reachedSet);
         } finally {
-
+            // Debug.
+            dumpToJson();
         }
     }
 
@@ -134,8 +136,21 @@ public class OGAlgorithm implements Algorithm {
                 for (AbstractState ch : successors) {
                     ARGState chs = (ARGState) ch;
                     CFAEdge chtp = pars.getEdgeToChild(chs);
-                    System.out.println("s" + pars.getStateId()
-                            + " -> s" + chs.getStateId()
+                    int parId = pars.getStateId(), chId = chs.getStateId();
+//                    if (OGMap.get(parId) != null)
+//                        System.out.println("s" + parId
+//                                + "[label=\"s"
+//                                + pars.getStateId()
+//                                + " gs = " + OGMap.get(pars.getStateId()).size()
+//                                + "\"]");
+//                    if (OGMap.get(chId) != null)
+//                        System.out.println("s" + chId
+//                                + "[label=\"s"
+//                                + chs.getStateId()
+//                                + " gs = " + OGMap.get(chs.getStateId()).size()
+//                                + "\"]");
+                    System.out.println("s" + parId
+                            + " -> s" + chId
                             + " [label=\"" + chtp + "\"]");
                 }
             }
