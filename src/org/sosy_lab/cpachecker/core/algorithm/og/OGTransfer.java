@@ -58,6 +58,14 @@ public class OGTransfer {
             addGraphToFull(graph, chState.getStateId());
             return graph;
         }
+        // Whether the graph contains the node.
+        int idx = contain(graph, node);
+        // Whether there is any node in the graph still unmet.
+        boolean hasNodeUnmet = hasUnmetNode(graph);
+        // In the case that the graph still has some nodes unmet and doesn't contain the
+        // current 'node', just skip the 'node' simply.
+        if (hasNodeUnmet && (idx < 0)) return null;
+
         if (node.isSimpleNode() /* Simple node. */) {
             // Update the preState and SucStat for the node, if it's not null;
             node.setPreState(parState);
@@ -71,11 +79,11 @@ public class OGTransfer {
             } else {
                 // Debug.
                 addGraphToFull(graph, chState.getStateId());
+                // Just transfer graph from parState to chState simply.
                 return graph;
             }
         }
 
-        int idx = contain(graph, node);
         if (idx > 0) {
             // The graph has contained the node.
             if (!node.isSimpleNode() && !edge.equals(node.getBlockStartEdge())) {
@@ -126,6 +134,11 @@ public class OGTransfer {
         return graph;
     }
 
+    private boolean hasUnmetNode(ObsGraph graph) {
+        // TODO.
+        return false;
+    }
+
     /**
      *
      * @param leadState
@@ -134,7 +147,9 @@ public class OGTransfer {
     public void multiStepTransfer(Vector<AbstractState> waitlist,
                                   ARGState leadState,
                                   ObsGraph graph) {
-        // Divide children of leadState into two parts: in waitlist and not.
+        // Debug.
+        addGraphToFull(graph, leadState.getStateId());
+        // Divide children of leadState into two parts: in the waitlist and not.
         List<ARGState> inWait = new ArrayList<>(), notInWait = new ArrayList<>();
         leadState.getChildren().forEach(s -> {
             if (waitlist.contains(s)) inWait.add(s);
@@ -148,18 +163,14 @@ public class OGTransfer {
             // assert node != null: "Could not find OGNode for edge " + etp;
             ObsGraph chGraph = singleStepTransfer(graph, etp, leadState, chState);
             if (chGraph != null) {
-                if (waitlist.contains(chState)) {
-                    // Transfer stop, we have found the target state.
-                    List<ObsGraph> chGraphs = OGMap.computeIfAbsent(chState.getStateId(),
-                            k -> new ArrayList<>());
-                    chGraphs.add(chGraph);
-                    // Adjust waitlist to ensure chState will be explored before its
-                    // siblings that has no graphs.
-                    adjustWaitlist(OGMap, waitlist, chState);
-                    return;
-                }
-                // Else, find target state recursively.
-                multiStepTransfer(waitlist, chState, chGraph);
+                // Transfer stop, we have found the target state.
+                List<ObsGraph> chGraphs = OGMap.computeIfAbsent(chState.getStateId(),
+                        k -> new ArrayList<>());
+                chGraphs.add(chGraph);
+                // Adjust waitlist to ensure chState will be explored before its
+                // siblings that has no graphs.
+                adjustWaitlist(OGMap, waitlist, chState);
+                return;
             }
         }
         // Handel states not in the waitlist.

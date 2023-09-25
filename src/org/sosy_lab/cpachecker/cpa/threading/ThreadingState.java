@@ -287,9 +287,12 @@ public class ThreadingState implements AbstractState, AbstractStateWithLocations
   public String toDOTLabel() {
     StringBuilder sb = new StringBuilder();
 
+    // debug.
+    /*
     sb.append("[");
     Joiner.on(",\n ").withKeyValueSeparator("=").appendTo(sb, threads);
     sb.append("]");
+     */
 
     return sb.toString();
   }

@@ -9,6 +9,8 @@ import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
+import java.io.InvalidObjectException;
+import java.io.UncheckedIOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -32,15 +34,15 @@ public class OGRevisitor {
      * @param result All results produced by revisit process will be put into it.
      */
     public void apply(List<ObsGraph> graphs, List<Pair<AbstractState, ObsGraph>> result) {
-        if (graphs.isEmpty()) {
-            return;
-        }
+        if (graphs.isEmpty()) return;
 
         for (ObsGraph graph : graphs) {
-            if (!needToRevisit(graph)) {
-                continue;
+            if (!needToRevisit(graph)) continue;
+            try {
+                result.addAll(revisit(graph));
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            result.addAll(revisit(graph));
         }
     }
 
@@ -48,61 +50,68 @@ public class OGRevisitor {
         return graph.isNeedToRevisit();
     }
 
-    private List<Pair<AbstractState, ObsGraph>> revisit(ObsGraph g) {
+    private List<Pair<AbstractState, ObsGraph>> revisit(ObsGraph g) throws Exception {
         List<Pair<AbstractState, ObsGraph>> result = new ArrayList<>();
         List<OGNode> nodes = g.getNodes();
         OGNode node0 = g.getLastNode();
         int nodeNum = nodes.size();
         assert node0 != null && node0.equals(nodes.get(nodeNum - 1));
 
-        List<ObsGraph> gs = new ArrayList<>();
-        gs.add(g);
-        // Backtracking along the order ndoes added?
-        // TODO: maybe it's better to use trace order.
-        OGNode nodei = node0.getTrAfter();
-//        for (int i = nodeNum - 2; i >= 0; i--) {
-        for (; nodei != null; nodei = nodei.getTrAfter()) {
-//            OGNode nodei = nodes.get(i);
-            int i = nodes.indexOf(nodei);
-            int affectedNodeIndex = -1;
-            if (mayReadFrom(nodei, node0)) {
-                // If nodei may reads from node0, then we update the affectedNode as
-                // nodei. Here, we record the index of affectedNode instead itself,
-                // because there may be more than one graph produced when revisiting
-                // and these graphs have the same affectedNodes.
-                affectedNodeIndex = nodes.indexOf(nodei);
-            }
-            if (node0.getReadFrom().contains(nodei) /* node0 reads from nodei. */
-                    /* nodei may read from node0. */
-                    || affectedNodeIndex >= 0) {
-                // Collecting the graphs produced in one revisiting, these graphs may be
-                // used for next revisiting.
-                List<ObsGraph> tmpGraphs = new ArrayList<>();
-                for (ObsGraph g0 : gs) {
-                    Pair<AbstractState, ObsGraph> tmpResult = null;
-                    // During the revisit, the number of nodes may change.
-                    int node0Index = g0.getNodes().size() - 1,
-                            /* The index of nodei keep unchanged. */
-                            nodeiIndex = i;
-                    tmpResult = revisit0(g0, affectedNodeIndex, node0Index, nodeiIndex);
-                    if (tmpResult != null) {
-                        tmpGraphs.add(tmpResult.getSecondNotNull());
-                        result.add(tmpResult);
-                    }
-                }
-                if (!tmpGraphs.isEmpty()) {
-                    // Add all newly got graphs during the last revisiting for next
-                    // revisiting.
-                    gs.addAll(tmpGraphs);
+        List<ObsGraph> RG = new ArrayList<>();
+        RG.add(g);
+
+        while (!RG.isEmpty()) {
+            ObsGraph G0 = RG.remove(0);
+            for (SharedEvent a : G0.getRE()) {
+                switch (a.getAType()) {
+                    case READ:
+                        ObsGraph Gr = G0.deepCopy(new HashMap<>());
+                        List<SharedEvent> locA = Gr.getSameLocationAs(a);
+                        for (SharedEvent w : locA) {
+                            Gr.setReadFrom(a, w);
+                            RG.add(Gr);
+                            if (consistent(Gr)) {
+                                result.add(Pair.of(getPivotState(Gr), Gr));
+                                Gr.RESubtract(a);
+                            }
+                        }
+                        break;
+                    case WRITE:
+                        locA = G0.getSameLocationAs(a);
+                        for (SharedEvent r : locA) {
+                            ObsGraph Gw = G0.deepCopy(new HashMap<>());
+                            List<SharedEvent> delete = getDelete(Gw);
+                            List<SharedEvent> deletePlusR = new ArrayList<>(delete);
+                            deletePlusR.add(r);
+                            if (allMaximallyAdded(Gw, deletePlusR)) {
+                                Gw.removeDelete(delete);
+                                Gw.setReadFrom(r, a);
+                                RG.add(Gw);
+                                if (consistent(Gw)) {
+                                    result.add(Pair.of(getPivotState(Gw), Gw));
+                                    Gw.RESubtract(a);
+                                }
+                            }
+
+                        }
+                        break;
+                    case UNKNOWN:
+                        throw new Exception("Unknown access type.");
                 }
             }
         }
 
-        // Before returning, update the trace orders for all graphs in result because we
-        // update the last node for these graphs.
-        result.forEach(pair -> updateTraceOrder(pair.getSecondNotNull()));
-
         return result;
+    }
+
+    private AbstractState getPivotState(ObsGraph G) {
+        // TODO.
+        return null;
+    }
+
+    private boolean allMaximallyAdded(ObsGraph G, List<SharedEvent> deletePlusR) {
+        // TODO.
+        return false;
     }
 
     /**
@@ -126,86 +135,6 @@ public class OGRevisitor {
         graph.setTraceLen(trL);
         getAllDot(graph);
         System.out.printf("");
-    }
-
-    private Pair<AbstractState, ObsGraph> revisit0(
-            ObsGraph g0,
-            int affectedNodeIndex,
-            int node0Index,
-            int nodeiIndex) {
-        OGNode node0 = g0.getNodes().get(node0Index),
-                nodei = g0.getNodes().get(nodeiIndex),
-                affectedNode = affectedNodeIndex >= 0 ?
-                        g0.getNodes().get(affectedNodeIndex) : null;
-        if (affectedNode != null) {
-            // AffectedNode shouldn't happen before node0, except that node0 reads from
-            // AffectedNode directly or AffectedNode is the direct predecessor of node0.
-            if (!node0.getReadFrom().contains(affectedNode)
-                    // Here, use '!=' to check whether affectedNode is node0's predecessor
-                    && node0.getPredecessor() != affectedNode) {
-                if (happenBefore(affectedNode, node0)) {
-                    return null;
-                }
-            }
-        } else {
-            // affectedNode == null.
-            boolean hasNewValueToRead = false;
-            for (SharedEvent r : node0.getRs()) {
-                for (SharedEvent w : nodei.getWs()) {
-                    if (r.getReadFrom() == w) {
-                        if (w.getMoAfter() != null) {
-                            hasNewValueToRead = true;
-                            break;
-                        }
-                    }
-                }
-                if (hasNewValueToRead) break;
-            }
-            if (!hasNewValueToRead) return null;
-        }
-
-        ObsGraph g = copier.deepCopy(g0);
-        getAllDot(g);
-        System.out.printf("");
-        node0 = g.getNodes().get(node0Index);
-        affectedNode = affectedNodeIndex >= 0 ? g.getNodes().get(affectedNodeIndex) : null;
-        nodei = g.getNodes().get(nodeiIndex);
-        assert node0 != null && nodei != null;
-
-        List<OGNode> delete = new ArrayList<>();
-        if (affectedNode != null) {
-            // If affectedNode exists, then some nodes may get deleted.
-            getDelete(g, affectedNode, node0, delete);
-            // Only all nodes in delete added maximally we can continue to revisit.
-            // Else, just drop the revisit process and return null;
-            if (!maximallyAdded(g, delete, node0, affectedNode)) {
-                return null;
-            }
-        }
-        // Delete the nodes in 'delete' if necessary.
-        removeDelete(g, delete, affectedNodeIndex);
-        // Update relations after removing the delete part.
-        getAllDot(g);
-        System.out.printf("");
-        updateRelation(node0, nodei, affectedNode, g);
-        getAllDot(g);
-        System.out.printf("");
-        // Check the consistency of the new graph, if not satisfied, return null;
-        if (!consistent(g)) {
-            getAllDot(g);
-            System.out.printf("");
-            consistent(g);
-            return null;
-        }
-
-        Pair<ARGState, OGNode> nLStateNode = updateLStateNode(node0, nodei, affectedNode);
-        assert nLStateNode != null;
-        ARGState leadState = nLStateNode.getFirstNotNull();
-        OGNode nLastNode = nLStateNode.getSecondNotNull();
-        g.setLastNode(nLastNode);
-        g.setNeedToRevisit(false);
-
-        return Pair.of(leadState, g);
     }
 
     /**
@@ -242,13 +171,14 @@ public class OGRevisitor {
      * Ref: <a herf="https://www.geeksforgeeks.org/detect-cycle-in-a-graph/"></a>
      * @return true if there is no any cycle in g.
      */
-    private boolean consistent(ObsGraph g) {
-        int nodeNum = g.getNodes().size();
+    // FIXME
+    private boolean consistent(ObsGraph G) {
+        int nodeNum = G.getNodes().size();
         if (nodeNum <= 0) return true;
         boolean[] visited = new boolean[nodeNum];
         boolean[] inTrace = new boolean[nodeNum];
         for (int i = 0; i < nodeNum; i++) {
-            if (isCyclic(g, i, visited, inTrace))
+            if (isCyclic(G, i, visited, inTrace))
                 return false;
         }
         return true;
@@ -589,15 +519,6 @@ public class OGRevisitor {
         }
     }
 
-    /**
-     *
-     * @param g
-     * @param delete
-     * @param node0
-     * @param affectedNode
-     * @return True, if affectedNode and all nodes in delete added maximally.
-     * @implNode
-     */
     private boolean maximallyAdded(ObsGraph g, List<OGNode> delete, OGNode node0,
                                    OGNode affectedNode) {
         // Maximality check should include affectedNode.
@@ -652,22 +573,15 @@ public class OGRevisitor {
     /**
      * @implNote The delete part includes all nodes that are added to graph g after
      * affectedNode and independent with node0.
-     * @param delete The delete part.
      */
-    private void getDelete(ObsGraph g, OGNode affectedNode,
-                           OGNode node0, List<OGNode> delete) {
-        int h = g.getNodes().size() - 1,
-                l = g.getNodes().indexOf(affectedNode);
-        for (; h > l; h--) {
-            OGNode nodek = g.getNodes().get(h);
-            if (nodek == node0) continue;
-            if (happenBefore(nodek, node0)) continue;
-            delete.add(nodek);
-        }
+    // FIXME.
+    private List<SharedEvent> getDelete(ObsGraph G) {
+        List<SharedEvent> delete = new ArrayList<>();
+
+        return delete;
     }
 
     /**
-     *
      * @return true if node1 happens before node2.
      */
     public static boolean happenBefore(OGNode node1, OGNode node2) {

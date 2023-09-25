@@ -35,6 +35,9 @@ public class OGInfo {
 
     private OGNodeBuilder nodeBuilder;
 
+    // <next table.
+    private final HashMap<Integer, Integer> nlt;
+
     @Option(secure = true,
             description = "this option is enabled iff we use OGPORCPA. When enabled")
     private boolean useOG = false;
@@ -49,9 +52,11 @@ public class OGInfo {
             fullOGMap = new HashMap<>();
             transfer = new OGTransfer(OGMap, nodeMap);
             revisitor = new OGRevisitor(OGMap, nodeMap);
+            nlt = new HashMap<>();
         } else {
             OGMap = null;
             nodeMap = null;
+            nlt = null;
         }
     }
 
@@ -73,5 +78,9 @@ public class OGInfo {
 
     public Map<Integer, List<String>> getFullOGMap() {
         return fullOGMap;
+    }
+
+    public HashMap<Integer, Integer> getNlt() {
+        return nlt;
     }
 }

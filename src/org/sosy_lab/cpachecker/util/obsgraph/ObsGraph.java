@@ -1,10 +1,6 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
-import edu.umd.cs.findbugs.annotations.NonNull;
-import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
-import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.Triple;
-import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
+import com.google.common.base.Preconditions;
 
 import java.util.*;
 
@@ -18,8 +14,21 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     private int traceLen;
 
+    private List<SharedEvent> RE;
+
     public ObsGraph() {
         traceLen = 0;
+        RE = new ArrayList<>();
+    }
+
+    public List<SharedEvent> getRE() {
+        return RE;
+    }
+
+    public void addNode(OGNode n) {
+        nodes.add(n);
+        RE.addAll(n.getRs());
+        RE.addAll(n.getWs());
     }
 
     @Override
@@ -97,4 +106,57 @@ public class ObsGraph implements Copier<ObsGraph> {
 
         return nGraph;
     }
+
+    public List<SharedEvent> getSameLocationAs(SharedEvent a) {
+        List<SharedEvent> result = new ArrayList<>();
+
+        for (int i = nodes.indexOf(a.getInNode()) - 1; i >= 0; i--) {
+            OGNode nodei = nodes.get(i);
+            if (a.getAType() == SharedEvent.AccessType.READ) {
+                SharedEvent arf = a.getReadFrom();
+                // jump nodes after arf.inNode.
+                if (i > nodes.indexOf(arf.getInNode())) continue;
+                for (SharedEvent w : nodei.getWs()) {
+                    if (w.accessSameVarWith(a)) {
+                        result.add(w);
+                        break;
+                    }
+                }
+            } else {
+                // WRITE
+                for (SharedEvent r : nodei.getRs()) {
+                    if (r.accessSameVarWith(a) && !this.porf(r, a)) {
+                        result.add(r);
+                        break;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public boolean porf(SharedEvent e1, SharedEvent e2) {
+        // TODO
+        return false;
+    }
+
+     public void RESubtract(SharedEvent a) {
+         Preconditions.checkState(RE.contains(a), "Event a not in RE.");
+        RE.remove(a);
+     }
+
+     public void removeDelete(List<SharedEvent> delete) {
+        // remove the relations before remove the nodes.
+         delete.forEach(this::removeAllRelationsForEvent);
+        delete.forEach(this.nodes::remove);
+     }
+
+     public void setReadFrom(SharedEvent r, SharedEvent w) {
+        // TODO.
+     }
+
+     private void removeAllRelationsForEvent(SharedEvent e) {
+        // TODO.
+     }
 }

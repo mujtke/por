@@ -3,6 +3,7 @@ package org.sosy_lab.cpachecker.core.algorithm.og;
 import com.google.common.base.Functions;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
@@ -17,6 +18,8 @@ import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
+
+import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.dumpToJson;
 
@@ -37,6 +40,8 @@ public class OGAlgorithm implements Algorithm {
     private final Map<Integer, OGNode> nodeMap;
     private final OGRevisitor revisitor;
     private final OGTransfer transfer;
+
+    private final HashMap<Integer, Integer> nlt;
 
     // We don't use the waitlist provided by reachedSet, it's read-only.
     // Instead, use the 'waitlist' we define. But it is better to keep
@@ -61,6 +66,7 @@ public class OGAlgorithm implements Algorithm {
         this.revisitor = ogInfo.getRevisitor();
         this.transfer = ogInfo.getTransfer();
         this.waitlist = new Vector<>();
+        this.nlt = ogInfo.getNlt();
     }
 
     @Override
@@ -74,7 +80,7 @@ public class OGAlgorithm implements Algorithm {
             return run0(reachedSet);
         } finally {
             // Debug.
-            dumpToJson();
+            dumpToJson(reachedSet);
         }
     }
 
@@ -163,7 +169,9 @@ public class OGAlgorithm implements Algorithm {
                 noGraphs = new ArrayList<>();
         ARGState parState = (ARGState) state, chState;
 
-        // Precision adjustment and Split children into two parts if possible.
+        List<? extends AbstractState> nSuccessors = reorder(parState, successors);
+
+        // Adjust precision and split children into two parts if possible.
         for (Iterator<? extends AbstractState> it = successors.iterator(); it.hasNext(); ) {
 
             AbstractState s = it.next();
@@ -223,7 +231,7 @@ public class OGAlgorithm implements Algorithm {
             }
         }
 
-        // Add children without graphs to reachedSet first. (Add states to
+        // Add children without graphs to reachedSet first. (which will add states to
         // waitlist too).
         noGraphs.forEach(sp -> {
             waitlist.add(sp.getFirstNotNull());
@@ -239,18 +247,16 @@ public class OGAlgorithm implements Algorithm {
         for (Iterator<Pair<AbstractState, Precision>> it = withGraphs.iterator();
              it.hasNext(); ) {
             Pair<AbstractState, Precision> apPair = it.next();
-            assert apPair.getFirstNotNull() instanceof ARGState;
             ARGState ch = (ARGState) apPair.getFirstNotNull();
             List<ObsGraph> chGraphs = OGMap.get(ch.getStateId());
             assert chGraphs != null;
             revisitor.apply(chGraphs, revisitResult);
         }
 
-        // Perform transferring for all graphs in 'revisitResult'.
+        // Perform transfer for all graphs in 'revisitResult'.
         for (Iterator<Pair<AbstractState, ObsGraph>> it = revisitResult.iterator();
              it.hasNext(); ) {
             Pair<AbstractState, ObsGraph> aoPair = it.next();
-            assert aoPair.getFirstNotNull() instanceof ARGState;
             ARGState leadState = (ARGState) aoPair.getFirstNotNull();
             ObsGraph graph = aoPair.getSecondNotNull();
             getAllDot(graph);
@@ -259,6 +265,43 @@ public class OGAlgorithm implements Algorithm {
         }
 
         return false;
+    }
+
+    private List<AbstractState> reorder(ARGState parState, Collection<?
+            extends AbstractState> successors) {
+        ArrayList<AbstractState> result = new ArrayList<>(successors);
+        if (!(result.size() == 1)) {
+            for (int i = result.size() - 2; i >= 0; i--) {
+                for (int j = 0; j <= i; j++) {
+                    // jth should <next (j+1)th.
+                    CFAEdge ej1 = parState.getEdgeToChild((ARGState) result.get(j)),
+                            ej2 = parState.getEdgeToChild((ARGState) result.get(j + 1));
+                    assert ej1 != null && ej2 != null;
+                    Integer p1 = hash(ej1.hashCode(), ej2.hashCode()),
+                            p2 = hash(ej2.hashCode(), ej1.hashCode()),
+                            cmp1, cmp2;
+                    // handle assume statement;
+                    if ((ej1 instanceof AssumeEdge)
+                            && (ej2 instanceof AssumeEdge)
+                            && ej1.getPredecessor().equals(ej2.getPredecessor())) {
+                        // 0 means not comparable.
+                        nlt.putIfAbsent(p1, 0);
+                        nlt.putIfAbsent(p2, 0);
+                    } else {
+                        nlt.putIfAbsent(p1, 1);
+                        nlt.putIfAbsent(p2, -1);
+                    }
+                    cmp1 = nlt.get(p1); cmp2 = nlt.get(p2);
+                    if ((cmp1 == 0 || cmp2 == 0) ||
+                            (cmp1 > 0 && cmp2 < 0)) continue;
+                    // If ej2 <next ej1, swap result[j] and result[j + 1].
+                    AbstractState tmp = result.get(j);
+                    result.set(j, result.get(j + 1));
+                    result.set(j + 1, tmp);
+                }
+            }
+        }
+        return result;
     }
 
     private boolean hasWaitingState() {

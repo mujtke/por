@@ -1,18 +1,19 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import org.json.JSONObject;
+import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class DebugAndTest {
 
     private final static String dotFile = "output/ogs.dot";
     private final static String fullDotFile = "output/fullDot.json";
+    private final static String argFile = "output/arg.json";
 
     private static void addNewNode(FileWriter fout, OGNode n,
                                    Map<OGNode, String> visited) throws IOException {
@@ -211,16 +212,99 @@ public class DebugAndTest {
         return strBuilder.toString();
     }
 
-    public static void dumpToJson() {
+    public static void dumpToJson(ReachedSet reachedSet) {
         Map<Integer, List<String>> fullOGMap =
                 GlobalInfo.getInstance().getOgInfo().getFullOGMap();
         JSONObject json = new JSONObject(fullOGMap);
         try {
+            // Export ogs in json.
             FileWriter fout = new FileWriter(fullDotFile);
+            json.write(fout, 4, 0);
+            fout.close();
+
+            // Export arg.
+            ARG arg = new ARG();
+            ARGState s = (ARGState) reachedSet.getFirstState();
+            assert s != null;
+            Stack<ARGState> stack = new Stack<>();
+            stack.push(s);
+            while (!stack.isEmpty()) {
+                ARGState cur = stack.pop(), par;
+                cur.getChildren().forEach(stack::push);
+                int curStateId = cur.getStateId();
+                if (cur.getParents().isEmpty()) {
+                    ARG.State state = new ARG.State(String.valueOf(curStateId),
+                            "s" + curStateId);
+                    arg.getReached().add(state);
+                    continue;
+                }
+                // One parent at most (Assume).
+                par = cur.getParents().iterator().next();
+                int parStateId = par.getStateId();
+                ARG.State state = new ARG.State(String.valueOf(curStateId),
+                        "s" + curStateId);
+                ARG.Edge edge = new ARG.Edge(String.valueOf(parStateId),
+                        String.valueOf(curStateId),
+                        Objects.requireNonNull(par.getEdgeToChild(cur)).toString());
+                arg.getReached().add(state);
+                arg.getEdges().add(edge);
+            }
+            fout = new FileWriter(argFile);
+            json = new JSONObject(arg);
             json.write(fout, 4, 0);
             fout.close();
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public static class ARG {
+        public static class State {
+            public State(String pKey, String pStateNum) {
+                this.key = pKey;
+                this.stateNum = pStateNum;
+            }
+            private final String key;
+            private final String stateNum;
+
+            public String getKey() {
+                return key;
+            }
+
+            public String getStateNum() {
+                return stateNum;
+            }
+        }
+
+        public static class Edge {
+            public Edge(String from, String to, String stmt) {
+                this.from = from;
+                this.to  = to;
+                this.stmt = stmt;
+            }
+            private final String from;
+            private final String to;
+            private final String stmt;
+
+            public String getFrom() {
+                return from;
+            }
+
+            public String getTo() {
+                return to;
+            }
+
+            public String getStmt() {
+                return stmt;
+            }
+        }
+        private final List<State> reached = new ArrayList<>();
+        private final List<Edge> edges = new ArrayList<>();
+        public List<Edge> getEdges() {
+            return edges;
+        }
+        public List<State> getReached() {
+            return reached;
         }
     }
 }

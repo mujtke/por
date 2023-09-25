@@ -320,32 +320,32 @@ public class CPAAlgorithm implements Algorithm, StatisticsProvider {
 //            .map(s -> ((ARGState) s).getStateId())
 //            .collect(Collectors.toList()));
 
-//     if (!((ARGState) state).getParents().isEmpty()) {
-//     ARGState argParState = ((ARGState) state).getParents().iterator().next();
-//     CFAEdge edge = argParState.getEdgeToChild((ARGState) state);
-//
-//     int curStateId = ((ARGState) state).getStateId(), parStateId = argParState.getStateId();
-//     String color = any(((ARGState) state).getWrappedStates(), AbstractStates::isTargetState) ? "red" : "cornflowerblue";
-//     System.out.println(
-//     ""
-//     + curStateId
-//     + " [fillcolor=\"" + color + "\" shape=\"box\" label=\"s"
-//     + curStateId
-//     + "\" id=\""
-//     + curStateId
-//     + "\"]");
-//     System.out.println(
-//     parStateId
-//     + " -> "
-//     + curStateId
-//     + " [label=\""
-//     + edge
-//     + "\" id=\""
-//     + parStateId
-//     + " -> "
-//     + curStateId
-//     + "\"]");
-//     }
+    if (!((ARGState) state).getParents().isEmpty()) {
+    ARGState argParState = ((ARGState) state).getParents().iterator().next();
+    CFAEdge edge = argParState.getEdgeToChild((ARGState) state);
+
+    int curStateId = ((ARGState) state).getStateId(), parStateId = argParState.getStateId();
+    String color = any(((ARGState) state).getWrappedStates(), AbstractStates::isTargetState) ? "red" : "cornflowerblue";
+    System.out.println(
+    ""
+    + curStateId
+    + " [fillcolor=\"" + color + "\" shape=\"box\" label=\"s"
+    + curStateId
+    + "\" id=\""
+    + curStateId
+    + "\"]");
+    System.out.println(
+    parStateId
+    + " -> "
+    + curStateId
+    + " [label=\""
+    + edge
+    + "\" id=\""
+    + parStateId
+    + " -> "
+    + curStateId
+    + "\"]");
+    }
 
     stats.transferTimer.start();
     Collection<? extends AbstractState> successors;
