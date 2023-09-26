@@ -92,13 +92,6 @@ public class ObsGraph implements Copier<ObsGraph> {
             nGraph.nodes.add(nN);
         });
 
-        /*
-        for (OGNode n : nodes) {
-            OGNode nN = n.deepCopy(memo);
-            nGraph.nodes.add(nN);
-        }
-         */
-
         assert this.lastNode != null;
         nGraph.lastNode = this.lastNode.deepCopy(memo);
         nGraph.needToRevisit = this.needToRevisit;

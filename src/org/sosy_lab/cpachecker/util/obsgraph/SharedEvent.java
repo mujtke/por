@@ -54,44 +54,19 @@ public class SharedEvent implements Copier<SharedEvent> {
         memo.put(this, nEvent);
 
         /* Read from & read by. */
-        SharedEvent nReadFrom = this.readFrom != null
-                ? this.readFrom.deepCopy(memo) : null;
-        nEvent.readFrom = nReadFrom;
+        nEvent.readFrom = this.readFrom != null ? this.readFrom.deepCopy(memo) : null;
         this.readBy.forEach(rb -> {
             SharedEvent nRb = rb.deepCopy(memo);
             nEvent.readBy.add(nRb);
         });
 
-        /* Modification order */
-        SharedEvent nMoBefore = this.moBefore != null
-                ? this.moBefore.deepCopy(memo) : null;
-        SharedEvent nMoAfter = this.moAfter != null
-                ? this.moAfter.deepCopy(memo) : null;
-        nEvent.moBefore = nMoBefore;
-        nEvent.moAfter = nMoAfter;
+        /* Modification order: no copy. */
 
-        /* Write before */
-        this.wBefore.forEach(wb -> {
-            SharedEvent nWb = wb.deepCopy(memo);
-            nEvent.wBefore.add(nWb);
-        });
-        this.wAfter.forEach(wa -> {
-            SharedEvent nWa = wa.deepCopy(memo);
-            nEvent.wAfter.add(nWa);
-        });
+        /* Write before: no copy. */
 
-        /* From read */
-        this.fromRead.forEach(fr -> {
-            SharedEvent nFr = fr.deepCopy(memo);
-            nEvent.fromRead.add(nFr);
-        });
-        this.fromReadBy.forEach(frb -> {
-            SharedEvent nFrb = frb.deepCopy(memo);
-            nEvent.fromReadBy.add(nFrb);
-        });
+        /* From read: no copy. */
 
-        OGNode nInNode = this.inNode.deepCopy(memo);
-        nEvent.inNode = nInNode;
+        nEvent.inNode = this.inNode.deepCopy(memo);
 
         return nEvent;
     }

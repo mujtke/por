@@ -12,8 +12,8 @@ import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
 
+import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.happenBefore;
-import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class OGTransfer {
@@ -21,10 +21,30 @@ public class OGTransfer {
     private final Map<Integer, List<ObsGraph>> OGMap;
     private final Map<Integer, OGNode> nodeMap;
     private final DeepCopier copier = new DeepCopier();
+
+    private static final NLTComparator nltcmp = new NLTComparator();
     public OGTransfer(Map<Integer, List<ObsGraph>> pOGMap,
                       Map<Integer, OGNode> pNodeMap) {
         this.OGMap = pOGMap;
         this.nodeMap = pNodeMap;
+    }
+
+    private static class NLTComparator implements Comparator<ARGState> {
+        // NLT => <next
+        @Override
+        public int compare(ARGState s1, ARGState s2) {
+            Map<Integer, Integer> nlt = GlobalInfo.getInstance().getOgInfo().getNlt();
+            ARGState par = s1.getParents().iterator().next();
+            assert par == s2.getParents().iterator().next() : "s1 and s2 should " +
+                    "have only the same parent.";
+            CFAEdge e1 = par.getEdgeToChild(s1), e2 = par.getEdgeToChild(s2);
+            assert e1 != null && e2 != null;
+            int cmp1 = nlt.get(hash(e1.hashCode(), e2.hashCode())),
+                    cmp2 = nlt.get(hash(e2.hashCode(), e1.hashCode()));
+            if (cmp1 == 0 || cmp2 == 0) return 0; // equal.
+            if (cmp1 == 1 && cmp2 == -1) return -1; // <
+            return 1; // >, cmp1 == 1 && cmp2 == -1.
+        }
     }
 
     /**
@@ -43,6 +63,7 @@ public class OGTransfer {
      * @param chState Final {@ARGState} where the transferring stop.
      * @return Transferred graph if no conflict found, else null.
      */
+    // FIXME
     public ObsGraph singleStepTransfer(ObsGraph graph,
                                        CFAEdge edge,
                                        ARGState parState, /* lead state */
@@ -66,31 +87,17 @@ public class OGTransfer {
         // current 'node', just skip the 'node' simply.
         if (hasNodeUnmet && (idx < 0)) return null;
 
-        if (node.isSimpleNode() /* Simple node. */) {
-            // Update the preState and SucStat for the node, if it's not null;
-            node.setPreState(parState);
-            node.setSucState(chState);
-        } else { // Not simple node.
-            if (edge.equals(node.getBlockStartEdge())) {
-                node.setPreState(parState);
-            }
-            else if (edge.equals(node.getLastBlockEdge())) {
-                node.setSucState(chState);
-            } else {
-                // Debug.
-                addGraphToFull(graph, chState.getStateId());
-                // Just transfer graph from parState to chState simply.
-                return graph;
-            }
-        }
-
+        // no unmet nodes or idx > 0.
         if (idx > 0) {
-            // The graph has contained the node.
+            // The node has been in the graph.
             if (!node.isSimpleNode() && !edge.equals(node.getBlockStartEdge())) {
                 // Debug.
                 addGraphToFull(graph, chState.getStateId());
+                // Inside the non-simple node, just return.
+                updatePreSucState(edge, node, parState, chState);
                 return graph;
             }
+            // Not inside the non-simple node, check the conflict.
             if (isConflict(graph, node, idx)) {
                 // If some other nodes should be 'added' to the graph before the node but
                 // still not be, then the transfer is not allowed.
@@ -115,11 +122,13 @@ public class OGTransfer {
                 graph.setNeedToRevisit(false);
                 // Debug.
                 addGraphToFull(graph, chState.getStateId());
+                updatePreSucState(edge, node, parState, chState);
                 return graph;
             }
             // Add the node to the graph.
             // If we add a new node to the graph, we should use its deep copy.
             OGNode newNode = copier.deepCopy(node);
+            updatePreSucState(edge, newNode, parState, chState);
 //            getDot(graph);
 //            System.out.println("");
             addNewNode(graph, newNode,
@@ -134,16 +143,27 @@ public class OGTransfer {
         return graph;
     }
 
+    private void updatePreSucState(CFAEdge edge, OGNode node, ARGState parState,
+                                ARGState chState) {
+        if (node.isSimpleNode() /* Simple node. */) {
+            // Update the preState and SucStat for the node, if it's not null;
+            node.setPreState(parState);
+            node.setSucState(chState);
+        } else { // Not simple node.
+            if (edge.equals(node.getBlockStartEdge())) {
+                node.setPreState(parState);
+            }
+            else if (edge.equals(node.getLastBlockEdge())) {
+                node.setSucState(chState);
+            }
+        }
+    }
+
     private boolean hasUnmetNode(ObsGraph graph) {
         // TODO.
         return false;
     }
 
-    /**
-     *
-     * @param leadState
-     * @param graph
-     */
     public void multiStepTransfer(Vector<AbstractState> waitlist,
                                   ARGState leadState,
                                   ObsGraph graph) {
@@ -155,6 +175,9 @@ public class OGTransfer {
             if (waitlist.contains(s)) inWait.add(s);
             else notInWait.add(s);
         });
+        // Reorder by using <next.
+        inWait.sort(nltcmp);
+        notInWait.sort(nltcmp);
         // Handle states in the waitlist first.
         for (ARGState chState : inWait) {
             CFAEdge etp = leadState.getEdgeToChild(chState);
@@ -223,6 +246,7 @@ public class OGTransfer {
      * @param nodeInGraph
      * @return true, if conflict.
      */
+    // FIXME
     private boolean isConflict(ObsGraph graph, OGNode node, int nodeInGraph) {
         int i = graph.getTraceLen(), j = nodeInGraph;
         if (j < 0) {
@@ -263,6 +287,7 @@ public class OGTransfer {
      * @param newSucState used to update the sucState of the new last node.
      * @implNote Because of the block, we should handle the preState carefully.
      */
+    // FIXME
     private void updateLastNode(ObsGraph graph, int idx, ARGState newPreState,
                                 ARGState newSucState) {
         OGNode nLast = graph.getNodes().get(idx),
@@ -320,6 +345,7 @@ public class OGTransfer {
 
     }
 
+    // FIXME
     private void addNewNode(ObsGraph graph,
                             OGNode node,
                             ARGState newPreState,

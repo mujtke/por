@@ -110,15 +110,12 @@ public class OGNode implements Copier<OGNode> {
         });
 
         /* preState & sucState */
-        ARGState nPreState = this.preState, /* Shallow copy. */
-                nSucState = this.sucState;  /* Shallow copy. */
-        nNode.preState = nPreState;
-        nNode.sucState = nSucState;
+        nNode.preState = this.preState; /* Shallow copy. */
+        nNode.sucState = this.sucState; /* Shallow copy. */
 
         /* predecessor & successors */
-        OGNode nPredecessor = this.predecessor != null
+        nNode.predecessor = this.predecessor != null
                 ? this.predecessor.deepCopy(memo) : null;
-        nNode.predecessor = nPredecessor;
         this.successors.forEach(suc -> {
             OGNode nSuc = suc.deepCopy(memo);
             nNode.successors.add(nSuc);
@@ -134,41 +131,13 @@ public class OGNode implements Copier<OGNode> {
             nNode.readBy.add(nrb);
         });
 
-        /* Modification order */
-        this.moBefore.forEach(mb -> {
-            OGNode nMb = mb.deepCopy(memo);
-            nNode.moBefore.add(nMb);
-        });
-        this.moAfter.forEach(ma -> {
-            OGNode nMa = ma.deepCopy(memo);
-            nNode.moAfter.add(nMa);
-        });
-
-        /* Write before */
-        this.wBefore.forEach(wb -> {
-            OGNode nWb = wb.deepCopy(memo);
-            nNode.wBefore.add(nWb);
-        });
-        this.wAfter.forEach(wa -> {
-            OGNode nWa = wa.deepCopy(memo);
-            nNode.wAfter.add(nWa);
-        });
-
-        /* From read */
-        this.fromRead.forEach(fr -> {
-            OGNode nFr = fr.deepCopy(memo);
-            nNode.fromRead.add(nFr);
-        });
-        this.fromReadBy.forEach(frb -> {
-            OGNode nFrb = frb.deepCopy(memo);
-            nNode.fromReadBy.add(nFrb);
-        });
+        /* Modification order: no copy. */
+        /* Write before: no copy. */
+        /* From read: no copy. */
 
         /* Trace order */
-        OGNode nTrBefore = this.trBefore != null ? this.trBefore.deepCopy(memo) : null,
-                nTrAfter = this.trAfter != null ? this.trAfter.deepCopy(memo) : null;
-        nNode.trBefore = nTrBefore;
-        nNode.trAfter = nTrAfter;
+        nNode.trBefore = this.trBefore != null ? this.trBefore.deepCopy(memo) : null;
+        nNode.trAfter = this.trAfter != null ? this.trAfter.deepCopy(memo) : null;
 
         return nNode;
     }
