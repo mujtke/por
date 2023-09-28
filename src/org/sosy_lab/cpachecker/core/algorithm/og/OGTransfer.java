@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
+import com.google.common.base.Preconditions;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
@@ -13,7 +14,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 import java.util.*;
 
 import static java.util.Objects.hash;
-import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.happenBefore;
+import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.porf;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class OGTransfer {
@@ -44,6 +45,37 @@ public class OGTransfer {
             if (cmp1 == 0 || cmp2 == 0) return 0; // equal.
             if (cmp1 == 1 && cmp2 == -1) return -1; // <
             return 1; // >, cmp1 == 1 && cmp2 == -1.
+        }
+    }
+
+    public static void setRelation(String type, SharedEvent e1, SharedEvent e2) {
+        // set relation: <e1, e2> \in <_{type}
+        OGNode e1n = e1.getInNode(), e2n = e2.getInNode();
+        switch (type) {
+            case "rf":
+                // e1 <_rf e2, e2 reads from e1.
+                Preconditions.checkArgument(e1.getReadFrom() != e2);
+                e2.setReadFrom(e1);
+                e1.getReadBy().add(e2);
+                if (!e2n.getReadFrom().contains(e1n)) e2n.getReadFrom().add(e1n);
+                if (!e1n.getReadBy().contains(e2n)) e1n.getReadBy().add(e2n);
+                break;
+            case "fr":
+                // from read.
+                Preconditions.checkArgument(!e1.getFromRead().contains(e2));
+                e1.getFromRead().add(e2);
+                e2.getFromReadBy().add(e1);
+                if (!e1n.getFromRead().contains(e2n)) e1n.getFromRead().add(e2n);
+                if (!e2n.getFromReadBy().contains(e1n)) e2n.getFromReadBy().add(e1n);
+                break;
+            case "mo":
+                Preconditions.checkArgument(e1.getMoBefore() != e2);
+                e1.setMoBefore(e2);
+                e2.setMoAfter(e1);
+                if (!e1n.getMoBefore().contains(e2n)) e1n.getMoBefore().add(e2n);
+                if (!e2n.getMoAfter().contains(e1n)) e2n.getMoBefore().add(e1n);
+                break;
+            default:
         }
     }
 
@@ -79,8 +111,9 @@ public class OGTransfer {
             addGraphToFull(graph, chState.getStateId());
             return graph;
         }
+
         // Whether the graph contains the node.
-        int idx = contain(graph, node);
+        int idx = graph.contain(node);
         // Whether there is any node in the graph still unmet.
         boolean hasNodeUnmet = hasUnmetNode(graph);
         // In the case that the graph still has some nodes unmet and doesn't contain the
@@ -160,8 +193,9 @@ public class OGTransfer {
     }
 
     private boolean hasUnmetNode(ObsGraph graph) {
-        // TODO.
-        return false;
+        // Judge whether there is any node in the graph yet to meet.
+        // traceLen != nodes.size()
+        return graph.getTraceLen() != graph.getNodes().size();
     }
 
     public void multiStepTransfer(Vector<AbstractState> waitlist,
@@ -220,33 +254,14 @@ public class OGTransfer {
         }
     }
 
-    /**
-     * Given a graph and a OGNode, judge whether the graph contains the node.
-     * If true, return the index of the node in that graph. Else, return -1;
-     * @param graph
-     * @param node
-     * @return A positive integer if the graph contains node, -1 if not.
-     */
-    private int contain(ObsGraph graph, OGNode node) {
-        for (int i = 0; i < graph.getNodes().size(); i++) {
-            assert graph.getNodes().get(i) != null;
-            if (graph.getNodes().get(i).equals(node)) {
-                return i;
-            }
-        }
-
-        return -1;
-    }
 
     /**
-     * Detect whether a node conflict with a graph. No conflict means we could add the
-     * node to the trace corresponding to the graph.
-     * @param graph
-     * @param node
-     * @param nodeInGraph
+     * Detect whether a node conflicts with a graph. No conflict means we could add the
+     * node to the trace. A trace corresponds to an actual execution sequence of the
+     * nodes in the graph, so, one graph may have more than one trace.
      * @return true, if conflict.
      */
-    // FIXME
+    // FIXME: throw away the write-before order.
     private boolean isConflict(ObsGraph graph, OGNode node, int nodeInGraph) {
         int i = graph.getTraceLen(), j = nodeInGraph;
         if (j < 0) {
@@ -270,7 +285,7 @@ public class OGTransfer {
             // n != nodej && n not in graph.
             if (nodej.getFromReadBy().contains(nodej)
                 || nodej.getWAfter().contains(nodej)
-                || happenBefore(n, nodej)) {
+                || porf(n, nodej)) {
                 return true;
             }
         }
@@ -279,13 +294,9 @@ public class OGTransfer {
     }
 
     /**
-     * Update the last node to {@node} for {@graph}, and update relations for the new
-     * last node.
-     * @param graph
-     * @param idx the index of the new last node.
-     * @param newPreState used to update the preState of the new last node.
-     * @param newSucState used to update the sucState of the new last node.
-     * @implNote Because of the block, we should handle the preState carefully.
+     * Update the last node and calculate trace order and modify order for it.
+     * This function is called only when the new last node has already been in the graph.
+     * @param idx gives the index of the new last node in the graph.
      */
     // FIXME
     private void updateLastNode(ObsGraph graph, int idx, ARGState newPreState,
@@ -296,45 +307,21 @@ public class OGTransfer {
         nLast.setSucState(newSucState);
         nLast.setInGraph(true);
         graph.setLastNode(nLast);
+        // oLast -- trBefore ->  nLast
         nLast.setTrAfter(oLast);
         oLast.setTrBefore(nLast);
         graph.setTraceLen(graph.getTraceLen() + 1);
 
-        // Update mo for the new last node (nLast).
-        /* Firstly, clear all old mo of nLast. */
-        nLast.getWs().forEach(w -> {
-            if (w.getMoAfter() != null) {
-                w.getMoAfter().setMoBefore(null);
-                w.setMoAfter(null);
-            }
-            if (w.getMoBefore() != null) {
-                w.getMoBefore().setMoAfter(null);
-                w.setMoBefore(null);
-            }
-        });
-        nLast.getMoAfter().forEach(n -> {
-            n.getMoBefore().remove(nLast);
-        });
-        nLast.getMoAfter().clear();
-        nLast.getMoBefore().forEach(n -> {
-            n.getMoAfter().remove(nLast);
-        });
-        nLast.getMoBefore().clear();
-
-        /* Secondly, update mo by backtracking along the trace. */
-        Set<SharedEvent> wSet = new HashSet<>(nLast.getWs()),
-                toRemove = new HashSet<>();
+        // Update mo for the new last node (nLast) by backtracking along the trace.
+        Set<SharedEvent> wSet = new HashSet<>(nLast.getWs()), toRemove = new HashSet<>();
         OGNode tracePre = nLast.getTrAfter();
         while (tracePre != null) {
             for (SharedEvent wp : tracePre.getWs()) {
                 for (SharedEvent w : wSet) {
-                    if (w.getVar().getName().equals(wp.getVar().getName())) {
-                        wp.setMoBefore(w);
-                        w.setMoAfter(wp);
+                    if (w.accessSameVarWith(wp)) {
+                        // wp <_mo w.
+                        setRelation("mo", wp, w);
                         toRemove.add(w);
-                        if (!tracePre.getMoBefore().contains(nLast)) {
-                            tracePre.getMoBefore().add(nLast);
-                        }
                         break;
                     }
                 }
@@ -342,7 +329,6 @@ public class OGTransfer {
             wSet.removeAll(toRemove);
             tracePre = tracePre.getPredecessor();
         }
-
     }
 
     // FIXME
@@ -350,46 +336,39 @@ public class OGTransfer {
                             OGNode node,
                             ARGState newPreState,
                             ARGState newSucState) {
-        // 1. Add rf, mo, fr and wb (not deduced from rf and fr) relations.
+        // 1. Add rf, mo, fr relations.
         Set<SharedEvent> rFlag = new HashSet<>(node.getRs()),
-                wFlag = new HashSet<>(node.getWs()),
-                wbFlag = new HashSet<>(node.getWs());
+                wFlag = new HashSet<>(node.getWs());
         // Whether we have found the predecessor of the node.
         boolean preFlag = false;
         OGNode n = graph.getLastNode();
         // Backtracking along with the trace.
         while (n != null) {
-           if (!preFlag && (n.getInThread().equals(node.getInThread())
-                   || !n.getThreadLoc().containsKey(n.getInThread()))) {
+            if (!preFlag && (n.getInThread().equals(node.getInThread())
+                    || !n.getThreadLoc().containsKey(n.getInThread()))) {
                 n.getSuccessors().add(node);
                 node.setPredecessor(n);
                 preFlag = true;
-           }
-           if (rFlag.isEmpty() && wFlag.isEmpty() && wbFlag.isEmpty()) {
+            }
+            if (rFlag.isEmpty() && wFlag.isEmpty()) {
                 // All Rs and Ws in node have been handled.
-               if (preFlag) {
-                   // We have found the predecessor of node.
-                   break;
-               } else {
-                   // Else, continue to find the predecessor of node.
-                   n = n.getTrAfter();
-                   continue;
-               }
-           }
+                if (preFlag) {
+                    // We have found the predecessor of node.
+                    break;
+                } else {
+                    // Else, continue to find the predecessor of node.
+                    n = n.getTrAfter();
+                    continue;
+                }
+            }
 //            getAllDot(graph);
 //            System.out.println("");
-            addRfFrWb(n, node, rFlag, wFlag, wbFlag);
+            addRfMoForNewNode(n, node, rFlag, wFlag);
 //            getAllDot(graph);
 //            System.out.println("");
             n = n.getTrAfter();
         }
-        // 2. Deduce wb from rf and fr.
-//        getAllDot(graph);
-//        System.out.println("");
-        deduceWb(node);
-//        getAllDot(graph);
-//        System.out.println("");
-        // 3. Add the new node to the graph.
+        // 2. Add the new node to the graph.
         node.setPreState(newPreState);
         node.setSucState(newSucState);
         node.setInGraph(true);
@@ -403,24 +382,17 @@ public class OGTransfer {
         graph.setTraceLen(graph.getTraceLen() + 1);
     }
 
-    void addRfFrWb(OGNode n,
-                   OGNode newNode,
+    // Add rf and mo for the newly added node.
+    void addRfMoForNewNode(OGNode n, OGNode newNode,
                    Set<SharedEvent> rFlag,
-                   Set<SharedEvent> wFlag,
-                   Set<SharedEvent> wbFlag) {
+                   Set<SharedEvent> wFlag) {
         for (SharedEvent w : n.getWs()) {
             Set<SharedEvent> toRemove = new HashSet<>();
             // Rf.
             for (SharedEvent r : rFlag) {
                 if (r.accessSameVarWith(w)) {
-                    r.setReadFrom(w);
-                    w.getReadBy().add(r);
-                    if (!newNode.getReadFrom().contains(n)) {
-                        newNode.getReadFrom().add(n);
-                    }
-                    if (!n.getReadBy().contains(newNode)) {
-                        n.getReadBy().add(newNode);
-                    }
+                    // set w <_rf r.
+                    setRelation("rf", w, r);
                     toRemove.add(r);
                 }
             }
@@ -430,22 +402,19 @@ public class OGTransfer {
             // Mo.
             for (SharedEvent j : wFlag) {
                 if (j.accessSameVarWith(w)) {
-                    j.setMoAfter(w);
-                    w.setMoBefore(j);
-                    if (!newNode.getMoAfter().contains(n)) {
-                        newNode.getMoAfter().add(n);
-                    }
-                    if (!n.getMoBefore().contains(newNode)) {
-                        n.getMoBefore().add(newNode);
-                    }
+                    setRelation("mo", w, j);
                     toRemove.add(j);
                 }
             }
             wFlag.removeAll(toRemove);
             toRemove.clear();
 
-            // Wb and Fr.
-            for (SharedEvent k : wbFlag) {
+            // Fr: when should we deduce this?
+            // It seems when a node is added at the first time, we needn't deduce fr,
+            // because all read events in it read from the mo-max writes, which have no
+            // mo successor.
+            /*
+            for (SharedEvent k : ) {
                 if (k.accessSameVarWith(w)) {
                     if (newNode.getInThread().equals(n.getInThread())
                             || !n.getThreadLoc().containsKey(newNode.getInThread())) {
@@ -493,6 +462,7 @@ public class OGTransfer {
             }
             wbFlag.removeAll(toRemove);
             toRemove.clear();
+            */
         }
     }
 

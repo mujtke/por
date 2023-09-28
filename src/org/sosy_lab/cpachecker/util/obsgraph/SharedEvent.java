@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
+import com.google.common.base.Preconditions;
 import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 
 import java.util.ArrayList;
@@ -7,6 +8,19 @@ import java.util.List;
 import java.util.Map;
 
 public class SharedEvent implements Copier<SharedEvent> {
+
+    public List<SharedEvent> getAllMoBefore() {
+        List<SharedEvent> allMoBefore = new ArrayList<>();
+        SharedEvent next = this.getMoBefore();
+        while (next != null) {
+            Preconditions.checkState(!allMoBefore.contains(next),
+                    "mo should be acyclic.");
+            allMoBefore.add(next);
+            next = next.getMoBefore();
+        }
+
+        return allMoBefore;
+    }
 
     public enum AccessType { WRITE, READ, UNKNOWN; }
     private final Var var;
@@ -55,12 +69,11 @@ public class SharedEvent implements Copier<SharedEvent> {
 
         /* Read from & read by. */
         nEvent.readFrom = this.readFrom != null ? this.readFrom.deepCopy(memo) : null;
-        this.readBy.forEach(rb -> {
-            SharedEvent nRb = rb.deepCopy(memo);
-            nEvent.readBy.add(nRb);
-        });
+        this.readBy.forEach(rb -> nEvent.readBy.add(rb.deepCopy(memo)));
 
         /* Modification order: no copy. */
+        nEvent.moAfter = this.moAfter != null ? this.moAfter.deepCopy(memo) : null;
+        nEvent.moBefore = this.moBefore != null ? this.moBefore.deepCopy(memo) : null;
 
         /* Write before: no copy. */
 

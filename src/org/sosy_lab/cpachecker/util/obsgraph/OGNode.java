@@ -3,6 +3,7 @@ package org.sosy_lab.cpachecker.util.obsgraph;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class OGNode implements Copier<OGNode> {
 
@@ -67,7 +68,6 @@ public class OGNode implements Copier<OGNode> {
     }
 
     /**
-     *
      * @param memo Store the original object and its copied object.
      * @return The deep copy of this OGNode.
      */
@@ -100,14 +100,8 @@ public class OGNode implements Copier<OGNode> {
 
         // The left part will need to be copied in a deep way.
         /* Rs & Ws. */
-        this.Rs.forEach(r -> {
-            SharedEvent nr = r.deepCopy(memo);
-            nNode.Rs.add(nr);
-        });
-        this.Ws.forEach(w -> {
-            SharedEvent nw = w.deepCopy(memo);
-            nNode.Ws.add(nw);
-        });
+        this.Rs.forEach(r -> nNode.Rs.add(r.deepCopy(memo)));
+        this.Ws.forEach(w -> nNode.Ws.add(w.deepCopy(memo)));
 
         /* preState & sucState */
         nNode.preState = this.preState; /* Shallow copy. */
@@ -116,22 +110,15 @@ public class OGNode implements Copier<OGNode> {
         /* predecessor & successors */
         nNode.predecessor = this.predecessor != null
                 ? this.predecessor.deepCopy(memo) : null;
-        this.successors.forEach(suc -> {
-            OGNode nSuc = suc.deepCopy(memo);
-            nNode.successors.add(nSuc);
-        });
+        this.successors.forEach(suc -> nNode.successors.add(suc.deepCopy(memo)));
 
         /* readFrom & readBy */
-        this.readFrom.forEach(rf -> {
-            OGNode nRf = rf.deepCopy(memo);
-            nNode.readFrom.add(nRf);
-        });
-        this.readBy.forEach(rb -> {
-            OGNode nrb = rb.deepCopy(memo);
-            nNode.readBy.add(nrb);
-        });
+        this.readFrom.forEach(rf -> nNode.readFrom.add(rf.deepCopy(memo)));
+        this.readBy.forEach(rb -> nNode.readBy.add(rb.deepCopy(memo)));
 
         /* Modification order: no copy. */
+        this.moBefore.forEach(mb -> nNode.moBefore.add(mb.deepCopy(memo)));
+        this.moAfter.forEach(ma -> nNode.moAfter.add(ma.deepCopy(memo)));
         /* Write before: no copy. */
         /* From read: no copy. */
 
@@ -305,5 +292,18 @@ public class OGNode implements Copier<OGNode> {
         int edgeNum = blockEdges.size();
         assert edgeNum > 1:"Non simple block OG node should have more than one edge";
         return blockEdges.get(edgeNum - 1);
+    }
+
+    public boolean containWriteToSameVar(SharedEvent w) {
+        return Ws.stream().anyMatch(w::accessSameVarWith);
+    }
+
+    public SharedEvent getWriteToSameVar(SharedEvent r) {
+        for (SharedEvent w : Ws) {
+            if (w.accessSameVarWith(r))
+                return w;
+        }
+
+        return null;
     }
 }

@@ -16,6 +16,8 @@ import java.util.stream.Collectors;
 
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer.getHb;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
+import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
+import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
 
 public class OGRevisitor {
 
@@ -66,7 +68,9 @@ public class OGRevisitor {
                 switch (a.getAType()) {
                     case READ:
                         ObsGraph Gr = G0.deepCopy(new HashMap<>());
-                        List<SharedEvent> locA = Gr.getSameLocationAs(a);
+                        // After deep copy, a not in Gr.
+                        SharedEvent ap = getCopyEvent(Gr, G0, a);
+                        List<SharedEvent> locA = Gr.getSameLocationAs(ap);
                         for (SharedEvent w : locA) {
                             Gr.setReadFrom(a, w);
                             RG.add(Gr);
@@ -80,16 +84,17 @@ public class OGRevisitor {
                         locA = G0.getSameLocationAs(a);
                         for (SharedEvent r : locA) {
                             ObsGraph Gw = G0.deepCopy(new HashMap<>());
-                            List<SharedEvent> delete = getDelete(Gw);
-                            List<SharedEvent> deletePlusR = new ArrayList<>(delete);
-                            deletePlusR.add(r);
-                            if (allMaximallyAdded(Gw, deletePlusR)) {
+                            SharedEvent rp = getCopyEvent(Gw, G0, r);
+                            ap = getCopyEvent(Gw, G0, a);
+                            List<SharedEvent> delete = getDelete(Gw, rp, ap);
+                            List<SharedEvent> deletePlusR = getDeletePlusR(delete, rp);
+                            if (allMaximallyAdded(Gw, deletePlusR, ap)) {
                                 Gw.removeDelete(delete);
-                                Gw.setReadFrom(r, a);
+                                Gw.setReadFrom(rp, ap);
                                 RG.add(Gw);
                                 if (consistent(Gw)) {
                                     result.add(Pair.of(getPivotState(Gw), Gw));
-                                    Gw.RESubtract(a);
+                                    Gw.RESubtract(ap);
                                 }
                             }
 
@@ -105,13 +110,85 @@ public class OGRevisitor {
     }
 
     private AbstractState getPivotState(ObsGraph G) {
-        // TODO.
-        return null;
+        // FIXME: try not go back to the first state.
+        OGNode targetNode;
+        // Use the preState of the first node, for the simplicity.
+        targetNode = G.getNodes().get(0);
+        // Before return, clear the trace order and modify order for nodes that
+        // trace after the target node.
+        for (OGNode next = targetNode; next != null; ) {
+            OGNode tmp = next.getTrBefore();
+            // Trace order.
+            next.setTrAfter(null);
+            next.setTrBefore(null);
+            // Modify order.
+            // Events.
+            next.getWs().forEach(w -> {
+                if (w.getMoAfter() != null) {
+                    w.getMoAfter().setMoBefore(null);
+                    w.setMoAfter(null);
+                }
+                if (w.getMoBefore() != null) {
+                    w.getMoBefore().setMoAfter(null);
+                    w.setMoBefore(null);
+                }
+            });
+            next.getMoAfter().forEach(n -> n.getMoBefore().remove(next));
+            next.getMoAfter().clear();
+            next.getMoBefore().forEach(n -> n.getMoAfter().remove(next));
+            next.getMoBefore().clear();
+        }
+
+        Preconditions.checkState(targetNode != null);
+        Preconditions.checkState(targetNode.getPreState() != null);
+        return targetNode.getPreState();
     }
 
-    private boolean allMaximallyAdded(ObsGraph G, List<SharedEvent> deletePlusR) {
-        // TODO.
-        return false;
+    private boolean allMaximallyAdded(
+            ObsGraph G,
+            List<SharedEvent> deletePlusR,
+            SharedEvent w) {
+        for (SharedEvent e : deletePlusR) {
+            // e is maximally added?
+            List<SharedEvent> previous = new ArrayList<>();
+            // Get previous for e.
+            for (OGNode n : G.getNodes()) {
+                for (SharedEvent ep : n.getRs()) {
+                    if (G.lessThanOrEqual(ep, e) || !G.porf(ep, w)) {
+                        previous.add(ep);
+                    }
+                }
+                for (SharedEvent ep : n.getWs()) {
+                    if (G.lessThanOrEqual(ep, e) || !G.porf(ep, w)) {
+                        previous.add(ep);
+                    }
+                }
+            }
+            //
+            boolean eIsWrite = e.getAType() == WRITE;
+            SharedEvent ep = eIsWrite ? e : e.getReadFrom();
+            Preconditions.checkState(ep != null, "");
+            for (int i = previous.size() - 1; i >= 0; i--) {
+                // Reverse search.
+                SharedEvent ee = previous.get(i);
+                if ((ee.getAType() == READ) && eIsWrite && (ee.getReadFrom() == e)) {
+                    // \exists r = ee \in previous /\ G.rf(r) = e.
+                    return false;
+                }
+                if (!previous.contains(ep.getReadFrom())) {
+                    // e' \not\in previous.
+                    return false;
+                }
+                for (SharedEvent epmo : ep.getAllMoBefore()) {
+                    if (previous.contains(epmo) && (epmo.getInNode() != ep.getInNode())) {
+                        // ep \in previous /\ \exists epmo \in previous s.t. <ep, epmo>
+                        // \in G.mo /\ ep, epmo not in the same block.
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     /**
@@ -186,7 +263,8 @@ public class OGRevisitor {
 
     private boolean isCyclic(ObsGraph g, int i, boolean[] visited, boolean[] inTrace) {
         // mark g.getNodes().get(i) as visited and in trace.
-        Preconditions.checkState(i >= 0 && i < visited.length && i < inTrace.length);
+        Preconditions.checkState(i >= 0 &&
+                i < visited.length && i < inTrace.length);
         visited[i] = true;
         inTrace[i] = true;
 
@@ -574,11 +652,50 @@ public class OGRevisitor {
      * @implNote The delete part includes all nodes that are added to graph g after
      * affectedNode and independent with node0.
      */
-    // FIXME.
-    private List<SharedEvent> getDelete(ObsGraph G) {
+    private List<SharedEvent> getDelete(ObsGraph G, SharedEvent r,
+                                        SharedEvent w) {
         List<SharedEvent> delete = new ArrayList<>();
+        int ridx = G.getNodes().indexOf(r.getInNode()),
+                widx = G.getNodes().indexOf(w.getInNode());
+        for (int i = ridx + 1; i < widx; i++) {
+            OGNode ni = G.getNodes().get(i), nw = G.getNodes().get(widx);
+            if (!porf(ni, nw)) {
+                delete.addAll(ni.getRs());
+                delete.addAll(ni.getWs());
+            }
+        }
 
         return delete;
+    }
+
+    private List<SharedEvent> getDeletePlusR(List<SharedEvent> delete, SharedEvent r) {
+        // Assume:
+        //      | r1 |
+        //      | r2 |
+        // in the same node, we think r1 > r2 if r = r2 and r2 > r1 if r = r1 as they are
+        // unordered.
+        // => Next step maybe we should store them in an array rather than a set.
+        List<SharedEvent> deletePlusR = new ArrayList<>(delete);
+        // deletePlusR.add(rp);
+        deletePlusR.addAll(r.getInNode().getRs());
+        deletePlusR.addAll(r.getInNode().getWs());
+
+        return deletePlusR;
+    }
+
+    private SharedEvent getCopyEvent(ObsGraph G, ObsGraph G0, SharedEvent e) {
+        // e is in the graph G0, and G is the copy of G0.
+        // Try to get the e's copy in G.
+        int eidx = G0.getNodes().indexOf(e.getInNode());
+        OGNode epn = G.getNodes().get(eidx);
+        List<SharedEvent> eps = e.getAType() == READ
+                ? epn.getRs().stream()
+                .filter(e::accessSameVarWith).collect(Collectors.toList())
+                : epn.getWs().stream()
+                .filter(e::accessSameVarWith).collect(Collectors.toList());
+        assert eps.size() == 1;
+
+        return eps.iterator().next();
     }
 
     /**
@@ -598,7 +715,6 @@ public class OGRevisitor {
     }
 
     /**
-     *
      * @return true if nodei has r accesses the same var as w in node0.
      */
     private boolean mayReadFrom(OGNode nodei, OGNode node0) {
@@ -608,13 +724,11 @@ public class OGRevisitor {
     private List<SharedEvent> getJoin(Collection<SharedEvent> es1,
                                       Collection<SharedEvent> es2) {
         List<SharedEvent> res = new ArrayList<>();
-        es1.forEach(r -> {
-            es2.forEach(w -> {
-                if (r.accessSameVarWith(w)) {
-                    res.add(r);
-                }
-            });
-        });
+        es1.forEach(r -> es2.forEach(w -> {
+            if (r.accessSameVarWith(w)) {
+                res.add(r);
+            }
+        }));
 
         return res;
     }
@@ -699,7 +813,7 @@ public class OGRevisitor {
      * @return true if node A is porf-before B.
      * @implNote porf only contains po and rf relations.
      */
-    private boolean porf(OGNode A, OGNode B) {
+    public static boolean porf(OGNode A, OGNode B) {
         if (A == null || B == null) return false;
         for (OGNode n : A.getSuccessors()) {
             if (n == B) return true;

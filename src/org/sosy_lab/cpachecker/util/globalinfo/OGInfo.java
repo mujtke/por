@@ -39,7 +39,7 @@ public class OGInfo {
     private final HashMap<Integer, Integer> nlt;
 
     @Option(secure = true,
-            description = "this option is enabled iff we use OGPORCPA. When enabled")
+            description = "this option is enabled iff we use OGPORCPA.")
     private boolean useOG = false;
 
     public OGInfo(final Configuration pConfig, final CFA pCfa)
