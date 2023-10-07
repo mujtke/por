@@ -1,9 +1,9 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
+import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer.setRelation;
@@ -29,12 +29,6 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     public List<SharedEvent> getRE() {
         return RE;
-    }
-
-    public void addNode(OGNode n) {
-        nodes.add(n);
-        RE.addAll(n.getRs());
-        RE.addAll(n.getWs());
     }
 
     @Override
@@ -109,10 +103,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         // Put the copy into memo.
         memo.put(this, nGraph);
         // Copy nodes.
-        this.nodes.forEach(n -> {
-            OGNode nN = n.deepCopy(memo);
-            nGraph.nodes.add(nN);
-        });
+        this.nodes.forEach(n -> nGraph.nodes.add(n.deepCopy(memo)));
+        this.RE.forEach(re -> nGraph.RE.add(re.deepCopy(memo)));
 
         assert this.lastNode != null;
         nGraph.lastNode = this.lastNode.deepCopy(memo);
@@ -122,6 +114,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         return nGraph;
     }
 
+    // FIXME.
     public List<SharedEvent> getSameLocationAs(SharedEvent a) {
         List<SharedEvent> result = new ArrayList<>();
 
@@ -130,7 +123,7 @@ public class ObsGraph implements Copier<ObsGraph> {
             if (a.getAType() == READ) {
                 SharedEvent arf = a.getReadFrom();
                 // jump nodes after arf.inNode.
-                if (i > nodes.indexOf(arf.getInNode())) continue;
+                if (i >= nodes.indexOf(arf.getInNode())) continue;
                 for (SharedEvent w : nodei.getWs()) {
                     if (w.accessSameVarWith(a)) {
                         result.add(w);
@@ -151,14 +144,25 @@ public class ObsGraph implements Copier<ObsGraph> {
         return result;
     }
 
-    public boolean porf(SharedEvent e1, SharedEvent e2) {
-        // TODO
-        return false;
+    public boolean porf(SharedEvent a, SharedEvent b) {
+        // FIXME: This method may be not correct.
+        // Assume a in node A, and b in node B.
+        OGNode A = a.getInNode(), B = b.getInNode();
+        // Case 1: A == B.
+        if (A == B) {
+            // In the same node, we assume read events always po before write events.
+            // For the case that both a and b are read or write events, a po before b
+            // is always true.
+            return a.getAType() == READ || b.getAType() == WRITE;
+        }
+        // Case 2: A != B.
+        // If A porf B, then we think a porf b too.
+        return OGRevisitor.porf(A, B);
     }
 
      public void RESubtract(SharedEvent a) {
          Preconditions.checkState(RE.contains(a), "Event a not in RE.");
-        RE.remove(a);
+         RE.remove(a);
      }
 
      public void removeDelete(List<SharedEvent> delete) {
@@ -300,5 +304,11 @@ public class ObsGraph implements Copier<ObsGraph> {
             int en1idx = this.nodes.indexOf(en1), en2idx = this.nodes.indexOf(en2);
             return en1idx < en2idx;
         }
+    }
+
+    public void setRE() {
+        if (!RE.isEmpty()) RE.clear();
+        RE.addAll(lastNode.getRs());
+        RE.addAll(lastNode.getWs());
     }
 }

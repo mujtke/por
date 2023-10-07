@@ -111,14 +111,8 @@ public class OGAlgorithm implements Algorithm {
     }
 
     /**
-     *
-     * @param state
-     * @param precision
-     * @param reachedSet
      * @return {@true} if analysis should terminate, {@false} if analysis should continue
      * with next state.
-     * @throws CPATransferException
-     * @throws InterruptedException
      */
     private boolean handleState(
             final AbstractState state,
@@ -171,7 +165,7 @@ public class OGAlgorithm implements Algorithm {
         List<? extends AbstractState> nSuccessors = reorder(parState, successors);
 
         // Adjust precision and split children into two parts if possible.
-        for (Iterator<? extends AbstractState> it = successors.iterator(); it.hasNext(); ) {
+        for (Iterator<? extends AbstractState> it = nSuccessors.iterator(); it.hasNext(); ) {
 
             AbstractState s = it.next();
             PrecisionAdjustmentResult precAdjustmentResult;

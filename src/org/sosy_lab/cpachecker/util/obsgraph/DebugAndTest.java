@@ -253,6 +253,21 @@ public class DebugAndTest {
             json = new JSONObject(arg);
             json.write(fout, 4, 0);
             fout.close();
+
+            // Debug.
+            // Copy fullDotFile to destination dir.
+            Process p = Runtime.getRuntime().exec(new String[] {
+                    "/bin/bash",
+                    "-c",
+                    "/usr/bin/cp " + fullDotFile + " /home/mujeke/mmm/js/ogs-visual" +
+                            "/model/"
+            });
+            // Copy argFile to destination dir.
+            p = Runtime.getRuntime().exec(new String[] {
+                    "/bin/bash",
+                    "-c",
+                    "/usr/bin/cp" + argFile + " /home/mujeke/mmm/js/ogs-visual/model/"
+            });
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

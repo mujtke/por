@@ -73,7 +73,7 @@ public class OGTransfer {
                 e1.setMoBefore(e2);
                 e2.setMoAfter(e1);
                 if (!e1n.getMoBefore().contains(e2n)) e1n.getMoBefore().add(e2n);
-                if (!e2n.getMoAfter().contains(e1n)) e2n.getMoBefore().add(e1n);
+                if (!e2n.getMoAfter().contains(e1n)) e2n.getMoAfter().add(e1n);
                 break;
             default:
         }
@@ -345,7 +345,7 @@ public class OGTransfer {
         // Backtracking along with the trace.
         while (n != null) {
             if (!preFlag && (n.getInThread().equals(node.getInThread())
-                    || !n.getThreadLoc().containsKey(n.getInThread()))) {
+                    || !n.getThreadLoc().containsKey(node.getInThread()))) {
                 n.getSuccessors().add(node);
                 node.setPredecessor(n);
                 preFlag = true;
@@ -380,6 +380,8 @@ public class OGTransfer {
         }
         graph.setLastNode(node);
         graph.setTraceLen(graph.getTraceLen() + 1);
+        // TODO: Set RE when we add a new node to the graph?
+        graph.setRE();
     }
 
     // Add rf and mo for the newly added node.

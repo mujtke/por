@@ -8,6 +8,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.DeepCopier;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
+import org.w3c.dom.ls.LSOutput;
 
 import java.io.InvalidObjectException;
 import java.io.UncheckedIOException;
@@ -62,38 +63,85 @@ public class OGRevisitor {
         List<ObsGraph> RG = new ArrayList<>();
         RG.add(g);
 
+        // Debug.
+        boolean debug = true;
+        int depth = 0;
         while (!RG.isEmpty()) {
+            if (debug) System.out.println("size of RG: " + RG.size() + ", loop depth: "
+                    + (++depth));
             ObsGraph G0 = RG.remove(0);
             for (SharedEvent a : G0.getRE()) {
+                if (debug) System.out.println("\tsize of G0.RE: " + G0.getRE().size());
+                if (debug) System.out.println("\tentering for loop.");
                 switch (a.getAType()) {
                     case READ:
-                        ObsGraph Gr = G0.deepCopy(new HashMap<>());
-                        // After deep copy, a not in Gr.
-                        SharedEvent ap = getCopyEvent(Gr, G0, a);
-                        List<SharedEvent> locA = Gr.getSameLocationAs(ap);
+                        if (debug) System.out.println("\t'a' is R(" + a.getVar().getName()
+                                + ").");
+                        if (debug) System.out.println("\tGet the events that have the " +
+                                "same location with 'a'");
+                        List<SharedEvent> locA = G0.getSameLocationAs(a);
                         for (SharedEvent w : locA) {
-                            Gr.setReadFrom(a, w);
+                            ObsGraph Gr = G0.deepCopy(new HashMap<>());
+                            if (debug) System.out.println("\tCopying G0 is finished. Try to" +
+                                    " get the copy of 'a'.");
+                            // After deep copy, a not in Gr.
+                            SharedEvent ap = getCopyEvent(Gr, G0, a),
+                                    wp = getCopyEvent(Gr, G0, w);
+                            if (debug) System.out.println("\tSetting the new read-from " +
+                                    "relations.");
+                            Gr.setReadFrom(ap, wp);
+                            if (debug) System.out.println("\tSetting the new read-from " +
+                                    "is finished. RG adds the new graph Gr.");
                             RG.add(Gr);
+                            if (debug) System.out.println("\tChecking the consistency " +
+                                    "of Gr.");
                             if (consistent(Gr)) {
+                                if (debug) System.out.println("\tGr is consistent. Try " +
+                                        "to get the pivot state.");
                                 result.add(Pair.of(getPivotState(Gr), Gr));
-                                Gr.RESubtract(a);
+                                if (debug) System.out.println("\tHaving gotten the " +
+                                        "pivot state.");
+                                // Gr.RE = G0.RE \ {a}.
+                                Gr.RESubtract(ap);
                             }
                         }
                         break;
                     case WRITE:
+                        if (debug) System.out.println("\t'a' is W(" + a.getVar().getName()
+                                + "). Try to get the events that have the same location" +
+                                " with 'a'.");
                         locA = G0.getSameLocationAs(a);
+                        if (debug) System.out.println("\tEntering for loop.");
                         for (SharedEvent r : locA) {
+                            if (debug) System.out.println("\tStarting to copy G0.");
                             ObsGraph Gw = G0.deepCopy(new HashMap<>());
-                            SharedEvent rp = getCopyEvent(Gw, G0, r);
-                            ap = getCopyEvent(Gw, G0, a);
+                            if (debug) System.out.println("\tCopying G0 is complete. " +
+                                    "Get the copy event of 'a' and 'r'.");
+                            SharedEvent rp = getCopyEvent(Gw, G0, r),
+                                    ap = getCopyEvent(Gw, G0, a);
+                            if (debug) System.out.println("\tGet the delete.");
                             List<SharedEvent> delete = getDelete(Gw, rp, ap);
+                            if (debug) System.out.println("\tGet the deletePlusR.");
                             List<SharedEvent> deletePlusR = getDeletePlusR(delete, rp);
+                            if (debug) System.out.println("\tChecking maximality.");
                             if (allMaximallyAdded(Gw, deletePlusR, ap)) {
+                                if (debug) System.out.println("\tChecking the " +
+                                        "maximality is complete. Removing the delete.");
                                 Gw.removeDelete(delete);
+                                if (debug) System.out.println("\tRemoving the " +
+                                        "delete is complete. Set the new read-from " +
+                                        "relation" + ".");
                                 Gw.setReadFrom(rp, ap);
+                                if (debug) System.out.println("\tSetting the new " +
+                                        "read-from is finished. RG adds the new graph " +
+                                        "Gw. Check the consistency of Gw.");
                                 RG.add(Gw);
                                 if (consistent(Gw)) {
+                                    if (debug) System.out.println("\tGw is consistent. " +
+                                            "Try to get the pivot State.");
                                     result.add(Pair.of(getPivotState(Gw), Gw));
+                                    if (debug) System.out.println("\tHaving gotten the " +
+                                            "pivot state.");
                                     Gw.RESubtract(ap);
                                 }
                             }
@@ -116,7 +164,7 @@ public class OGRevisitor {
         targetNode = G.getNodes().get(0);
         // Before return, clear the trace order and modify order for nodes that
         // trace after the target node.
-        for (OGNode next = targetNode; next != null; ) {
+        for (OGNode next = targetNode; next != null;) {
             OGNode tmp = next.getTrBefore();
             // Trace order.
             next.setTrAfter(null);
@@ -133,10 +181,12 @@ public class OGRevisitor {
                     w.setMoBefore(null);
                 }
             });
-            next.getMoAfter().forEach(n -> n.getMoBefore().remove(next));
+            OGNode finalNext = next;
+            next.getMoAfter().forEach(n -> n.getMoBefore().remove(finalNext));
             next.getMoAfter().clear();
-            next.getMoBefore().forEach(n -> n.getMoAfter().remove(next));
+            next.getMoBefore().forEach(n -> n.getMoAfter().remove(finalNext));
             next.getMoBefore().clear();
+            next = tmp;
         }
 
         Preconditions.checkState(targetNode != null);

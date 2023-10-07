@@ -69,7 +69,11 @@ public class SharedEvent implements Copier<SharedEvent> {
 
         /* Read from & read by. */
         nEvent.readFrom = this.readFrom != null ? this.readFrom.deepCopy(memo) : null;
-        this.readBy.forEach(rb -> nEvent.readBy.add(rb.deepCopy(memo)));
+//        this.readBy.forEach(rb -> nEvent.readBy.add(rb.deepCopy(memo)));
+        for (SharedEvent rb : readBy) {
+            SharedEvent nrb = rb.deepCopy(memo);
+            nEvent.readBy.add(nrb);
+        }
 
         /* Modification order: no copy. */
         nEvent.moAfter = this.moAfter != null ? this.moAfter.deepCopy(memo) : null;
