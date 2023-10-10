@@ -199,13 +199,15 @@ public class OGAlgorithm implements Algorithm {
                 getAllDot(parGraph);
                 System.out.println("");
                 ObsGraph chGraph =
-                        transfer.singleStepTransfer(parGraph, edge, parState, chState);
+                        transfer.singleStepTransfer(new ArrayList<>(List.of(parGraph)),
+                                edge,
+                                parState,
+                                chState);
                 if (chGraph != null) {
                     // If parGraph could be transferred to chState, we should relate chGraph
                     // with chState.
-                    List<ObsGraph> chGraphs =
-                            OGMap.computeIfAbsent(((ARGState) suc).getStateId(),
-                            k -> new ArrayList<>());
+                    OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
+                    List<ObsGraph> chGraphs = OGMap.get(chState.getStateId());
                     chGraphs.add(chGraph);
                     toRemove.add(parGraph);
                 }
@@ -254,45 +256,51 @@ public class OGAlgorithm implements Algorithm {
             ObsGraph graph = aoPair.getSecondNotNull();
             getAllDot(graph);
             System.out.printf("");
-            transfer.multiStepTransfer(waitlist, leadState, graph);
+            // Debug.
+            transfer.addGraphToFull(graph, leadState.getStateId());
+            transfer.multiStepTransfer(waitlist, leadState,
+                    new ArrayList<>(List.of(graph)));
         }
 
         return false;
     }
 
+    /**
+     * We Assume a total order (<next) on all statements (edges), and this method
+     * reorders the successors according to the assumed order. If the order on some
+     * successors hasn't been computed, this method will compute it first.
+     */
     private List<AbstractState> reorder(ARGState parState, Collection<?
             extends AbstractState> successors) {
         ArrayList<AbstractState> result = new ArrayList<>(successors);
         if (!(result.size() == 1)) {
-            for (int i = result.size() - 2; i >= 0; i--) {
-                for (int j = 0; j <= i; j++) {
-                    // jth should <next (j+1)th.
-                    CFAEdge ej1 = parState.getEdgeToChild((ARGState) result.get(j)),
-                            ej2 = parState.getEdgeToChild((ARGState) result.get(j + 1));
-                    assert ej1 != null && ej2 != null;
-                    Integer p1 = hash(ej1.hashCode(), ej2.hashCode()),
-                            p2 = hash(ej2.hashCode(), ej1.hashCode()),
-                            cmp1, cmp2;
-                    // handle assume statement;
-                    if ((ej1 instanceof AssumeEdge)
-                            && (ej2 instanceof AssumeEdge)
-                            && ej1.getPredecessor().equals(ej2.getPredecessor())) {
+            for (int i = 0; i < result.size() - 1; i++) {
+                for (int j = i; j < result.size(); j++) {
+                    // Compute the <next and put the result into the nlt, if we haven't
+                    // compared ei with ej yet.
+                    CFAEdge ei = parState.getEdgeToChild((ARGState) result.get(i)),
+                            ej = parState.getEdgeToChild((ARGState) result.get(j));
+                    assert ei != null && ej != null;
+                    Integer p1 = hash(ei.hashCode(), ej.hashCode()),
+                            p2 = hash(ej.hashCode(), ei.hashCode());
+                    // If we have computed the <next for ei and ej, just continue;
+                    if (nlt.containsKey(p1) && nlt.containsKey(p2)) continue;
+                    // Else, computing the <next for ei and ej.
+                    if ((ei instanceof AssumeEdge)
+                            && (ej instanceof AssumeEdge)
+                            && ei.getPredecessor().equals(ej.getPredecessor())) {
+                        // handle assume statement;
                         // 0 means not comparable.
-                        nlt.putIfAbsent(p1, 0);
-                        nlt.putIfAbsent(p2, 0);
+                        nlt.put(p1, 0);
+                        nlt.put(p2, 0);
                     } else {
-                        nlt.putIfAbsent(p1, 1);
-                        nlt.putIfAbsent(p2, -1);
+                        nlt.put(p1, 1);
+                        nlt.put(p2, -1);
                     }
-                    cmp1 = nlt.get(p1); cmp2 = nlt.get(p2);
-                    if ((cmp1 == 0 || cmp2 == 0) ||
-                            (cmp1 > 0 && cmp2 < 0)) continue;
-                    // If ej2 <next ej1, swap result[j] and result[j + 1].
-                    AbstractState tmp = result.get(j);
-                    result.set(j, result.get(j + 1));
-                    result.set(j + 1, tmp);
                 }
             }
+            // Reorder the result by <next.
+            result.sort(transfer.getNltcmp());
         }
         return result;
     }

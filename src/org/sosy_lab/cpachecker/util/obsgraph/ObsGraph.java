@@ -79,7 +79,7 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     /**
      * Given a graph and a OGNode, judge whether the graph contains the node.
-     * @return A positive integer if the graph contains the node, -1 if not.
+     * @return A non-negative integer if the graph contains the node, -1 if not.
      */
     public int contain(OGNode node) {
         for (int i = 0; i < nodes.size(); i++) {
@@ -106,8 +106,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         this.nodes.forEach(n -> nGraph.nodes.add(n.deepCopy(memo)));
         this.RE.forEach(re -> nGraph.RE.add(re.deepCopy(memo)));
 
-        assert this.lastNode != null;
-        nGraph.lastNode = this.lastNode.deepCopy(memo);
+//        assert this.lastNode != null;
+        nGraph.lastNode = this.lastNode == null ? null : this.lastNode.deepCopy(memo);
         nGraph.needToRevisit = this.needToRevisit;
         nGraph.traceLen = this.traceLen;
 
@@ -235,45 +235,59 @@ public class ObsGraph implements Copier<ObsGraph> {
      public void setReadFrom(SharedEvent r, SharedEvent w) {
          // After setting the rf, we should also deduce the fr.
          setRelation("rf", w, r);
-         // Deduce the fr caused by the new rf.
-         // For the sake of saving space, use map M to replace the matrix T.
-         // T(i, j) == M(k), k = hash(i, j), and i, j are the indexes of the two nodes.
-         Map<Integer, Boolean> adjacencyMatrix = new HashMap<>();
-         OGNode rNode = r.getInNode(), wNode = w.getInNode(), porfPre = wNode;
-         Preconditions.checkState(wNode.getReadBy().contains(rNode)
-                 && rNode.getReadFrom().contains(wNode));
-         Stack<OGNode> waitlist = new Stack<>();
-         Set<OGNode> frNodes = new HashSet<>();
-         waitlist.add(porfPre);
-         while (!waitlist.isEmpty()) {
-             porfPre = waitlist.pop();
-             int i = nodes.indexOf(porfPre);
-             Set<OGNode> porfSucs = new HashSet<>();
-             porfSucs.addAll(porfPre.getReadBy());
-             porfSucs.addAll(porfPre.getSuccessors());
-             porfSucs.forEach(porfSuc -> {
-                 int j = nodes.indexOf(porfSuc), k = hash(i, j), kp = hash(j, i);
-                 if (adjacencyMatrix.get(kp) == null) {
-                     // Only if We haven't computed the relation for <j, i> , we could
-                     // compute it for <i, j>.
-                     if (adjacencyMatrix.putIfAbsent(k, true) == null) {
-                         // When it's the first time to access the porfSuc, do sth.
-                         // Otherwise, we won't handle it again.
-                         if (porfSuc.containWriteToSameVar(w)) {
-                             frNodes.add(porfSuc);
-                         }
-                         waitlist.add(porfSuc);
-                     };
+         deduceFromRead();
+     }
+
+     public void deduceFromRead() {
+         // Deduce the fr according the rf in the graph.
+         // Use adjacency matrix and Floyd Warshall Algorithm to compute the transitive
+         // closure of po and rf, i.e, porf+.
+         int i, j, k, n = nodes.size();
+         boolean[][] porf = new boolean[n][n];
+         // Fill in the porf matrix with the original po and rf in the graph.
+         for (i = 0; i < n; i++) {
+             for (j = 0; j < n; j++) {
+                 OGNode nodei = nodes.get(i), nodej = nodes.get(j);
+                 if (nodei.getSuccessors().contains(nodej)
+                 || nodej.getReadBy().contains(nodej)) {
+                     porf[i][j] = true;
                  }
-             });
+             }
          }
-         // frNodes contains rNode, but we rNode can't fr itself.
-         frNodes.remove(rNode);
-         frNodes.forEach(frn -> {
-             SharedEvent frnw = frn.getWriteToSameVar(r);
-             Preconditions.checkState(frnw != null);
-             setRelation("fr", r, frnw);
-         });
+         // Calculate the transitive closure porf+.
+         for (k = 0; k < n; k++) {
+             for (i = 0; i < n; i++) {
+                 for (j = 0; j < n; j++) {
+                     // i porf j => i porf j, or there exists k, s.t., i porf k and k
+                     // porf j.
+                     porf[i][j] = porf[i][j] || (porf[i][k] && porf[k][j]);
+                 }
+             }
+         }
+
+         for (OGNode node : nodes) {
+             if (node.getRs().isEmpty()) continue;
+             for (Iterator<SharedEvent> it = node.getRs().iterator(); it.hasNext();) {
+                 SharedEvent r = it.next(), w = r.getReadFrom();
+                 Preconditions.checkArgument(w != null, "Event r " +
+                         "should read from some write.");
+                 // Deduce fr caused by r and w.
+                 OGNode wNode = w.getInNode();
+                 Preconditions.checkState(wNode.getReadBy().contains(node)
+                         && node.getReadFrom().contains(wNode));
+                 for (int m = 0; m < n; m++) {
+                     if (porf[nodes.indexOf(wNode)][m] && m != nodes.indexOf(node)) {
+                         // if wNode porf nodes[m] and nodes[m] != node (wNode must
+                         // porf node, but a node cannot fr itself.
+                         OGNode frn = nodes.get(m);
+                         if (!frn.containWriteToSameVar(w)) continue;
+                         SharedEvent frnw = frn.getWriteToSameVar(r);
+                         Preconditions.checkState(frnw != null);
+                         setRelation("fr", r, frnw);
+                     }
+                 }
+             }
+         }
      }
 
     public boolean lessThanOrEqual(SharedEvent e1, SharedEvent e2) {

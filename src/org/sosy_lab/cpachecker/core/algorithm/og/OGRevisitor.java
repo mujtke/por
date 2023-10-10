@@ -8,10 +8,6 @@ import org.sosy_lab.cpachecker.util.obsgraph.DeepCopier;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
-import org.w3c.dom.ls.LSOutput;
-
-import java.io.InvalidObjectException;
-import java.io.UncheckedIOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -67,12 +63,16 @@ public class OGRevisitor {
         boolean debug = true;
         int depth = 0;
         while (!RG.isEmpty()) {
-            if (debug) System.out.println("size of RG: " + RG.size() + ", loop depth: "
+            if (debug) System.out.println("Size of RG: " + RG.size() + ", loop depth: "
                     + (++depth));
             ObsGraph G0 = RG.remove(0);
-            for (SharedEvent a : G0.getRE()) {
-                if (debug) System.out.println("\tsize of G0.RE: " + G0.getRE().size());
-                if (debug) System.out.println("\tentering for loop.");
+            for (SharedEvent a; !G0.getRE().isEmpty();) {
+                // When revisiting, we handle the read events before the write ones.
+                // If we are handling event e, then in the resulting graphs, it will not be
+                // handled again. Otherwise, we may get redundant results.
+                a = G0.getRE().remove(0);
+                if (debug) System.out.println("\tSize of G0.RE: " + G0.getRE().size());
+                if (debug) System.out.println("\tEntering for loop.");
                 switch (a.getAType()) {
                     case READ:
                         if (debug) System.out.println("\t'a' is R(" + a.getVar().getName()
@@ -92,17 +92,20 @@ public class OGRevisitor {
                             Gr.setReadFrom(ap, wp);
                             if (debug) System.out.println("\tSetting the new read-from " +
                                     "is finished. RG adds the new graph Gr.");
+                            // Gr.RE = G0.RE \ {a}.
+//                            Gr.RESubtract(ap);
                             RG.add(Gr);
                             if (debug) System.out.println("\tChecking the consistency " +
                                     "of Gr.");
                             if (consistent(Gr)) {
                                 if (debug) System.out.println("\tGr is consistent. Try " +
                                         "to get the pivot state.");
-                                result.add(Pair.of(getPivotState(Gr), Gr));
+                                AbstractState pivotState = getPivotState(Gr);
+                                result.add(Pair.of(pivotState, Gr));
+//                                result.add(Pair.of(getPivotState(Gr), Gr));
                                 if (debug) System.out.println("\tHaving gotten the " +
-                                        "pivot state.");
-                                // Gr.RE = G0.RE \ {a}.
-                                Gr.RESubtract(ap);
+                                        "pivot state s" + ((ARGState) pivotState).getStateId()
+                                        + ", add the Gr to the revisit result.");
                             }
                         }
                         break;
@@ -135,21 +138,24 @@ public class OGRevisitor {
                                 if (debug) System.out.println("\tSetting the new " +
                                         "read-from is finished. RG adds the new graph " +
                                         "Gw. Check the consistency of Gw.");
+                                // Gw.RE = G0.RE \ {ap}.
+//                                Gw.RESubtract(ap);
                                 RG.add(Gw);
                                 if (consistent(Gw)) {
                                     if (debug) System.out.println("\tGw is consistent. " +
                                             "Try to get the pivot State.");
-                                    result.add(Pair.of(getPivotState(Gw), Gw));
+                                    AbstractState pivotState = getPivotState(Gw);
+                                    result.add(Pair.of(pivotState, Gw));
+//                                    result.add(Pair.of(getPivotState(Gw), Gw));
                                     if (debug) System.out.println("\tHaving gotten the " +
-                                            "pivot state.");
-                                    Gw.RESubtract(ap);
+                                            "pivot state s" + ((ARGState) pivotState).getStateId()
+                                            + ", add the Gr to the revisit result.");
                                 }
                             }
 
                         }
                         break;
                     case UNKNOWN:
-                        throw new Exception("Unknown access type.");
                 }
             }
         }
@@ -158,12 +164,14 @@ public class OGRevisitor {
     }
 
     private AbstractState getPivotState(ObsGraph G) {
-        // FIXME: try not go back to the first state.
+        // FIXME: try not going back to the first state.
         OGNode targetNode;
         // Use the preState of the first node, for the simplicity.
         targetNode = G.getNodes().get(0);
+        G.setLastNode(null);
         // Before return, clear the trace order and modify order for nodes that
-        // trace after the target node.
+        // trace after the target node. At the same time, set those nodes invisible in
+        // the graph.
         for (OGNode next = targetNode; next != null;) {
             OGNode tmp = next.getTrBefore();
             // Trace order.
@@ -186,6 +194,9 @@ public class OGRevisitor {
             next.getMoAfter().clear();
             next.getMoBefore().forEach(n -> n.getMoAfter().remove(finalNext));
             next.getMoBefore().clear();
+            // Set node invisible.
+            next.setInGraph(false);
+            G.setTraceLen(G.getTraceLen() - 1);
             next = tmp;
         }
 
@@ -203,13 +214,15 @@ public class OGRevisitor {
             List<SharedEvent> previous = new ArrayList<>();
             // Get previous for e.
             for (OGNode n : G.getNodes()) {
+                // FIXME: when computing the previous, we consider events or nodes?
+                if (n == w.getInNode()) break;
                 for (SharedEvent ep : n.getRs()) {
-                    if (G.lessThanOrEqual(ep, e) || !G.porf(ep, w)) {
+                    if (G.lessThanOrEqual(ep, e) || G.porf(ep, w)) {
                         previous.add(ep);
                     }
                 }
                 for (SharedEvent ep : n.getWs()) {
-                    if (G.lessThanOrEqual(ep, e) || !G.porf(ep, w)) {
+                    if (G.lessThanOrEqual(ep, e) || G.porf(ep, w)) {
                         previous.add(ep);
                     }
                 }
@@ -225,7 +238,7 @@ public class OGRevisitor {
                     // \exists r = ee \in previous /\ G.rf(r) = e.
                     return false;
                 }
-                if (!previous.contains(ep.getReadFrom())) {
+                if (!previous.contains(ep)) {
                     // e' \not\in previous.
                     return false;
                 }
@@ -699,8 +712,7 @@ public class OGRevisitor {
     }
 
     /**
-     * @implNote The delete part includes all nodes that are added to graph g after
-     * affectedNode and independent with node0.
+     * @implNote
      */
     private List<SharedEvent> getDelete(ObsGraph G, SharedEvent r,
                                         SharedEvent w) {
@@ -728,7 +740,8 @@ public class OGRevisitor {
         List<SharedEvent> deletePlusR = new ArrayList<>(delete);
         // deletePlusR.add(rp);
         deletePlusR.addAll(r.getInNode().getRs());
-        deletePlusR.addAll(r.getInNode().getWs());
+        // FIXME: Should we consider the writes?
+//        deletePlusR.addAll(r.getInNode().getWs());
 
         return deletePlusR;
     }
@@ -792,8 +805,6 @@ public class OGRevisitor {
      * w0 writes before w comes from: 1) w0 happens before r, 2) w --> r. So if there
      * is any r's causal R that reads from w and happens after w0, then w0 will still
      * write before w.
-     * @param A
-     * @param B
      * @param r use this to get the old rf and fr relations. And r should be in node A.
      */
     private void removeOldWb(OGNode A, OGNode B, SharedEvent r) {

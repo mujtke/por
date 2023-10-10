@@ -255,19 +255,27 @@ public class DebugAndTest {
             fout.close();
 
             // Debug.
-            // Copy fullDotFile to destination dir.
+            // Copy fullDotFile and argFile to the destination dir.
             Process p = Runtime.getRuntime().exec(new String[] {
                     "/bin/bash",
                     "-c",
                     "/usr/bin/cp " + fullDotFile + " /home/mujeke/mmm/js/ogs-visual" +
-                            "/model/"
+                            "/model/; /usr/bin/cp " + argFile + " /home/mujeke/mmm/js" +
+                            "/ogs-visual/model/"
             });
+            // Copy fullDotFile to destination dir.
+//            Process p = Runtime.getRuntime().exec(new String[] {
+//                    "/bin/bash",
+//                    "-c",
+//                    "/usr/bin/cp " + fullDotFile + " /home/mujeke/mmm/js/ogs-visual" +
+//                            "/model/"
+//            });
             // Copy argFile to destination dir.
-            p = Runtime.getRuntime().exec(new String[] {
-                    "/bin/bash",
-                    "-c",
-                    "/usr/bin/cp" + argFile + " /home/mujeke/mmm/js/ogs-visual/model/"
-            });
+//            Process p2 = Runtime.getRuntime().exec(new String[] {
+//                    "/bin/bash",
+//                    "-c",
+//                    "/usr/bin/cp " + argFile + " /home/mujeke/mmm/js/ogs-visual/model/"
+//            });
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
