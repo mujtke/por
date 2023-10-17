@@ -389,26 +389,35 @@ public class ObsGraph implements Copier<ObsGraph> {
             if (w0 != null) {
                 w0.getReadBy().remove(r0);
                 w0.getInNode().getReadBy().remove(rNode);
-                setRelation("corf", this, cor0, w0);
             }
 
             // From read.
             for (SharedEvent fr : fr0) {
                 fr.getFromReadBy().remove(r0);
                 fr.getInNode().getFromReadBy().remove(rNode);
-                setRelation("fr", this, cor0, fr);
             }
 
-            // Trace order.
+            // Po.
             OGNode predecessor = rNode.getPredecessor();
-            List<OGNode> successor = rNode.getSuccessors();
+            List<OGNode> successors = rNode.getSuccessors();
             if (predecessor != null) {
                 predecessor.getSuccessors().remove(rNode);
                 predecessor.getSuccessors().add(corNode);
                 corNode.setPredecessor(predecessor);
             }
 
-            for (OGNode suc : successor) {
+            // Trace order.
+            OGNode rTrAfter = rNode.getTrAfter(), rTrBefore = rNode.getTrBefore();
+            if (rTrAfter != null) {
+                rTrAfter.setTrBefore(corNode);
+                corNode.setTrAfter(rTrAfter);
+            }
+            if (rTrBefore != null) {
+                rTrBefore.setTrAfter(corNode);
+                corNode.setTrBefore(rTrBefore);
+            }
+
+            for (OGNode suc : successors) {
                 suc.setPredecessor(corNode);
                 corNode.getSuccessors().add(suc);
             }
@@ -417,6 +426,10 @@ public class ObsGraph implements Copier<ObsGraph> {
             if (rNode.equals(lastNode)) lastNode = corNode;
             corNode.setPreState(rNode.getPreState());
             // FIXME: sucState?
+
+            // Handle threadLoc and inThread.
+            corNode.setThreadsLoc(rNode.getThreadLoc());
+            corNode.setInThread(corNode.getInThread());
         }
 
         return cor;

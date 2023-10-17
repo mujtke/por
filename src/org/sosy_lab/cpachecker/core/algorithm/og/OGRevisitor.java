@@ -423,6 +423,8 @@ public class OGRevisitor {
             case "rf":
                 try {
                     e2 = CSHandler.handleAssumeStatement(G, e2, e1);
+                    // e2n may change.
+                    e2n = e2.getInNode();
                 } catch (UnsupportedCodeException e) {
                     e.printStackTrace();
                 }
@@ -435,22 +437,7 @@ public class OGRevisitor {
                     e2n.getReadFrom().remove(e2rfn);
                     e2rfn.getReadBy().remove(e2n);
                 }
-                Preconditions.checkArgument(e1.getReadFrom() != e2);
-                e2.setReadFrom(e1);
-                e1.getReadBy().add(e2);
-                if (!e2n.getReadFrom().contains(e1n)) e2n.getReadFrom().add(e1n);
-                if (!e1n.getReadBy().contains(e2n)) e1n.getReadBy().add(e2n);
-                break;
-            case "corf":
-                // FIXME: duplicated code.
-                e2rf = e2.getReadFrom();
-                if (e2rf != null) {
-                    OGNode e2rfn = e2rf.getInNode();
-                    e2rf.getReadBy().remove(e2);
-                    e2n.getReadFrom().remove(e2rfn);
-                    e2rfn.getReadBy().remove(e2n);
-                }
-                Preconditions.checkArgument(e1.getReadFrom() != e2);
+                Preconditions.checkArgument(e2.getReadFrom() != e1);
                 e2.setReadFrom(e1);
                 e1.getReadBy().add(e2);
                 if (!e2n.getReadFrom().contains(e1n)) e2n.getReadFrom().add(e1n);

@@ -9,6 +9,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.ast.c.*;
 import org.sosy_lab.cpachecker.cfa.model.*;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
@@ -161,7 +162,7 @@ public class ConditionalStatementHandler {
                 final FunctionSummaryEdge summaryEdge = fnReturnEdge.getSummaryEdge();
                 final CFunctionCall summaryExpr = (CFunctionCall) summaryEdge.getExpression();
 
-                final Partition partition = varClass.getPartitionForEdge(wEdge);
+                Partition partition = varClass.getPartitionForEdge(wEdge);
                 // Handle assignments like "y = f(x);"
                 if (summaryExpr instanceof CFunctionCallAssignmentStatement) {
                     Preconditions.checkArgument(
@@ -194,6 +195,55 @@ public class ConditionalStatementHandler {
                     assert summaryExpr instanceof CFunctionCallStatement;
                 }
 
+            case DeclarationEdge:
+                CDeclarationEdge declarationEdge = (CDeclarationEdge) wEdge;
+                CDeclaration declaration = declarationEdge.getDeclaration();
+                if (declaration instanceof CVariableDeclaration) {
+                    CVariableDeclaration vDecl= (CVariableDeclaration) declaration;
+                    if (vDecl.getType().isIncomplete()) {
+                        // Variables of such types cannot store values, only their address
+                        // can be taken.
+                        // FIXME: how to handle this case.
+                        throw new UnsupportedCodeException("Declared variable in edge " +
+                                "is incomplete.", wEdge);
+                    }
+
+                    CInitializer initializer = vDecl.getInitializer();
+                    CExpression init = null;
+                    if (initializer instanceof CInitializerExpression) {
+                        init = ((CInitializerExpression) initializer).getExpression();
+                    }
+
+                    // make variable (predicate) for LEFT SIDE of declaration,
+                    // delete variable, if it was initialized before i.e.
+                    // in another block, with an existential operator
+                    partition = varClass.getPartitionForEdge(wEdge);
+                    Region[] var = predmgr.createPredicate(
+                            vDecl.getQualifiedName(),
+                            vDecl.getType(),
+                            wEdge.getSuccessor(),
+                            bvComputer.getBitsize(partition, vDecl.getType()),
+                            null);
+//                    assignFormula = nrmgr.makeExists(nrmgr.makeTrue(), var);
+
+                    // initializer on RIGHT SIDE available, make region for it.
+                    if (init != null) {
+                        final Region[] rhs = bvComputer.evaluateVectorExpression(
+                                partition,
+                                init,
+                                vDecl.getType(),
+                                wEdge.getSuccessor(),
+                                null);
+                        assignFormula = assignment(var, rhs, false);
+                    } else {
+                        throw new UnsupportedCodeException("Initializer on the right " +
+                                "side should not be null", wEdge);
+                    }
+                } else {
+                    throw new UnsupportedCodeException("W event in a " +
+                            "non-CVariableDeclaration edge is not supported.", wEdge);
+                }
+                break;
             default:
         }
 
