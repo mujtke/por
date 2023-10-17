@@ -16,6 +16,7 @@ import java.util.*;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.porf;
+import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class OGTransfer {
@@ -56,43 +57,6 @@ public class OGTransfer {
         }
     }
 
-    public static void setRelation(String type, SharedEvent e1, SharedEvent e2) {
-        // set relation: <e1, e2> \in <_{type}
-        OGNode e1n = e1.getInNode(), e2n = e2.getInNode();
-        switch (type) {
-            case "rf":
-                // e1 <_rf e2, e2 reads from e1.
-                SharedEvent e2rf = e2.getReadFrom();
-                if (e2rf != null) {
-                    OGNode e2rfn = e2rf.getInNode();
-                    e2rf.getReadBy().remove(e2);
-                    e2n.getReadFrom().remove(e2rfn);
-                    e2rfn.getReadBy().remove(e2n);
-                }
-                Preconditions.checkArgument(e1.getReadFrom() != e2);
-                e2.setReadFrom(e1);
-                e1.getReadBy().add(e2);
-                if (!e2n.getReadFrom().contains(e1n)) e2n.getReadFrom().add(e1n);
-                if (!e1n.getReadBy().contains(e2n)) e1n.getReadBy().add(e2n);
-                break;
-            case "fr":
-                // from read.
-                Preconditions.checkArgument(!e1.getFromRead().contains(e2));
-                e1.getFromRead().add(e2);
-                e2.getFromReadBy().add(e1);
-                if (!e1n.getFromRead().contains(e2n)) e1n.getFromRead().add(e2n);
-                if (!e2n.getFromReadBy().contains(e1n)) e2n.getFromReadBy().add(e1n);
-                break;
-            case "mo":
-                Preconditions.checkArgument(e1.getMoBefore() != e2);
-                e1.setMoBefore(e2);
-                e2.setMoAfter(e1);
-                if (!e1n.getMoBefore().contains(e2n)) e1n.getMoBefore().add(e2n);
-                if (!e2n.getMoAfter().contains(e1n)) e2n.getMoAfter().add(e1n);
-                break;
-            default:
-        }
-    }
 
     /**
      * This method transfer a given graph from a parent state {@parState} to its child
@@ -354,7 +318,7 @@ public class OGTransfer {
                 for (SharedEvent w : wSet) {
                     if (w.accessSameVarWith(wp)) {
                         // wp <_mo w.
-                        setRelation("mo", wp, w);
+                        setRelation("mo", graph, wp, w);
                         toRemove.add(w);
                         break;
                     }
@@ -397,7 +361,7 @@ public class OGTransfer {
             }
 //            getAllDot(graph);
 //            System.out.println("");
-            addRfMoForNewNode(n, node, rFlag, wFlag);
+            addRfMoForNewNode(graph, n, node, rFlag, wFlag);
 //            getAllDot(graph);
 //            System.out.println("");
             n = n.getTrAfter();
@@ -419,16 +383,16 @@ public class OGTransfer {
     }
 
     // Add rf and mo for the newly added node.
-    void addRfMoForNewNode(OGNode n, OGNode newNode,
-                   Set<SharedEvent> rFlag,
-                   Set<SharedEvent> wFlag) {
+    void addRfMoForNewNode(ObsGraph graph, OGNode n, OGNode newNode,
+                           Set<SharedEvent> rFlag,
+                           Set<SharedEvent> wFlag) {
         for (SharedEvent w : n.getWs()) {
             Set<SharedEvent> toRemove = new HashSet<>();
             // Rf.
             for (SharedEvent r : rFlag) {
                 if (r.accessSameVarWith(w)) {
                     // set w <_rf r.
-                    setRelation("rf", w, r);
+                    setRelation("rf", graph, w, r);
                     toRemove.add(r);
                 }
             }
@@ -438,165 +402,12 @@ public class OGTransfer {
             // Mo.
             for (SharedEvent j : wFlag) {
                 if (j.accessSameVarWith(w)) {
-                    setRelation("mo", w, j);
+                    setRelation("mo", graph, w, j);
                     toRemove.add(j);
                 }
             }
             wFlag.removeAll(toRemove);
             toRemove.clear();
-
-            // Fr: when should we deduce this?
-            // It seems when a node is added at the first time, we needn't deduce fr,
-            // because all read events in it read from the mo-max writes, which have no
-            // mo successor.
-            /*
-            for (SharedEvent k : ) {
-                if (k.accessSameVarWith(w)) {
-                    if (newNode.getInThread().equals(n.getInThread())
-                            || !n.getThreadLoc().containsKey(newNode.getInThread())) {
-                        // Add wb.
-                        k.getWAfter().add(w);
-                        w.getWBefore().add(k);
-                        if (!newNode.getWAfter().contains(n)) {
-                            newNode.getWAfter().add(n);
-                        }
-                        if (!n.getWBefore().contains(newNode)) {
-                            n.getWBefore().add(newNode);
-                        }
-                        toRemove.add(k);
-
-                        // Add fr.
-                        Set<SharedEvent> wps = new HashSet<>();
-                        wps.add(w);
-                        while (!wps.isEmpty()) {
-                            Set<SharedEvent> nwps = new HashSet<>();
-                            for (SharedEvent wp : wps) {
-                                if (!wp.getReadBy().isEmpty()) {
-                                    for (SharedEvent rb : wp.getReadBy()) {
-                                        if (rb.getInNode() != newNode) {
-                                            // newNode may also read from n, we should
-                                            // skip this case.
-                                            rb.getFromRead().add(k);
-                                            k.getFromReadBy().add(rb);
-                                            if (!newNode.getFromReadBy().contains(n)) {
-                                                newNode.getFromReadBy().add(n);
-                                            }
-                                            OGNode rbn = rb.getInNode();
-                                            if (!rbn.getFromRead().contains(newNode)) {
-                                                rbn.getFromRead().add(newNode);
-                                            }
-                                        }
-                                        nwps.addAll(wp.getWAfter());
-                                    }
-                                }
-                            }
-                            wps = nwps;
-                        }
-                        break;
-                    }
-                }
-            }
-            wbFlag.removeAll(toRemove);
-            toRemove.clear();
-            */
-        }
-    }
-
-    private void deduceWb(OGNode n0) {
-        List<OGNode> rfns = n0.getReadFrom();
-        for (OGNode rfn : rfns) {
-            deduceWb0(n0, rfn);
-        }
-    }
-
-    /**
-     * Deduce wb relations caused by nA's rf and fr relations that come from nA reads
-     * from nB.
-     * @implNode 1. fr: if n0 -fr-> nx, then n2 that happens before and writes the same
-     * var with n0 will write before nx.
-     * 2. rf: nx - rf -> n0, then n2 that happens before and writes the same var with nx
-     * will write before n0.
-     * @param nA
-     * @param nB nA reads from nB.
-     */
-    private void deduceWb0(OGNode nA, OGNode nB) {
-        Set<SharedEvent> rfs = new HashSet<>();
-        nA.getRs().forEach(r -> {
-            if (nB.getWs().contains(r)) {
-                rfs.add(r);
-            }
-        });
-        Set<OGNode> frns = new HashSet<>(nA.getFromRead()),
-                frrfns = new HashSet<>();
-        frns.forEach(frn -> frrfns.addAll(frn.getReadFrom()));
-        Set<OGNode> hbA = new HashSet<>(),
-                visited = new HashSet<>();
-        getHb(nA, hbA);
-        while (!hbA.isEmpty()) {
-            for (OGNode n : hbA) {
-                for (SharedEvent wn : n.getWs()) {
-                    // rf
-                    for (SharedEvent rf : rfs) {
-                        if (rf == wn) continue;
-                        if (rf.accessSameVarWith(wn)) {
-                            if (!rf.getWAfter().contains(wn))
-                                rf.getWAfter().add(wn);
-                            if (!wn.getWBefore().contains(rf))
-                                wn.getWBefore().add(rf);
-                            if (!n.getWBefore().contains(rf.getInNode()))
-                                n.getWBefore().add(rf.getInNode());
-                            if (!rf.getInNode().getWAfter().contains(n))
-                                rf.getInNode().getWAfter().add(n);
-                        }
-                    }
-
-                    // frn.
-                    for (OGNode frn : frns) {
-                        for (SharedEvent fr : frn.getWs()) {
-                            if (fr == wn) continue;
-                            if (fr.accessSameVarWith(wn)) {
-                                if (!fr.getWAfter().contains(wn))
-                                    fr.getWAfter().add(wn);
-                                if (!wn.getWBefore().contains(fr))
-                                    wn.getWBefore().add(fr);
-                                if (!fr.getInNode().getWAfter().contains(n))
-                                    fr.getInNode().getWAfter().add(n);
-                                if (!n.getWBefore().contains(fr.getInNode()))
-                                    n.getWBefore().add(n);
-                            }
-                        }
-                    }
-
-                    // frrfn.
-                    for (OGNode frrfn: frrfns) {
-                        for (SharedEvent frrf : frrfn.getWs()) {
-                            if (frrf == wn) continue;
-                            if (frrf.accessSameVarWith(wn)) {
-                                if (!frrf.getWAfter().contains(wn))
-                                    frrf.getWAfter().add(wn);
-                                if (!wn.getWBefore().contains(frrf))
-                                    wn.getWBefore().add(frrf);
-                                if (!frrf.getInNode().getWAfter().contains(n))
-                                    frrf.getInNode().getWAfter().add(n);
-                                if (!n.getWBefore().contains(frrf.getInNode()))
-                                    n.getWBefore().add(n);
-                            }
-                        }
-                    }
-                }
-            }
-
-            visited.addAll(hbA);
-            Set<OGNode> nhbA = new HashSet<>();
-            hbA.forEach(h -> {
-                Set<OGNode> hbhs = new HashSet<>();
-                getHb(h, hbhs);
-                hbhs.forEach(hbn -> {
-                    if (!visited.contains(hbn))
-                        nhbA.add(hbn);
-                });
-            });
-            hbA = nhbA;
         }
     }
 

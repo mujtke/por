@@ -136,7 +136,7 @@ public class BDDTransferRelation extends ForwardingTransferRelation<BDDState, BD
 
   /** This function handles statements like "a = 0;" and "b = !a;".
    * A region is build for the right side of the statement.
-   * Then this region is assigned to the variable at the left side.
+   * Then this region is assigned to the variable on the left side.
    * This equality is added to the BDDstate to get the next state. */
   private BDDState handleAssignment(CAssignment assignment, CFANode successor, CFAEdge edge)
       throws UnsupportedCodeException {
@@ -227,7 +227,7 @@ public class BDDTransferRelation extends ForwardingTransferRelation<BDDState, BD
   }
 
   /** This function deletes all vars, that could be modified
-   * through a side-effect of the (external) functionCall. */
+   * through a side effect of the (external) functionCall. */
   private BDDState handleExternalFunctionCall(BDDState currentState, CFANode successor, final List<CExpression> params) {
 
     for (final CExpression param : params) {
@@ -542,7 +542,7 @@ public class BDDTransferRelation extends ForwardingTransferRelation<BDDState, BD
 
   /**
    * returns a canonical representation of a field reference, including functionname. return NULL if
-   * the canonical name could not determined.
+   * the canonical name could not be determined.
    */
   static @Nullable String getCanonicalName(CExpression expr) {
     String name = "";

@@ -208,7 +208,7 @@ public class VariableClassification implements Serializable {
   /** This function returns a collection of partitions.
    * Each partition contains only vars,
    * that are only assigned or compared for equality with integer values.
-   * This collection does not contains anypartition from "IntBool" or "IntAdd". */
+   * This collection does not contain any partition from "IntBool" or "IntAdd". */
   public Set<Partition> getIntEqualPartitions() {
     return intEqualPartitions;
   }

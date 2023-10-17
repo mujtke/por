@@ -1,6 +1,7 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 
 import java.util.ArrayList;
@@ -46,6 +47,8 @@ public class SharedEvent implements Copier<SharedEvent> {
 
     // ogNode this event in.
     private OGNode inNode;
+    // CFAEdge this event in.
+    private CFAEdge inEdge;
 
     @Override
     public String toString() {
@@ -53,9 +56,11 @@ public class SharedEvent implements Copier<SharedEvent> {
     }
 
     public SharedEvent (Var pVar,
-                        AccessType pAccessType) {
+                        AccessType pAccessType,
+                        CFAEdge pInEdge) {
         this.var = pVar;
         this.aType = pAccessType;
+        this.inEdge = pInEdge;
     }
 
     public SharedEvent deepCopy(Map<Object, Object> memo) {
@@ -64,7 +69,7 @@ public class SharedEvent implements Copier<SharedEvent> {
             return (SharedEvent) memo.get(this);
         }
 
-        SharedEvent nEvent = new SharedEvent(this.var, this.aType);
+        SharedEvent nEvent = new SharedEvent(this.var, this.aType, this.inEdge);
         memo.put(this, nEvent);
 
         /* Read from & read by. */
@@ -147,6 +152,8 @@ public class SharedEvent implements Copier<SharedEvent> {
     public AccessType getAType() {
         return aType;
     }
+
+    public CFAEdge getInEdge() { return inEdge; }
 
     public boolean accessSameVarWith(SharedEvent other) {
         return this.var.getName().equals(other.var.getName());

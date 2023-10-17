@@ -1,12 +1,18 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
+import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
+import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 
 import java.util.*;
 
 import static java.util.Objects.hash;
-import static org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer.setRelation;
+import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
 
@@ -232,13 +238,16 @@ public class ObsGraph implements Copier<ObsGraph> {
         }
      }
 
-     public void setReadFrom(SharedEvent r, SharedEvent w) {
+    /**
+     * @implNote This method is only used in the revisiting process.
+     */
+     public void setReadFromAndFromRead(SharedEvent r, SharedEvent w) {
+         setRelation("rf", this, w, r);
          // After setting the rf, we should also deduce the fr.
-         setRelation("rf", w, r);
          deduceFromRead();
      }
 
-     public void deduceFromRead() {
+    public void deduceFromRead() {
          // Deduce the fr according the rf in the graph.
          // Use adjacency matrix and Floyd Warshall Algorithm to compute the transitive
          // closure of po and rf, i.e, porf+.
@@ -283,7 +292,7 @@ public class ObsGraph implements Copier<ObsGraph> {
                          if (!frn.containWriteToSameVar(w)) continue;
                          SharedEvent frnw = frn.getWriteToSameVar(r);
                          Preconditions.checkState(frnw != null);
-                         setRelation("fr", r, frnw);
+                         setRelation("fr", this, r, frnw);
                      }
                  }
              }
@@ -324,5 +333,92 @@ public class ObsGraph implements Copier<ObsGraph> {
         if (!RE.isEmpty()) RE.clear();
         RE.addAll(lastNode.getRs());
         RE.addAll(lastNode.getWs());
+    }
+
+    /**
+     * When r locates in an assume edge and turns to read from a write event that
+     * contradicts r, i.e., r /\ w -> false, we change r to its co-event cor. If r
+     * comes from conditional branch d, then cor should come from !d. At the same time,
+     * we should also replace the rNode (r in) with the corNode (cor in), and assign all
+     * relations rNode has to corNode.
+     * @return r's co-event cor.
+     */
+    public SharedEvent changeAssumeNode(SharedEvent r) {
+        OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
+        Map<Integer, OGNode> nodeMap = ogInfo.getNodeMap();
+        // Find the corEdge.
+        CFAEdge rEdge = r.getInEdge(), corEdge = null;
+        Preconditions.checkArgument(rEdge instanceof AssumeEdge);
+        CFANode pre = rEdge.getPredecessor();
+        Preconditions.checkArgument(pre.getNumLeavingEdges() == 2,
+                "AssumeEdge " + rEdge + " has " + pre.getNumLeavingEdges() + " != 2 " +
+                        "leaving edges.");
+        for (int i = 0; i < 2; i++) {
+            CFAEdge leavingEdge = pre.getLeavingEdge(i);
+            if (!rEdge.equals(leavingEdge)) {
+                corEdge = leavingEdge;
+                break;
+            }
+        }
+        Preconditions.checkArgument(corEdge != null,
+                "Finding corEdge failed.");
+
+        // Replace rNode with corNode.
+        OGNode rNode = r.getInNode(), corNode = nodeMap.get(corEdge.hashCode());
+        Preconditions.checkArgument(nodes.contains(rNode),
+                "rNode " + rNode + " should locate in the graph.");
+        nodes.set(nodes.indexOf(rNode), corNode);
+
+        // Update the relations for corNode.
+        Preconditions.checkArgument(rNode.getWs().isEmpty(),
+                "AssumeEdge contains write events not handled.");
+        // Handle events.
+        SharedEvent cor = null;
+        for (Iterator<SharedEvent> rit = rNode.getRs().iterator(),
+             corit = corNode.getRs().iterator();
+             rit.hasNext() && corit.hasNext();) {
+
+            SharedEvent cor0 = corit.next(), r0 = rit.next(), w0 = r0.getReadFrom();
+            List<SharedEvent> fr0 = r0.getFromRead();
+            // FIXME: Can we assume the order of events in rNode.getRs() is same as
+            //  that in corNode.getRs()?
+            Preconditions.checkArgument(r0.accessSameVarWith(cor0));
+            if (cor0.accessSameVarWith(r)) cor = cor0;
+
+            // Read from.
+            if (w0 != null) {
+                w0.getReadBy().remove(r0);
+                w0.getInNode().getReadBy().remove(rNode);
+                setRelation("corf", this, cor0, w0);
+            }
+
+            // From read.
+            for (SharedEvent fr : fr0) {
+                fr.getFromReadBy().remove(r0);
+                fr.getInNode().getFromReadBy().remove(rNode);
+                setRelation("fr", this, cor0, fr);
+            }
+
+            // Trace order.
+            OGNode predecessor = rNode.getPredecessor();
+            List<OGNode> successor = rNode.getSuccessors();
+            if (predecessor != null) {
+                predecessor.getSuccessors().remove(rNode);
+                predecessor.getSuccessors().add(corNode);
+                corNode.setPredecessor(predecessor);
+            }
+
+            for (OGNode suc : successor) {
+                suc.setPredecessor(corNode);
+                corNode.getSuccessors().add(suc);
+            }
+
+            corNode.setInGraph(rNode.isInGraph());
+            if (rNode.equals(lastNode)) lastNode = corNode;
+            corNode.setPreState(rNode.getPreState());
+            // FIXME: sucState?
+        }
+
+        return cor;
     }
 }

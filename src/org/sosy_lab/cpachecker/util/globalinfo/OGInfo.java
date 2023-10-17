@@ -4,9 +4,11 @@ import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
+import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNodeBuilder;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
@@ -42,7 +44,10 @@ public class OGInfo {
             description = "this option is enabled iff we use OGPORCPA.")
     private boolean useOG = false;
 
-    public OGInfo(final Configuration pConfig, final CFA pCfa)
+    public OGInfo(final Configuration pConfig,
+                  final ConfigurableProgramAnalysis pCpa,
+                  final CFA pCfa,
+                  final LogManager pLogger)
             throws InvalidConfigurationException {
         pConfig.inject(this);
         if (useOG) {
@@ -51,7 +56,7 @@ public class OGInfo {
             nodeMap = nodeBuilder.build();
             fullOGMap = new HashMap<>();
             transfer = new OGTransfer(OGMap, nodeMap);
-            revisitor = new OGRevisitor(OGMap, nodeMap);
+            revisitor = new OGRevisitor(OGMap, nodeMap, pConfig, pCfa, pLogger);
             nlt = new HashMap<>();
         } else {
             OGMap = null;

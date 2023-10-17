@@ -69,7 +69,7 @@ public class GlobalInfo {
     Preconditions.checkState(pConfig != null && cfaInfo != null);
     try {
       CFA cfa = cfaInfo.getCFA();
-      ogInfo = new OGInfo(pConfig, cfa);
+      ogInfo = new OGInfo(pConfig, cpa, cfa, logger);
     } catch (InvalidConfigurationException e) {
       logger.log(Level.SEVERE,
                       "Failed to build the biMap of states and OGGraphs: " + e.getMessage());

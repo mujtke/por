@@ -225,7 +225,7 @@ public class PredicateManager {
 
   /**
    * This function returns regions containing bits of a variable. returns regions for positions of a
-   * variable, s --> [s@2, s@1, s@0]. There is no check, if the variable is tracked by the the
+   * variable, s --> [s@2, s@1, s@0]. There is no check, if the variable is tracked by the
    * precision.
    */
   Region[] createPredicateWithoutPrecisionCheck(final String varName, final int size) {
@@ -243,7 +243,7 @@ public class PredicateManager {
 
   /**
    * This function returns regions containing bits of a variable. returns regions for positions of a
-   * variable, s --> [s@2, s@1, s@0]. If the variable is not tracked by the the precision, Null is
+   * variable, s --> [s@2, s@1, s@0]. If the variable is not tracked by the precision, Null is
    * returned.
    */
   Region[] createPredicate(

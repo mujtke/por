@@ -3,7 +3,6 @@ package org.sosy_lab.cpachecker.util.obsgraph;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class OGNode implements Copier<OGNode> {
 
