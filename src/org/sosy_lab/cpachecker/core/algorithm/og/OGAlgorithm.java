@@ -85,7 +85,7 @@ public class OGAlgorithm implements Algorithm {
                 reachedSet.popFromWaitlist();
             }
             // Debug.
-            dumpToJson(reachedSet);
+//            dumpToJson(reachedSet);
         }
     }
 
@@ -202,8 +202,8 @@ public class OGAlgorithm implements Algorithm {
                 continue;
             }
             for (ObsGraph parGraph : parGraphs) {
-                getAllDot(parGraph);
-                System.out.println("");
+//                getAllDot(parGraph);
+//                System.out.println("");
                 ObsGraph chGraph =
                         transfer.singleStepTransfer(new ArrayList<>(List.of(parGraph)),
                                 edge,
@@ -260,10 +260,10 @@ public class OGAlgorithm implements Algorithm {
             Pair<AbstractState, ObsGraph> aoPair = it.next();
             ARGState leadState = (ARGState) aoPair.getFirstNotNull();
             ObsGraph graph = aoPair.getSecondNotNull();
-            getAllDot(graph);
-            System.out.printf("");
-            // Debug.
-            transfer.addGraphToFull(graph, leadState.getStateId());
+//            getAllDot(graph);
+//            System.out.printf("");
+//             Debug.
+//            transfer.addGraphToFull(graph, leadState.getStateId());
             transfer.multiStepTransfer(waitlist, leadState,
                     new ArrayList<>(List.of(graph)));
         }

@@ -89,7 +89,7 @@ public class OGTransfer {
             // Transfer graph from parState to chSate simply. I.e., just return the graph.
             graph.setNeedToRevisit(false);
             // Debug.
-            addGraphToFull(graph, chState.getStateId());
+//            addGraphToFull(graph, chState.getStateId());
             graphWrapper.clear();
             return graph;
         }
@@ -107,7 +107,7 @@ public class OGTransfer {
             // The node has been in the graph.
             if (!node.isSimpleNode() && !edge.equals(node.getBlockStartEdge())) {
                 // Debug.
-                addGraphToFull(graph, chState.getStateId());
+//                addGraphToFull(graph, chState.getStateId());
                 // Inside the non-simple node, just return.
                 updatePreSucState(edge, node, parState, chState);
                 graphWrapper.clear();
@@ -137,7 +137,7 @@ public class OGTransfer {
             if (!node.isSimpleNode() && !edge.equals(node.getLastBlockEdge())) {
                 graph.setNeedToRevisit(false);
                 // Debug.
-                addGraphToFull(graph, chState.getStateId());
+//                addGraphToFull(graph, chState.getStateId());
                 updatePreSucState(edge, node, parState, chState);
                 graphWrapper.clear();
                 return graph;
@@ -156,7 +156,7 @@ public class OGTransfer {
         }
 
         // Debug.
-        addGraphToFull(graph, chState.getStateId());
+//        addGraphToFull(graph, chState.getStateId());
         graphWrapper.clear();
         return graph;
     }

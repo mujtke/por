@@ -1430,6 +1430,7 @@ cpa.bdd.bitsize = 64
 
 # use a smaller bitsize for all vars, that have only intEqual values
 cpa.bdd.compressIntEqual = true
+cpa.bdd.csh.compressIntEqual = true
 
 # add some additional variables (with prefix) for each variable that can be
 # used for more complex BDD operations later. In the ordering, we declare
@@ -4561,7 +4562,7 @@ useCompositionAnalysis = false
 # build constrained dependency graph (only for partial-order reduction)
 utils.edgeinfo.buildDepGraph = false
 
-# this option is enabled iff we use OGPORCPA. When enabled
+# this option is enabled iff we use OGPORCPA.
 utils.globalInfo.OGInfo.useOG = false
 
 # File for exporting the witness automaton in DOT format.

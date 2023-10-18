@@ -274,59 +274,6 @@ public class OGRevisitor {
     }
 
     /**
-     * Clear trace orders for nodes after graph.getLastNode().
-     * @param graph
-     */
-    private void updateTraceOrder(ObsGraph graph) {
-        getAllDot(graph);
-        System.out.printf("");
-        OGNode tan = graph.getLastNode().getTrBefore();
-        graph.getLastNode().setTrBefore(null);
-        int trL = graph.getTraceLen();
-        while (tan != null) {
-            trL -= 1;
-            tan.setInGraph(false);
-            tan.setTrAfter(null);
-            OGNode tmptb = tan.getTrBefore();
-            tan.setTrBefore(null);
-            tan = tmptb;
-        }
-        graph.setTraceLen(trL);
-        getAllDot(graph);
-        System.out.printf("");
-    }
-
-    /**
-     * TODO
-     * It seems that when node0 doesn't contains w, i.e., affectedNode is null, lead
-     * state should be the suc state of the node which has the smallest trace order and
-     * is read by node0.
-     * @implNote
-     */
-    private Pair<ARGState, OGNode> updateLStateNode(OGNode node0,
-                                                    OGNode nodei,
-                                                    OGNode affectedNode) {
-        if (affectedNode != null) {
-            return Pair.of(nodei.getPreState(), nodei.getTrAfter());
-        }
-        else {
-            ARGState leadState = null;
-            OGNode leadNode = null;
-            // Backtracking to find the proper lead state.
-            int sucNum = Integer.MAX_VALUE;
-            for (OGNode n : node0.getReadFrom()) {
-                if (n.getSucState().getStateId() < sucNum) {
-                    leadState = n.getSucState();
-                    leadNode = n;
-                }
-                sucNum = n.getSucState().getStateId();
-            }
-            assert leadState != null && leadNode != null;
-            return Pair.of(leadState, leadNode);
-        }
-    }
-
-    /**
      * Ref: <a herf="https://www.geeksforgeeks.org/detect-cycle-in-a-graph/"></a>
      * @return true if there is no any cycle in g.
      */
