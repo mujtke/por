@@ -79,7 +79,7 @@ public class OGRevisitor {
         RG.add(g);
 
         // Debug.
-        boolean debug = true;
+        boolean debug = false;
         int depth = 0;
         while (!RG.isEmpty()) {
             if (debug) System.out.println("Size of RG: " + RG.size() + ", loop depth: "
