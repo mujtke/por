@@ -496,6 +496,9 @@ analysis.useGlobalVars = true
 # add loop-structure information to CFA.
 analysis.useLoopStructure = true
 
+# Use observer graphs based algorithm
+analysis.useOGAlgorithm = false
+
 # Use analyses parallely. The resulting reachedset is the one of the first
 # analysis finishing in time. All other analyses are terminated.
 analysis.useParallelAnalyses = false

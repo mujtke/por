@@ -81,6 +81,9 @@ a.out
 /test/programs/benchmarks
 /test/programs/ldv-benchmarks
 
+# /test/thread-test/
+/test/thread-test
+
 # /test/results/
 /test/results/*
 

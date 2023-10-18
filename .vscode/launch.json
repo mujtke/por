@@ -28,6 +28,7 @@
             "projectName": "por_b8eac397",
             "cwd": "${workspaceFolder}",
             "args": "-config config/myAnalysis-concurrency-bdd-ogpor.properties  test/thread-test/debug10-18.i",
+            "console": "integratedTerminal",
             "preLaunchTask": "ant build"
         },
     ]
