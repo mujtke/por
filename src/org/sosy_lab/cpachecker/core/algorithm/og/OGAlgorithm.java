@@ -78,6 +78,12 @@ public class OGAlgorithm implements Algorithm {
             waitlist.addAll(reachedSet.getWaitlist());
             return run0(reachedSet);
         } finally {
+            // When using OGAlgorithm, it's possible that the original waitlist is not
+            // empty after the algorithm has finished. Clear the original waitlist to
+            // avoid the 'UNKNOWN' result.
+            while (!reachedSet.getWaitlist().isEmpty()) {
+                reachedSet.popFromWaitlist();
+            }
             // Debug.
             dumpToJson(reachedSet);
         }
