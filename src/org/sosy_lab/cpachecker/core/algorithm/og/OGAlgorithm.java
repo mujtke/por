@@ -142,21 +142,9 @@ public class OGAlgorithm implements Algorithm {
                     ARGState chs = (ARGState) ch;
                     CFAEdge chtp = pars.getEdgeToChild(chs);
                     int parId = pars.getStateId(), chId = chs.getStateId();
-//                    if (OGMap.get(parId) != null)
-//                        System.out.println("s" + parId
-//                                + "[label=\"s"
-//                                + pars.getStateId()
-//                                + " gs = " + OGMap.get(pars.getStateId()).size()
-//                                + "\"]");
-//                    if (OGMap.get(chId) != null)
-//                        System.out.println("s" + chId
-//                                + "[label=\"s"
-//                                + chs.getStateId()
-//                                + " gs = " + OGMap.get(chs.getStateId()).size()
-//                                + "\"]");
-                    System.out.println("s" + parId
-                            + " -> s" + chId
-                            + " [label=\"" + chtp + "\"]");
+//                    System.out.println("s" + parId
+//                            + " -> s" + chId
+//                            + " [label=\"" + chtp + "\"]");
                 }
             }
 
