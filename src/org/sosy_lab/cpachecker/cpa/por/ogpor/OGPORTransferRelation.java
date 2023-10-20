@@ -2,6 +2,7 @@ package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -100,8 +101,11 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         if (OGMap.get(parOGState.getNum()) == null) {
             return Set.of();
         }
+
         // Update the num when adjusting precision.
         OGPORState chOGState = new OGPORState(-1);
+        chOGState.setLoops(parOGState.getLoops());
+        chOGState.setLoopDepthTable(parOGState.getLoopDepthTable());
 
         return Set.of(chOGState);
     }
@@ -131,6 +135,11 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
                 ogState.setInThread(getActiveThread(cfaEdge, threadingState));
             }
         }
+
+        ogState.updateLoopDepth(cfaEdge);
+        // Debug.
+//        System.out.println("\u001b[31m" + cfaEdge + " @" + ogState.getLoopDepth() +
+//                "\u001b[0m");
 
         return Set.of(state);
     }

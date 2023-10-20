@@ -1,10 +1,11 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Preconditions;
-import org.checkerframework.checker.units.qual.A;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.DeepCopier;
@@ -95,7 +96,8 @@ public class OGTransfer {
         }
 
         // Whether the graph contains the node.
-        int idx = graph.contain(node);
+        // FIXME: only use depth is enough?
+        int loopDepth = getLoopDepth(chState), idx = graph.contain(node, loopDepth);
         // Whether there is any node in the graph still unmet.
         boolean hasNodeUnmet = hasUnmetNode(graph);
         // In the case that the graph still has some nodes unmet and doesn't contain the
@@ -145,6 +147,10 @@ public class OGTransfer {
             // Add the node to the graph.
             // If we add a new node to the graph, we should use its deep copy.
             OGNode newNode = copier.deepCopy(node);
+            // Update the loopDepth.
+            newNode.setLoopDepth(loopDepth);
+            // Debug.
+//            System.out.println("\u001b[32m" + newNode + "\u001b[0m");
             updatePreSucState(edge, newNode, parState, chState);
 //            getDot(graph);
 //            System.out.println("");
@@ -159,6 +165,12 @@ public class OGTransfer {
 //        addGraphToFull(graph, chState.getStateId());
         graphWrapper.clear();
         return graph;
+    }
+
+    private int getLoopDepth(ARGState chState) {
+        OGPORState ogState = AbstractStates.extractStateByType(chState, OGPORState.class);
+        Preconditions.checkState(ogState != null);
+        return ogState.getLoopDepth();
     }
 
     private void updatePreSucState(CFAEdge edge, OGNode node, ARGState parState,
@@ -210,7 +222,6 @@ public class OGTransfer {
             if (graphWrapper.isEmpty()) return;
             CFAEdge etp = leadState.getEdgeToChild(chState);
             assert etp != null;
-            OGNode node = nodeMap.get(etp.hashCode());
             // assert node != null: "Could not find OGNode for edge " + etp;
             ObsGraph chGraph = singleStepTransfer(graphWrapper, etp, leadState, chState);
             if (chGraph != null) {
@@ -229,7 +240,6 @@ public class OGTransfer {
             if (graphWrapper.isEmpty()) return;
             CFAEdge etp = leadState.getEdgeToChild(chState);
             assert etp != null;
-            OGNode node = nodeMap.get(etp.hashCode());
             // assert node != null: "Could not find OGNode for edge " + etp;
             ObsGraph chGraph = singleStepTransfer(graphWrapper, etp, leadState, chState);
             if (chGraph != null) {

@@ -6,6 +6,11 @@ import java.util.*;
 
 public class OGNode implements Copier<OGNode> {
 
+    // The variable is used to distinguish two edges that locate in the same
+    // loop but with different loop depth.
+    // loopDepth = 0 means the node is not in a loop, i.e., if a node was in a loop,
+    // then its loopDepth >= 1.
+    private int loopDepth = 0;
     private final CFAEdge blockStartEdge;
     private final List<CFAEdge> blockEdges;
     private final boolean simpleNode;
@@ -91,6 +96,7 @@ public class OGNode implements Copier<OGNode> {
         // the same 'blockEdges', so they should be copied deeply.
         // Because String is immutable, so shallow copy has the same effect with a deep
         // one.
+        nNode.loopDepth = this.loopDepth;
         nNode.inThread = this.inThread;
         nNode.threadLoc = this.threadLoc; /* Deep copy */
         // This variable is not in use now.
@@ -133,9 +139,10 @@ public class OGNode implements Copier<OGNode> {
         if (this == o) return true;
         if (o == null || this.getClass() != o.getClass()) return false;
         OGNode oNode = (OGNode) o;
-        // Use 'blockEdges', 'inThread' and 'threadsLoc[inThread]' to distinguish two
-        // different OGNodes.
-        return blockEdges.equals(oNode.blockEdges)
+        // Use 'loopDepth', 'blockEdges', 'inThread' and 'threadsLoc[inThread]' to
+        // distinguish two different OGNodes.
+        return loopDepth == oNode.loopDepth
+                && blockEdges.equals(oNode.blockEdges)
                 && inThread.equals(oNode.inThread)
                 && threadLoc.get(inThread).equals(oNode.threadLoc.get(oNode.inThread));
     }
@@ -144,13 +151,16 @@ public class OGNode implements Copier<OGNode> {
     // override the 'hashCode()' to make sure they behave consistently.
     @Override
     public int hashCode() {
-        return Objects.hash(blockEdges, inThread, threadLoc.get(inThread));
+        return Objects.hash(loopDepth, blockEdges, inThread, threadLoc.get(inThread));
     }
 
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
         str.append(blockEdges.toString());
+        if (loopDepth > 0) {
+            str.append("@").append(loopDepth);
+        }
         return str.toString();
     }
 
@@ -305,4 +315,13 @@ public class OGNode implements Copier<OGNode> {
 
         return null;
     }
+
+    public int getLoopDepth() {
+        return loopDepth;
+    }
+
+    public void setLoopDepth(int loopDepth) {
+        this.loopDepth = loopDepth;
+    }
+
 }

@@ -5,7 +5,6 @@ import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
-import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 
@@ -15,6 +14,7 @@ import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
+import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class ObsGraph implements Copier<ObsGraph> {
 
@@ -84,17 +84,25 @@ public class ObsGraph implements Copier<ObsGraph> {
 
 
     /**
+     * @param node xxx.
+     * @param loopDepth
      * Given a graph and a OGNode, judge whether the graph contains the node.
      * @return A non-negative integer if the graph contains the node, -1 if not.
      */
-    public int contain(OGNode node) {
+    public int contain(OGNode node, int loopDepth) {
+        // Set the loopDepth for the node temporarily so that we can judge whether the
+        // graph contains the node. Before returning the result, we reset the loopDepth
+        // to the default value 0.
+        node.setLoopDepth(loopDepth);
         for (int i = 0; i < nodes.size(); i++) {
             assert nodes.get(i) != null;
             if (nodes.get(i).equals(node)) {
+                node.setLoopDepth(0);
                 return i;
             }
         }
 
+        node.setLoopDepth(0);
         return -1;
     }
 
@@ -248,7 +256,7 @@ public class ObsGraph implements Copier<ObsGraph> {
      }
 
     public void deduceFromRead() {
-         // Deduce the fr according the rf in the graph.
+         // Deduce the fr according the po and rf in the graph.
          // Use adjacency matrix and Floyd Warshall Algorithm to compute the transitive
          // closure of po and rf, i.e, porf+.
          int i, j, k, n = nodes.size();
@@ -258,7 +266,7 @@ public class ObsGraph implements Copier<ObsGraph> {
              for (j = 0; j < n; j++) {
                  OGNode nodei = nodes.get(i), nodej = nodes.get(j);
                  if (nodei.getSuccessors().contains(nodej)
-                 || nodej.getReadBy().contains(nodej)) {
+                 || nodei.getReadBy().contains(nodej)) {
                      porf[i][j] = true;
                  }
              }
