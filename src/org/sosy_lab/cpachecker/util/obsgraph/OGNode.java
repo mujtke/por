@@ -1,7 +1,11 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
+import com.google.common.base.Preconditions;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
+import org.sosy_lab.cpachecker.util.AbstractStates;
+
 import java.util.*;
 
 public class OGNode implements Copier<OGNode> {
@@ -25,7 +29,7 @@ public class OGNode implements Copier<OGNode> {
     private String inThread;
     // Use 'threadLoc' to recognize the OGNodes that have the same edges
     // but belong to different program locations.
-    private Map<String, String> threadLoc;
+    private Map<String, String> threadLoc = new HashMap<>();
 
     private boolean isFirstNodeInThread = false;
 
@@ -97,8 +101,9 @@ public class OGNode implements Copier<OGNode> {
         // Because String is immutable, so shallow copy has the same effect with a deep
         // one.
         nNode.loopDepth = this.loopDepth;
+        // FIXME: When we copy the node from the nodeMap, we may miss the threadLoc.
         nNode.inThread = this.inThread;
-        nNode.threadLoc = this.threadLoc; /* Deep copy */
+        nNode.threadLoc.putAll(this.threadLoc); /* Deep copy */
         // This variable is not in use now.
         nNode.isFirstNodeInThread = this.isFirstNodeInThread;
         nNode.inGraph = this.inGraph;
@@ -324,4 +329,11 @@ public class OGNode implements Copier<OGNode> {
         this.loopDepth = loopDepth;
     }
 
+    public void setThreadInfo(ARGState chState) {
+        OGPORState ogporState = AbstractStates.extractStateByType(chState, OGPORState.class);
+        Preconditions.checkArgument(ogporState != null);
+        Preconditions.checkArgument(ogporState.getThreads() != null);
+        this.inThread = ogporState.getInThread();
+        this.threadLoc.putAll(ogporState.getThreads());
+    }
 }
