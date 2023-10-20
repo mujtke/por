@@ -23,6 +23,8 @@ import org.sosy_lab.cpachecker.util.predicates.regions.RegionManager;
 import org.sosy_lab.cpachecker.util.variableclassification.Partition;
 import org.sosy_lab.cpachecker.util.variableclassification.VariableClassification;
 
+import java.util.List;
+
 @Options(prefix = "cpa.bdd.csh")
 public class ConditionalStatementHandler {
 
@@ -151,10 +153,82 @@ public class ConditionalStatementHandler {
 
                             break;
                         }
+                    } else if (rhs instanceof CFunctionCallExpression) {
+                        // handle params of functionCall, maybe there is a side effect.
+                        // 1) y = f(x), f write x, like scanf("%d", &x). In this case,
+                        // we need to handle the parameters of the function f. Even f
+                        // may write x more than once, but in all cases, the result is that
+                        // x can take any value. We just preserve the last result?
+                        // 2) x = f(), assign the return value to x. The result is that
+                        // x can take any value.
+                        // 3) x = f(x), f write x (may more than once) and finally we
+                        // assign the return value to x. In this case, we preserve the
+                        // result of the assignment?
+                        // FIXME: f may write x, or y and x are same var.
+                        CFunctionCallExpression funCallExpr =
+                                (CFunctionCallExpression) rhs;
+                        final List<CExpression> params =
+                                funCallExpr.getParameterExpressions();
+                        final Partition partition = varClass.getPartitionForEdge(wEdge);
+                        // A flag indicates that we find the write event.
+                        boolean findAssignment = false;
+                        for (final CExpression param : params) {
+                            /* special case: external functioncall with possible side-effect!
+                             * this is the only statement, where a pointer-operation is allowed
+                             * and the var can be boolean, intEqual or intAdd,
+                             * because we know, the variable can have a random (unknown) value after the functioncall.
+                             * example: "scanf("%d", &input);" */
+                            CExpression unpackedParam = param;
+                            while (unpackedParam instanceof CCastExpression) {
+                                unpackedParam = ((CCastExpression) param).getOperand();
+                            }
+                            if (unpackedParam instanceof CUnaryExpression) {
+                                CUnaryExpression unaryExpression =
+                                        ((CUnaryExpression) unpackedParam);
+                                // AMPER = '&'.
+                                if (CUnaryExpression.UnaryOperator.AMPER == unaryExpression.getOperator()
+                                && unaryExpression.getOperand() instanceof CIdExpression) {
+                                    final CIdExpression id =
+                                            (CIdExpression) unaryExpression.getOperand();
+                                    if (!id.getName().equals(r.getVar().getName())) {
+                                        continue;
+                                    }
+                                    // FIXME: How to handle multi-times writes to the
+                                    //  same var?
+                                    findAssignment = true;
+                                    final Region[] var = predmgr.createPredicate(
+                                            scopeVar(id),
+                                            id.getExpressionType(),
+                                            wEdge.getSuccessor(),
+                                            bvComputer.getBitsize(partition, targetType),
+                                            null); // is default bitsize enough?
+                                    assignFormula = nrmgr.makeExists(nrmgr.makeTrue(),
+                                            var);
+                                }
+                            } else {
+                                // "printf("%d", output);" or "assert(exp);"
+                                // TODO: can we do something here?
+                            }
+                        }
+
+                        if (varName.equals(r.getVar().getName())) {
+                            findAssignment = true;
+                            final Region[] var = predmgr.createPredicate(
+                                    scopeVar(lhs),
+                                    targetType,
+                                    wEdge.getSuccessor(),
+                                    bvComputer.getBitsize(partition, targetType),
+                                    null);
+                            assignFormula = nrmgr.makeExists(nrmgr.makeTrue(), var);
+                        }
+                        Preconditions.checkState(findAssignment,
+                                "Doesn't find the write event to"
+                                        + r.getVar().getName() + " in edge" + wEdge);
                     } else {
                         throw new UnsupportedCodeException("Not handled edge", wEdge);
                     }
                 }
+                break;
 
             case FunctionReturnEdge:
                 final String callerFunctionName = wEdge.getSuccessor().getFunctionName();
@@ -194,6 +268,7 @@ public class ConditionalStatementHandler {
                     // No assignment, nothing to do.
                     assert summaryExpr instanceof CFunctionCallStatement;
                 }
+                break;
 
             case DeclarationEdge:
                 CDeclarationEdge declarationEdge = (CDeclarationEdge) wEdge;
@@ -244,6 +319,7 @@ public class ConditionalStatementHandler {
                             "non-CVariableDeclaration edge is not supported.", wEdge);
                 }
                 break;
+
             default:
         }
 
