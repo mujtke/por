@@ -14,6 +14,7 @@ import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
+import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class ObsGraph implements Copier<ObsGraph> {
 
@@ -255,7 +256,7 @@ public class ObsGraph implements Copier<ObsGraph> {
      }
 
     public void deduceFromRead() {
-         // Deduce the fr according the rf in the graph.
+         // Deduce the fr according the po and rf in the graph.
          // Use adjacency matrix and Floyd Warshall Algorithm to compute the transitive
          // closure of po and rf, i.e, porf+.
          int i, j, k, n = nodes.size();
@@ -265,7 +266,7 @@ public class ObsGraph implements Copier<ObsGraph> {
              for (j = 0; j < n; j++) {
                  OGNode nodei = nodes.get(i), nodej = nodes.get(j);
                  if (nodei.getSuccessors().contains(nodej)
-                 || nodej.getReadBy().contains(nodej)) {
+                 || nodei.getReadBy().contains(nodej)) {
                      porf[i][j] = true;
                  }
              }

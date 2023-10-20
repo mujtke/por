@@ -52,7 +52,7 @@ public class SharedEvent implements Copier<SharedEvent> {
 
     @Override
     public String toString() {
-        return aType + "(" + var + ")";
+        return aType + "(" + var + ")@" + inEdge;
     }
 
     public SharedEvent (Var pVar,
