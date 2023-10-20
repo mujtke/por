@@ -76,18 +76,15 @@ public class OGNodeBuilder {
 
                     if (withBlock.contains(pre)) {
                         OGNode preNode = blockNodeMap.get(pre);
-                        Preconditions.checkState(preNode != null, "Missing OGNode for " +
-                                        "edge: %s", edge.getRawStatement());
+                        Preconditions.checkState(preNode != null,
+                                "Missing OGNode for edge: " + edge);
                         if (!hasAtomicEnd(edge)) {
                             withBlock.add(suc);
                             List<SharedEvent> sharedEvents =
                                     extractor.extractSharedVarsInfo(edge);
-                            if (sharedEvents == null || sharedEvents.isEmpty()) {
-                                visitedEdges.add(edge.hashCode());
-                                waitlist.add(suc);
-                                continue;
+                            if (sharedEvents != null && !sharedEvents.isEmpty()) {
+                                handleEvents(sharedEvents, preNode);
                             }
-                            handleEvents(sharedEvents, preNode);
                         }
                         preNode.getBlockEdges().add(edge);
                         ogNodes.put(edge.hashCode(), preNode);
