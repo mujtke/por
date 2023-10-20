@@ -85,7 +85,7 @@ public class OGAlgorithm implements Algorithm {
                 reachedSet.popFromWaitlist();
             }
             // Debug.
-            dumpToJson(reachedSet);
+//            dumpToJson(reachedSet);
         }
     }
 
