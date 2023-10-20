@@ -149,6 +149,7 @@ public class OGTransfer {
             OGNode newNode = copier.deepCopy(node);
             // Update the loopDepth.
             newNode.setLoopDepth(loopDepth);
+            newNode.setThreadInfo(chState);
             // Debug.
 //            System.out.println("\u001b[32m" + newNode + "\u001b[0m");
             updatePreSucState(edge, newNode, parState, chState);
