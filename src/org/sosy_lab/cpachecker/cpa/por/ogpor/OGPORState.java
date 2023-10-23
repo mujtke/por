@@ -4,6 +4,7 @@ package org.sosy_lab.cpachecker.cpa.por.ogpor;
 import com.google.common.base.Preconditions;
 import org.sosy_lab.common.annotations.ReturnValuesAreNonnullByDefault;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -146,17 +147,28 @@ public class OGPORState implements AbstractState, Graphable {
             } else {
                 // pre == curLoop, which means we are in a loop and reach its loop start
                 // again. In this case, we should check whether we will exit the loop.
-                AssumeEdge assumeEdge = (AssumeEdge) cfaEdge;
-                if (!assumeEdge.getTruthAssumption()) {
-                    // If-false branch. We exit the loop.
-                    loopDepthTable.remove(curLoop);
-                    loops.get(inThread).pop();
-                } else {
-                    // If-true branch. We increase the loop depth.
+                if (cfaEdge instanceof BlankEdge) {
+                    // Loop with while(ture) or while(1).
+                    // We increase the loop depth.
                     Preconditions.checkState(loopDepthTable.containsKey(curLoop));
                     loopDepthTable.compute(curLoop, (k, v) -> v + 1);
+                } else {
+                    // Loop with the if branch.
+                    AssumeEdge assumeEdge = (AssumeEdge) cfaEdge;
+                    if (!assumeEdge.getTruthAssumption()) {
+                        // If-false branch. We exit the loop.
+                        loopDepthTable.remove(curLoop);
+                        loops.get(inThread).pop();
+                    } else {
+                        // If-true branch. We increase the loop depth.
+                        Preconditions.checkState(loopDepthTable.containsKey(curLoop));
+                        loopDepthTable.compute(curLoop, (k, v) -> v + 1);
+                    }
                 }
             }
+        } else {
+            // pre is not the loop start, in this case, we may exit some loop.
+            // TODO.
         }
     }
 
