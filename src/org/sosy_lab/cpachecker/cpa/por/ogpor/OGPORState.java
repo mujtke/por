@@ -2,15 +2,22 @@ package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
 
 import com.google.common.base.Preconditions;
+import org.junit.Assume;
 import org.sosy_lab.common.annotations.ReturnValuesAreNonnullByDefault;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
+import org.sosy_lab.cpachecker.util.Pair;
+import scala.Int;
 
+import javax.annotation.Nonnull;
 import java.util.*;
+
+import static java.util.Objects.hash;
 
 public class OGPORState implements AbstractState, Graphable {
 
@@ -31,10 +38,12 @@ public class OGPORState implements AbstractState, Graphable {
     private final Map<String, Stack<CFANode>> loops = new HashMap<>();
     // The variable is used to record the depth of each loop we have met.
     private final Map<CFANode, Integer> loopDepthTable = new HashMap<>();
+    private final Map<CFANode, CFANode> loopExitNodes = new HashMap<>();
+    private final static Map<CFANode, Pair<Integer, Integer>> loopRange = new HashMap<>();
 
     @Override
     public int hashCode() {
-        return Objects.hash(num, inThread, threads);
+        return hash(num, inThread, threads);
     }
 
     @Override
@@ -135,41 +144,69 @@ public class OGPORState implements AbstractState, Graphable {
         }
 
         if (pre.isLoopStart()) {
+            // If we haven't computed the range for the pre.
+            if (!loopRange.containsKey(pre)) {
+                Preconditions.checkState(pre.getNumEnteringEdges() == 2, "Just two " +
+                        "edges entering to a loop start node is expected.");
+                CFAEdge loopStartEdge = pre.getEnteringEdge(0),
+                        loopBackEdge = pre.getEnteringEdge(1);
+                // Get the start line of the loop.
+                int startLine = loopStartEdge.getFileLocation().getStartingLineNumber(),
+                        endLine = -1;
+                // Get the end line of the loop.
+                CFANode lbePre = loopBackEdge.getPredecessor();
+                if (!(loopBackEdge instanceof BlankEdge)) {
+                    Preconditions.checkArgument(lbePre.getNumEnteringEdges() == 1);
+                    loopBackEdge = lbePre.getEnteringEdge(0);
+                    lbePre = loopBackEdge.getPredecessor();
+                }
+                for (int i = 0; i < lbePre.getNumEnteringEdges(); i++) {
+                    CFAEdge ei = lbePre.getEnteringEdge(i);
+                    if (ei instanceof BlankEdge) continue;
+                    int tempLine = ei.getFileLocation().getEndingLineNumber();
+                    if (tempLine > endLine) endLine = tempLine;
+                }
+                Preconditions.checkState(endLine > 0,
+                        "Finding loop end line failed.");
+                loopRange.put(pre, Pair.of(startLine, endLine));
+            }
             if (!pre.equals(curLoop)) {
-                // curLoop is null, i.e., we are not in any loop.
-                // Or pre != curLoop, i.e., we reach a new loop start.
-                // In both cases, we should add new loop item with initial depth = 1.
-                Preconditions.checkState(!loops.get(inThread).contains(pre),
-                        "Try to start a new loop with the current loop not exited.");
+                // curLoop is null or pre != curLoop, which means we reach a new loop
+                // start. We add a new loop item with initial depth = 1.
                 loops.get(inThread).push(pre);
-                Preconditions.checkState(!loopDepthTable.containsKey(pre));
                 loopDepthTable.put(pre, 1);
             } else {
                 // pre == curLoop, which means we are in a loop and reach its loop start
-                // again. In this case, we should check whether we will exit the loop.
-                if (cfaEdge instanceof BlankEdge) {
-                    // Loop with while(ture) or while(1).
-                    // We increase the loop depth.
-                    Preconditions.checkState(loopDepthTable.containsKey(curLoop));
-                    loopDepthTable.compute(curLoop, (k, v) -> v + 1);
-                } else {
-                    // Loop with the if branch.
-                    AssumeEdge assumeEdge = (AssumeEdge) cfaEdge;
-                    if (!assumeEdge.getTruthAssumption()) {
-                        // If-false branch. We exit the loop.
+                // again. In this case, we increase the loop depth.
+                Preconditions.checkState(loopDepthTable.containsKey(curLoop));
+                loopDepthTable.compute(curLoop, (k, v) -> v + 1);
+            }
+        } else {
+            // Pre may be a loop exit node.
+            if (curLoop != null && pre.equals(loopExitNodes.get(curLoop))) {
+                // If pre is a loop exit node, then we exit the curLoop.
+                loopDepthTable.remove(curLoop);
+                loops.get(inThread).pop();
+            } else if (curLoop != null && !loopExitNodes.containsKey(curLoop)) {
+                // We haven't computed the exited node for the curLoop.
+                if (!(cfaEdge instanceof BlankEdge)) {
+                    // BlankEdge may have no file location.
+                    Preconditions.checkArgument(loopRange.containsKey(curLoop));
+                    int curLine = cfaEdge.getFileLocation().getStartingLineNumber(),
+                            curLoopEndLine = loopRange.get(curLoop).getSecondNotNull();
+                    if (curLine > curLoopEndLine) {
+                        // curLine has exit the curLoop, and we add the exited node for
+                        // curLoop in loopExitNodes.
                         loopDepthTable.remove(curLoop);
                         loops.get(inThread).pop();
-                    } else {
-                        // If-true branch. We increase the loop depth.
-                        Preconditions.checkState(loopDepthTable.containsKey(curLoop));
-                        loopDepthTable.compute(curLoop, (k, v) -> v + 1);
+                        loopExitNodes.put(curLoop, pre);
                     }
                 }
             }
-        } else {
-            // pre is not the loop start, in this case, we may exit some loop.
-            // TODO.
         }
+        // Debug.
+        System.out.println(cfaEdge + "@" + (!loops.get(inThread).isEmpty() ?
+                loopDepthTable.get(loops.get(inThread).peek()) : 0));
     }
 
     /**
@@ -180,8 +217,15 @@ public class OGPORState implements AbstractState, Graphable {
         if (loops.get(inThread).isEmpty()) {
             return 0;
         }
-        CFANode curLoop = loops.get(inThread).peek();
+//        CFANode curLoop = loops.get(inThread).peek();
+//
+//        return loopDepthTable.get(curLoop);
+        int res = 0;
+        for (CFANode loop : loops.get(inThread)) {
+            int depth = loopDepthTable.get(loop);
+            res = hash(res, loop, depth);
+        }
 
-        return loopDepthTable.get(curLoop);
+        return res;
     }
 }
