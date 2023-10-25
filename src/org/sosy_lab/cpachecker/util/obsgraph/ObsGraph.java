@@ -84,26 +84,41 @@ public class ObsGraph implements Copier<ObsGraph> {
 
 
     /**
-     * @param node xxx.
-     * @param loopDepth
-     * Given a graph and a OGNode, judge whether the graph contains the node.
+     * Given a graph and a OGNode A, judge whether the graph contains a node B that
+     * is equal to A.
      * @return A non-negative integer if the graph contains the node, -1 if not.
+     * @implNote We assign loopDepth to A temporarily for finding the target node B
+     * that is equal to A after we assign a certain loop depth.
      */
     public int contain(OGNode node, int loopDepth) {
         // Set the loopDepth for the node temporarily so that we can judge whether the
         // graph contains the node. Before returning the result, we reset the loopDepth
         // to the default value 0.
+        int oldLoopDepth = node.getLoopDepth();
         node.setLoopDepth(loopDepth);
         for (int i = 0; i < nodes.size(); i++) {
             assert nodes.get(i) != null;
             if (nodes.get(i).equals(node)) {
-                node.setLoopDepth(0);
+                node.setLoopDepth(oldLoopDepth);
                 return i;
             }
         }
 
-        node.setLoopDepth(0);
+        node.setLoopDepth(oldLoopDepth);
         return -1;
+    }
+
+    public OGNode get(OGNode node, int loopDepth) {
+        node.setLoopDepth(loopDepth);
+        for (OGNode n : nodes) {
+            if (n.equals(node)) {
+                node.setLoopDepth(0);
+                return n;
+            }
+        }
+
+        node.setLoopDepth(0);
+        return null;
     }
 
     @Override

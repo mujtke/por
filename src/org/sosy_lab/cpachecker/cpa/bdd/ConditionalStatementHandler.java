@@ -71,6 +71,10 @@ public class ConditionalStatementHandler {
             SharedEvent w) throws UnsupportedCodeException {
 
         OGNode rNode = r.getInNode(), wNode = w.getInNode();
+        // FIXME: When G doesn't contain rNode, can we change the assume node?
+        if (G.contain(rNode, rNode.getLoopDepth()) < 0) {
+            return r;
+        }
         CFAEdge rEdge = rNode.getBlockStartEdge(), wEdge = w.getInEdge();
 
         if (!(rEdge instanceof AssumeEdge)) {

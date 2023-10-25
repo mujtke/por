@@ -107,11 +107,12 @@ public class OGTransfer {
         // no unmet nodes or idx >= 0.
         if (idx >= 0) {
             // The node has been in the graph.
+            OGNode innerNode = graph.getNodes().get(idx);
             if (!node.isSimpleNode() && !edge.equals(node.getBlockStartEdge())) {
                 // Debug.
 //                addGraphToFull(graph, chState.getStateId());
                 // Inside the non-simple node, just return.
-                updatePreSucState(edge, node, parState, chState);
+                updatePreSucState(edge, innerNode, parState, chState);
                 graphWrapper.clear();
                 return graph;
             }
@@ -126,6 +127,9 @@ public class OGTransfer {
             updateLastNode(graph, idx,
                     node.isSimpleNode() ? parState : node.getPreState(),
                     chState);
+            // Update the loop depth and thread info.
+            innerNode.setLoopDepth(loopDepth);
+            innerNode.setThreadInfo(chState);
             // In this case, needn't revisit the graph.
             graph.setNeedToRevisit(false);
         } else {
