@@ -10,7 +10,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
-import scala.concurrent.impl.FutureConvertersImpl;
+import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -48,6 +48,7 @@ public class OGNodeBuilder {
 
             if (visitedFuncs.contains(funcEntryNode)) continue;
             Stack<CFANode> waitlist = new Stack<>();
+            Stack<Var> locks = new Stack<>();
             Set<CFANode> withBlock = new HashSet<>();
             Set<Integer> visitedEdges = new HashSet<>();
             Map<CFANode, OGNode> blockNodeMap = new HashMap<>();
@@ -67,7 +68,7 @@ public class OGNodeBuilder {
                     if (pre.getLeavingSummaryEdge() != null) {
                         // edge is a function call. Don't enter the inside of the func,
                         // use summaryEdge as a substitute, and suc should also change.
-                        edge = pre.getLeavingSummaryEdge();
+//                        edge = pre.getLeavingSummaryEdge();
                         suc = edge.getSuccessor();
                     }
 
@@ -78,13 +79,13 @@ public class OGNodeBuilder {
                         OGNode preNode = blockNodeMap.get(pre);
                         Preconditions.checkState(preNode != null,
                                 "Missing OGNode for edge: " + edge);
-                        if (!hasAtomicEnd(edge)) {
+                        List<SharedEvent> sharedEvents =
+                                extractor.extractSharedVarsInfo(edge);
+                        if (sharedEvents != null && !sharedEvents.isEmpty()) {
+                            handleEvents(sharedEvents, preNode);
+                        }
+                        if (!hasAtomicEnd(locks, edge, sharedEvents)) {
                             withBlock.add(suc);
-                            List<SharedEvent> sharedEvents =
-                                    extractor.extractSharedVarsInfo(edge);
-                            if (sharedEvents != null && !sharedEvents.isEmpty()) {
-                                handleEvents(sharedEvents, preNode);
-                            }
                         }
                         preNode.getBlockEdges().add(edge);
                         ogNodes.put(edge.hashCode(), preNode);
@@ -92,36 +93,38 @@ public class OGNodeBuilder {
                     } else {
                         Preconditions.checkState(!ogNodes.containsKey(edge.hashCode()),
                                 "Duplicated key for Edge: %s", edge.getRawStatement());
-                        if (hasAtomicBegin(edge)) {
-                            withBlock.add(suc);
-                            OGNode newBlockNode = new OGNode(edge,
+                        List<SharedEvent> sharedEvents =
+                                extractor.extractSharedVarsInfo(edge);
+                        OGNode newBlockNode = null;
+                        if (hasAtomicBegin(locks, edge, sharedEvents)) {
+                            newBlockNode = new OGNode(edge,
                                     new ArrayList<CFAEdge>(List.of(edge)),
-                                    false,
+                                    false, /* Complicated Node */
                                     false,
                                     new HashSet<SharedEvent>(),
                                     new HashSet<SharedEvent>());
-                            ogNodes.put(edge.hashCode(), newBlockNode);
-                            blockNodeMap.put(suc, newBlockNode);
+                            withBlock.add(suc);
+                            if (!sharedEvents.isEmpty()) {
+                                handleEvents(sharedEvents, newBlockNode);
+                            }
                         } else {
                             // else, normal edge not in a block.
                             // If no shared events, just skip.
-                            List<SharedEvent> sharedEvents =
-                                    extractor.extractSharedVarsInfo(edge);
-                            if (sharedEvents == null || sharedEvents.isEmpty()) {
+                            newBlockNode = new OGNode(edge,
+                                    new ArrayList<CFAEdge>(List.of(edge)),
+                                    true, /* Simple node */
+                                    false,
+                                    new HashSet<SharedEvent>(),
+                                    new HashSet<SharedEvent>());
+                            if (sharedEvents.isEmpty()) {
                                 visitedEdges.add(edge.hashCode());
                                 waitlist.add(suc);
                                 continue;
                             }
-                            OGNode newNonBlockNode = new OGNode(edge,
-                                    List.of(edge),
-                                    true,
-                                    false,
-                                    new HashSet<SharedEvent>(),
-                                    new HashSet<SharedEvent>());
-                            handleEvents(sharedEvents, newNonBlockNode);
-                            ogNodes.put(edge.hashCode(), newNonBlockNode);
-                            blockNodeMap.put(suc, newNonBlockNode);
+                            handleEvents(sharedEvents, newBlockNode);
                         }
+                        ogNodes.put(edge.hashCode(), newBlockNode);
+                        blockNodeMap.put(suc, newBlockNode);
                     }
                     visitedEdges.add(edge.hashCode());
                     waitlist.add(suc);
@@ -176,18 +179,60 @@ public class OGNodeBuilder {
         });
     }
 
-    boolean hasAtomicBegin(CFAEdge edge) {
+    boolean hasAtomicBegin(Stack<Var> locks, CFAEdge edge, List<SharedEvent> sharedEvents) {
         // Skip the declaration.
         if (edge instanceof CDeclarationEdge) {
             return false;
         }
-        return edge.getRawStatement().contains(THREAD_MUTEX_LOCK)
-                || edge.getRawStatement().contains(VERIFIER_ATOMIC_BEGIN);
+
+        if (edge.getRawStatement().contains(VERIFIER_ATOMIC_BEGIN)) {
+            return true;
+        } else if (edge.getRawStatement().contains(THREAD_MUTEX_LOCK)) {
+            Preconditions.checkArgument(sharedEvents.size() == 1,
+                    "Exactly one lock variable is expected.");
+            Var curLock = sharedEvents.iterator().next().getVar();
+            locks.push(curLock);
+            return true;
+        };
+
+        return false;
     }
 
-    boolean hasAtomicEnd(CFAEdge edge) {
-        return edge.getRawStatement().contains(THREAD_MUTEX_UNLOCK)
-                || edge.getRawStatement().contains(VERIFIER_ATOMIC_END);
+    boolean hasAtomicEnd(Stack<Var> locks, CFAEdge edge, List<SharedEvent> sharedEvents) {
+        if(edge.getRawStatement().contains(THREAD_MUTEX_UNLOCK)
+                || edge.getRawStatement().contains(VERIFIER_ATOMIC_END)) {
+            if (edge.getRawStatement().contains(VERIFIER_ATOMIC_END)) return true;
+            // Else, edge unlock some lock, in this case we need to judge whether multi
+            // locks are held. FIXME: if so, how can we end the atomic block?
+            Preconditions.checkArgument(!locks.isEmpty(),
+                    "Try to unlock without locking.");
+            Var curLock = null;
+            if (sharedEvents.isEmpty()) {
+                // Which means the lock variable is local.
+                // TODO: Extract local lock variable.
+            } else {
+                // Which means the lock variable is gloal.
+                Preconditions.checkArgument(sharedEvents.size() == 1,
+                        "Exactly one lock variable is expected.");
+                curLock = sharedEvents.iterator().next().getVar();
+            }
+            Preconditions.checkArgument(curLock != null,
+                    "Get lock failed.");
+            if (curLock.equals(locks.peek())) {
+                locks.pop();
+            } else if (curLock.equals(locks.get(0))) {
+                // If the curLock is equal to the first lock in locks, we clear all
+                // locks, Which maybe unsound.
+                locks.clear();
+            }
+
+            if (locks.isEmpty()) {
+                // When locks is empty, we think we reach the end of the lock block.
+                return true;
+            }
+        };
+
+        return false;
     }
 
     private void export(Map<Integer, OGNode> nodes) {

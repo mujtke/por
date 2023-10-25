@@ -125,12 +125,10 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
             if (s instanceof ThreadingState) {
                 ThreadingState threadingState = (ThreadingState) s;
                 // Set 'threads' for ogState.
-                threadingState.getThreadIds().forEach(tid -> {
-                    ogState.getThreads().put(tid,
-                            threadingState.getThreadLocation(tid)
-                                    .getLocationNode()
-                                    .toString());
-                });
+                threadingState.getThreadIds().forEach(tid -> ogState.getThreads()
+                        .put(tid, threadingState.getThreadLocation(tid)
+                                .getLocationNode()
+                                .toString()));
                 // Set 'inThread'.
                 ogState.setInThread(getActiveThread(cfaEdge, threadingState));
             }
