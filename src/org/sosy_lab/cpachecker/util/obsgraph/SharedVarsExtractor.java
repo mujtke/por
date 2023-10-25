@@ -62,7 +62,7 @@ public class SharedVarsExtractor {
                 return handleFunctionReturnEdge(funRetEdge);
 
             default:
-                return null;
+                return List.of();
         }
     }
 
