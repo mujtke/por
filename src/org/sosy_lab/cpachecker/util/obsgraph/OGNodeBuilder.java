@@ -69,11 +69,12 @@ public class OGNodeBuilder {
                         // edge is a function call. Don't enter the inside of the func,
                         // use summaryEdge as a substitute, and suc should also change.
 //                        edge = pre.getLeavingSummaryEdge();
-                        suc = edge.getSuccessor();
+//                        suc = edge.getSuccessor();
+                        suc = pre.getLeavingSummaryEdge().getSuccessor();
                     }
 
                     // debug
-//                    System.out.println(edge);
+                    System.out.println(edge);
 
                     if (withBlock.contains(pre)) {
                         OGNode preNode = blockNodeMap.get(pre);
