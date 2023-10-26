@@ -366,8 +366,32 @@ public class OGRevisitor {
             case "rf":
                 try {
                     e2 = CSHandler.handleAssumeStatement(G, e2, e1);
-                    // e2n may change.
-                    e2n = e2.getInNode();
+                    if (e2.getInNode() != e2n) {
+                        e2n = e2.getInNode();
+//                        // e2n may change. If so, we should set the read-from
+//                        // relations for the left read events in the e2n.
+//                        OGNode ne2n = e2.getInNode();
+//                        for (SharedEvent or : ne2n.getRs()) {
+//                            if (or.accessSameVarWith(e2)) continue;
+//                            for (SharedEvent r0 : e2n.getRs()) {
+//                                if (r0.accessSameVarWith(or)) {
+//                                    // We set 'or' read from the value that r0 reads.
+//                                    SharedEvent w0 = r0.getReadFrom();
+//                                    Preconditions.checkArgument(w0 != null,
+//                                            "r0 should read from some write.");
+//                                    OGNode w0n = w0.getInNode();
+//                                    or.setReadFrom(w0);
+//                                    if (!w0n.getReadBy().contains(ne2n))
+//                                        w0n.getReadBy().add(ne2n);
+//                                    if (!ne2n.getReadFrom().contains(w0n))
+//                                        ne2n.getReadFrom().add(w0n);
+//                                    w0.getReadBy().remove(r0);
+//                                    w0n.getReadBy().remove(e2n);
+//                                }
+//                            }
+//                        }
+//                        e2n = ne2n;
+                    }
                 } catch (UnsupportedCodeException e) {
                     e.printStackTrace();
                 }
