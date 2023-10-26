@@ -85,6 +85,9 @@ public class OGNodeBuilder {
                         if (sharedEvents != null && !sharedEvents.isEmpty()) {
                             handleEvents(sharedEvents, preNode);
                         }
+                        if (hasAtomicBegin(locks, edge, sharedEvents)) {
+                            // FIXME: Inside a block, we don's start a new block.
+                        }
                         if (!hasAtomicEnd(locks, edge, sharedEvents)) {
                             withBlock.add(suc);
                         }
@@ -190,7 +193,7 @@ public class OGNodeBuilder {
             return true;
         } else if (edge.getRawStatement().contains(THREAD_MUTEX_LOCK)) {
             Preconditions.checkArgument(sharedEvents.size() == 1,
-                    "Exactly one lock variable is expected.");
+                    "Exactly one lock variable is expected." + edge);
             Var curLock = sharedEvents.iterator().next().getVar();
             locks.push(curLock);
             return true;

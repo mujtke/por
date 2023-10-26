@@ -63,7 +63,8 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
         String mainFuncName = cfa.getMainFunction().getFunctionName();
         OGPORState initState = new OGPORState(0);
         initState.getThreads().put(mainFuncName, "N" + node.getNodeNumber());
-
+        initState.setCfa(cfa);
+        initState.setLoopInfo();
         // initially, the first element of OGMap is set to be 'initState.num <-> \empty'.
         GlobalInfo.getInstance().getOgInfo().getOGMap().put(initState.getNum(),
                 new ArrayList<>(Collections.singleton(new ObsGraph())));
