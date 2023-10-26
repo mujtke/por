@@ -301,8 +301,8 @@ public class ObsGraph implements Copier<ObsGraph> {
              if (node.getRs().isEmpty()) continue;
              for (Iterator<SharedEvent> it = node.getRs().iterator(); it.hasNext();) {
                  SharedEvent r = it.next(), w = r.getReadFrom();
-                 Preconditions.checkArgument(w != null, "Event r " +
-                         "should read from some write.");
+                 Preconditions.checkArgument(w != null,
+                         "Event r should read from some write.");
                  // Deduce fr caused by r and w.
                  OGNode wNode = w.getInNode();
                  Preconditions.checkState(wNode.getReadBy().contains(node)
@@ -394,66 +394,71 @@ public class ObsGraph implements Copier<ObsGraph> {
 
         // Update the relations for corNode.
         Preconditions.checkArgument(rNode.getWs().isEmpty(),
-                "AssumeEdge contains write events not handled.");
+                "AssumeEdge contains write events is not expected.");
         // Handle events.
+        // We should set the read-from relations for the left read events in
+        // the e2n (i.e., read events != cor, because we set read-from relation for cor
+        // in method 'setRelation' later.
         SharedEvent cor = null;
-        for (Iterator<SharedEvent> rit = rNode.getRs().iterator(),
-             corit = corNode.getRs().iterator();
-             rit.hasNext() && corit.hasNext();) {
+        for (SharedEvent r0 : rNode.getRs()) {
+            for (SharedEvent cor0 : corNode.getRs()) {
+                if (!r0.accessSameVarWith(cor0)) continue;
+                if (cor0.accessSameVarWith(r)) cor = cor0;
 
-            SharedEvent cor0 = corit.next(), r0 = rit.next(), w0 = r0.getReadFrom();
-            List<SharedEvent> fr0 = r0.getFromRead();
-            // FIXME: Can we assume the order of events in rNode.getRs() is same as
-            //  that in corNode.getRs()?
-            Preconditions.checkArgument(r0.accessSameVarWith(cor0));
-            if (cor0.accessSameVarWith(r)) cor = cor0;
-
-            // Read from.
-            if (w0 != null) {
+                // Read from.
+                SharedEvent w0 = r0.getReadFrom();
+                Preconditions.checkArgument(w0 != null,
+                        "r0 should read from some write.");
+                OGNode w0n = w0.getInNode();
+                cor0.setReadFrom(w0);
+                if (!w0n.getReadBy().contains(corNode))
+                    w0n.getReadBy().add(corNode);
+                if (!corNode.getReadFrom().contains(w0n))
+                    corNode.getReadFrom().add(w0n);
                 w0.getReadBy().remove(r0);
                 w0.getInNode().getReadBy().remove(rNode);
-            }
 
-            // From read.
-            for (SharedEvent fr : fr0) {
-                fr.getFromReadBy().remove(r0);
-                fr.getInNode().getFromReadBy().remove(rNode);
+                // From read.
+                List<SharedEvent> fr0 = r0.getFromRead();
+                for (SharedEvent fr : fr0) {
+                    fr.getFromReadBy().remove(r0);
+                    fr.getInNode().getFromReadBy().remove(rNode);
+                }
             }
-
-            // Po.
-            OGNode predecessor = rNode.getPredecessor();
-            List<OGNode> successors = rNode.getSuccessors();
-            if (predecessor != null) {
-                predecessor.getSuccessors().remove(rNode);
-                predecessor.getSuccessors().add(corNode);
-                corNode.setPredecessor(predecessor);
-            }
-
-            // Trace order.
-            OGNode rTrAfter = rNode.getTrAfter(), rTrBefore = rNode.getTrBefore();
-            if (rTrAfter != null) {
-                rTrAfter.setTrBefore(corNode);
-                corNode.setTrAfter(rTrAfter);
-            }
-            if (rTrBefore != null) {
-                rTrBefore.setTrAfter(corNode);
-                corNode.setTrBefore(rTrBefore);
-            }
-
-            for (OGNode suc : successors) {
-                suc.setPredecessor(corNode);
-                corNode.getSuccessors().add(suc);
-            }
-
-            corNode.setInGraph(rNode.isInGraph());
-            if (rNode.equals(lastNode)) lastNode = corNode;
-            corNode.setPreState(rNode.getPreState());
-            // FIXME: sucState?
-
-            // Handle threadLoc and inThread.
-            corNode.setThreadsLoc(rNode.getThreadLoc());
-            corNode.setInThread(corNode.getInThread());
         }
+        // Po.
+        OGNode predecessor = rNode.getPredecessor();
+        List<OGNode> successors = rNode.getSuccessors();
+        if (predecessor != null) {
+            predecessor.getSuccessors().remove(rNode);
+            predecessor.getSuccessors().add(corNode);
+            corNode.setPredecessor(predecessor);
+        }
+
+        // Trace order.
+        OGNode rTrAfter = rNode.getTrAfter(), rTrBefore = rNode.getTrBefore();
+        if (rTrAfter != null) {
+            rTrAfter.setTrBefore(corNode);
+            corNode.setTrAfter(rTrAfter);
+        }
+        if (rTrBefore != null) {
+            rTrBefore.setTrAfter(corNode);
+            corNode.setTrBefore(rTrBefore);
+        }
+
+        for (OGNode suc : successors) {
+            suc.setPredecessor(corNode);
+            corNode.getSuccessors().add(suc);
+        }
+
+        corNode.setInGraph(rNode.isInGraph());
+        if (rNode.equals(lastNode)) lastNode = corNode;
+        corNode.setPreState(rNode.getPreState());
+        // FIXME: sucState?
+
+        // Handle threadLoc and inThread.
+        corNode.setThreadsLoc(rNode.getThreadLoc());
+        corNode.setInThread(corNode.getInThread());
 
         return cor;
     }

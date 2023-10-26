@@ -90,6 +90,8 @@ public class OGPORState implements AbstractState, Graphable {
         Preconditions.checkArgument(cfa.getLoopStructure().isPresent(),
                 "Missing loop structure.");
         LoopStructure loopStructure = cfa.getLoopStructure().get();
+        Preconditions.checkArgument(!loopStructure.getAllLoops().isEmpty(),
+                "Obtain loop structure failed.");
         for (Loop loop : loopStructure.getAllLoops()) {
             // one loop just have one loop head?
             Set<CFANode> loopStarts = loop.getIncomingEdges()
