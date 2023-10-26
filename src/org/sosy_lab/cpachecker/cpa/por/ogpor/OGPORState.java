@@ -97,8 +97,19 @@ public class OGPORState implements AbstractState, Graphable {
             Preconditions.checkState(loopStarts.size() == 1,
                     "Just one loop start node is expected.");
             CFANode loopStart= loopStarts.iterator().next();
-            Preconditions.checkState(loopStart.isLoopStart(),
-                    "Setting error node as loop start.");
+            if (!loopStart.isLoopStart()) {
+                // In some special cases, loopStart is not the real loop start node. In
+                // this case, we enumerate the nodes in loop to get the loop start node.
+                loopStart = null;
+                for (CFANode node : loop.getLoopNodes()) {
+                    if (node.isLoopStart()) {
+                        loopStart = node;
+                        break;
+                    }
+                }
+            }
+            Preconditions.checkState(loopStart != null,
+                    "Finding loop start node failed.");
             // Corresponding loopStart to its loop exit nodes.
             Set<CFANode> loopExits = loop.getOutgoingEdges()
                     .stream().map(CFAEdge::getSuccessor).collect(Collectors.toSet());
