@@ -90,8 +90,6 @@ public class OGPORState implements AbstractState, Graphable {
         Preconditions.checkArgument(cfa.getLoopStructure().isPresent(),
                 "Missing loop structure.");
         LoopStructure loopStructure = cfa.getLoopStructure().get();
-        Preconditions.checkArgument(!loopStructure.getAllLoops().isEmpty(),
-                "Obtain loop structure failed.");
         for (Loop loop : loopStructure.getAllLoops()) {
             // one loop just have one loop head?
             Set<CFANode> loopStarts = loop.getIncomingEdges()
@@ -198,7 +196,9 @@ public class OGPORState implements AbstractState, Graphable {
         } else {
             // Pre may be a loop exit node.
             if (curLoop != null) {
-                Preconditions.checkArgument(loopExitNodes.containsKey(curLoop));
+                Preconditions.checkArgument(!loopExitNodes.isEmpty()
+                                && loopExitNodes.containsKey(curLoop),
+                        "Obtain loop structure failed.");
                 if (loopExitNodes.get(curLoop).contains(pre)) {
                     // If pre is a loop exit node, then we exit the curLoop.
                     loopDepthTable.remove(curLoop);
