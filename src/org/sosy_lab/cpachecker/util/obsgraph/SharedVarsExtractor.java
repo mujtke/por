@@ -155,7 +155,12 @@ public class SharedVarsExtractor {
 
                     return Pair.of(varsInInit.getFirst(), declaredVars);
                 } else {
-                    return emptyRWVarsSet;
+//                    return emptyRWVarsSet;
+                    // FIXME: How to handle this case.
+                    CIdExpression varExp = new CIdExpression(decl.getFileLocation(),
+                            decl.getType(), decl.getName(), decl);
+                    Set<Var> declaredVars = varExp.accept(visitor);
+                    return Pair.of(Set.of(), declaredVars);
                 }
             } else {
                 return emptyRWVarsSet;

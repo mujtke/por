@@ -97,10 +97,51 @@ public class ObsGraph implements Copier<ObsGraph> {
         int oldLoopDepth = node.getLoopDepth();
         node.setLoopDepth(loopDepth);
         for (int i = 0; i < nodes.size(); i++) {
-            assert nodes.get(i) != null;
             if (nodes.get(i).equals(node)) {
                 node.setLoopDepth(oldLoopDepth);
                 return i;
+            }
+        }
+
+        node.setLoopDepth(oldLoopDepth);
+        return -1;
+    }
+
+    /**
+     *
+     * @param node
+     * @param loopDepth
+     * @param cfaNode
+     * @return
+     */
+    public int contain(OGNode node, int loopDepth, CFANode cfaNode) {
+
+        int oldLoopDepth = node.getLoopDepth();
+        node.setLoopDepth(loopDepth);
+        OGNode tmp;
+        for (int i = 0; i < nodes.size(); i++) {
+            tmp = nodes.get(i);
+            if (tmp.equals(node)) {
+                node.setLoopDepth(oldLoopDepth);
+                return i;
+            }
+            // If tmp isn't equal to node, then it may be equal to node's some coNode.
+            if (!node.getCoNodes().isEmpty()) {
+                for (CFANode cfaN : node.getCoNodes().keySet()) {
+                    if (!cfaN.equals(cfaNode)) {
+                        // We need to skip the cfaNode, because the coNode it
+                        // corresponds to conjugates with the node. For example, if e1 and
+                        // e2 are two edges stem from the cfaNode, and e2.inNode is the
+                        // coNode of e1.inNode, then when we judge if e1.inNode is in
+                        // the graph, we need to skip the e2.inNode. Because if a graph
+                        // could be transferred along the e1, then it wouldn't be
+                        // along the e2.
+                        if (tmp.equals(node.getCoNodes().get(cfaN))) {
+                            node.setLoopDepth(oldLoopDepth);
+                            return i;
+                        }
+                    }
+                }
             }
         }
 
@@ -301,6 +342,8 @@ public class ObsGraph implements Copier<ObsGraph> {
              if (node.getRs().isEmpty()) continue;
              for (Iterator<SharedEvent> it = node.getRs().iterator(); it.hasNext();) {
                  SharedEvent r = it.next(), w = r.getReadFrom();
+                 // Debug.
+                 if (w == null) continue;
                  Preconditions.checkArgument(w != null,
                          "Event r should read from some write.");
                  // Deduce fr caused by r and w.
@@ -411,12 +454,15 @@ public class ObsGraph implements Copier<ObsGraph> {
                         "r0 should read from some write.");
                 OGNode w0n = w0.getInNode();
                 cor0.setReadFrom(w0);
+                w0.getReadBy().add(cor0);
                 if (!w0n.getReadBy().contains(corNode))
                     w0n.getReadBy().add(corNode);
                 if (!corNode.getReadFrom().contains(w0n))
                     corNode.getReadFrom().add(w0n);
+                r0.setReadFrom(null);
                 w0.getReadBy().remove(r0);
-                w0.getInNode().getReadBy().remove(rNode);
+                w0n.getReadBy().remove(rNode);
+                rNode.getReadFrom().remove(w0n);
 
                 // From read.
                 List<SharedEvent> fr0 = r0.getFromRead();

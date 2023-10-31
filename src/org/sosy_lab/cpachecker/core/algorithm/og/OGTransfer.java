@@ -97,7 +97,8 @@ public class OGTransfer {
 
         // Whether the graph contains the node.
         // FIXME: only use depth is enough?
-        int loopDepth = getLoopDepth(chState), idx = graph.contain(node, loopDepth);
+        int loopDepth = getLoopDepth(chState),
+                idx = graph.contain(node, loopDepth, edge.getPredecessor());
         // Whether there is any node in the graph still unmet.
         boolean hasNodeUnmet = hasUnmetNode(graph);
         // In the case that the graph still has some nodes unmet and doesn't contain the
@@ -376,7 +377,7 @@ public class OGTransfer {
             }
 //            getAllDot(graph);
 //            System.out.println("");
-            addRfMoForNewNode(graph, n, node, rFlag, wFlag);
+            addRfMoForNewNode(graph, n, rFlag, wFlag);
 //            getAllDot(graph);
 //            System.out.println("");
             n = n.getTrAfter();
@@ -398,7 +399,7 @@ public class OGTransfer {
     }
 
     // Add rf and mo for the newly added node.
-    void addRfMoForNewNode(ObsGraph graph, OGNode n, OGNode newNode,
+    void addRfMoForNewNode(ObsGraph graph, OGNode n,
                            Set<SharedEvent> rFlag,
                            Set<SharedEvent> wFlag) {
         for (SharedEvent w : n.getWs()) {

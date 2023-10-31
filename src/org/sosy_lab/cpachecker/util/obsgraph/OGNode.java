@@ -2,19 +2,24 @@ package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 
 import java.util.*;
 
 public class OGNode implements Copier<OGNode> {
 
-    // The variable is used to distinguish two edges that locate in the same
+    // This variable is used to distinguish two edges that locate in the same
     // loop but with different loop depth.
-    // loopDepth = 0 means the node is not in a loop, i.e., if a node was in a loop,
-    // then its loopDepth >= 1.
+    // loopDepth = 0 means the node is not in a loop.
     private int loopDepth = 0;
+    // This variable is used to record all coNodes of the current node. CoNodes exist
+    // when there is any conditional branches inside an atomic block.
+    // FIXME: we don't deeply copy this variable.
+    private final Map<CFANode, OGNode> coNodes = new HashMap<>();
     private final CFAEdge blockStartEdge;
     private final List<CFAEdge> blockEdges;
     private final boolean simpleNode;
@@ -88,11 +93,13 @@ public class OGNode implements Copier<OGNode> {
         // Else, try copying 'this' to a new object.
         OGNode nNode = new OGNode(
                 this.blockStartEdge,    /* Shallow copy. */
-                this.blockEdges,        /* Shallow copy. */
+                new ArrayList<>(),
+//                this.blockEdges,        /* Shallow copy. */
                 this.simpleNode,        /* Shallow copy. */
                 this.containNonDetVar,  /* Shallow copy. */
                 new HashSet<>(),
                 new HashSet<>());
+        nNode.blockEdges.addAll(this.blockEdges);
         // Put the copy into memo.
         memo.put(this, nNode);
 
@@ -335,5 +342,21 @@ public class OGNode implements Copier<OGNode> {
         Preconditions.checkArgument(ogporState.getThreads() != null);
         this.inThread = ogporState.getInThread();
         this.threadLoc.putAll(ogporState.getThreads());
+    }
+
+    public Map<CFANode, OGNode> getCoNodes() {
+        return coNodes;
+    }
+
+    public void removeLastBlockEdge(CFAEdge coEdge) {
+        Preconditions.checkArgument(coEdge != null, "CoEdge is null.");
+        Preconditions.checkArgument(blockEdges.get(blockEdges.size() - 1).equals(coEdge),
+                "Error when trying to remove the coEdge: " + coEdge + ".");
+        blockEdges.remove(blockEdges.size() - 1);
+        for (Iterator<SharedEvent> it = Rs.iterator(); it.hasNext();) {
+            SharedEvent r = it.next();
+            // If r is extracted form the coEdge, then we remove it.
+            if (r.getInEdge().equals(coEdge)) it.remove();
+        }
     }
 }
