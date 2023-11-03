@@ -1,6 +1,7 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
+import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
@@ -26,6 +27,7 @@ public class OGNode implements Copier<OGNode> {
     private final boolean containNonDetVar;
     private final Set<SharedEvent> Rs;
     private final Set<SharedEvent> Ws;
+    private final List<SharedEvent> events = new ArrayList<>();
 
     // s0 -- edge --> s1, edge => ogNode, ogNode.preState = s0.
     private ARGState preState;
@@ -65,6 +67,7 @@ public class OGNode implements Copier<OGNode> {
     // Indicate whether this node is in a graph.
     // Here, in a graph means this node is in the trace of that graph.
     private boolean inGraph;
+    private SharedEvent lastHandledEvent;
 
     public OGNode(final CFAEdge pBlockStartEdge,
                   final List<CFAEdge> pBlockEdges,
@@ -78,6 +81,18 @@ public class OGNode implements Copier<OGNode> {
         containNonDetVar = pContainNonDetVar;
         Rs = pRs;
         Ws = pWs;
+    }
+
+    public OGNode (final CFAEdge pBlockStartEdge,
+                   final List<CFAEdge> pBlockEdges,
+                   boolean pSimpleNode,
+                   boolean pContainNonDetVar) {
+        blockStartEdge = pBlockStartEdge;
+        blockEdges = pBlockEdges;
+        simpleNode = pSimpleNode;
+        containNonDetVar = pContainNonDetVar;
+        Rs = new HashSet<>();
+        Ws = new HashSet<>();
     }
 
     /**
@@ -116,6 +131,10 @@ public class OGNode implements Copier<OGNode> {
         nNode.inGraph = this.inGraph;
 
         // The left part will need to be copied in a deep way.
+        /* events */
+        this.events.forEach(r -> nNode.events.add(r.deepCopy(memo)));
+        nNode.lastHandledEvent = this.lastHandledEvent != null ?
+            this.lastHandledEvent.deepCopy(memo) : null;
         /* Rs & Ws. */
         this.Rs.forEach(r -> nNode.Rs.add(r.deepCopy(memo)));
         this.Ws.forEach(w -> nNode.Ws.add(w.deepCopy(memo)));
@@ -348,15 +367,110 @@ public class OGNode implements Copier<OGNode> {
         return coNodes;
     }
 
-    public void removeLastBlockEdge(CFAEdge coEdge) {
-        Preconditions.checkArgument(coEdge != null, "CoEdge is null.");
-        Preconditions.checkArgument(blockEdges.get(blockEdges.size() - 1).equals(coEdge),
-                "Error when trying to remove the coEdge: " + coEdge + ".");
-        blockEdges.remove(blockEdges.size() - 1);
-        for (Iterator<SharedEvent> it = Rs.iterator(); it.hasNext();) {
-            SharedEvent r = it.next();
-            // If r is extracted form the coEdge, then we remove it.
-            if (r.getInEdge().equals(coEdge)) it.remove();
+    public List<SharedEvent> getEvents() {
+        return events;
+    }
+
+    public void addEvent(SharedEvent event) {
+        // Because of the existence of coNode, we should insert the event into some
+        // proper location in events.
+        if (lastHandledEvent == null) {
+            events.add(event);
+        } else {
+            int i = events.indexOf(lastHandledEvent);
+            if (i < events.size() - 1) {
+                // If lastHandledEvent is not the last event, then we insert the event
+                // after it.
+                events.add(i + 1, event);
+            } else {
+                // Else we just append the event to the end of the events.
+                events.add(event);
+            }
+        }
+        lastHandledEvent = event;
+        event.setInNode(this);
+        if (event.getAType() == SharedEvent.AccessType.READ) {
+            Rs.add(event);
+        } else if (event.getAType() == SharedEvent.AccessType.WRITE) {
+            Ws.add(event);
+        } else {
+            throw new UnsupportedOperationException("Unknown access type in edge: "
+                    + event.getInEdge() + ".");
+        }
+    }
+
+    public void removeEvent(SharedEvent event) {
+        if (event == lastHandledEvent) {
+            int i = events.indexOf(event);
+            lastHandledEvent = i > 0 ? events.get(i) : null;
+        }
+        events.remove(event);
+        if (event.getAType() == SharedEvent.AccessType.READ) Rs.remove(event);
+        else if (event.getAType() == SharedEvent.AccessType.WRITE) Ws.remove(event);
+    }
+
+    public SharedEvent getLastHandledEvent() {
+        return lastHandledEvent;
+    }
+
+    public void setLastHandledEvent(SharedEvent lastHandledEvent) {
+        this.lastHandledEvent = lastHandledEvent;
+    }
+
+    /**
+     * When we are building the nodeMap and reach a branch d, whose coEdge !d has been
+     * handled before, we should update the lastHandledEvent because d may lead some
+     * new edges we haven't seen yet. We reset the lastHandledEvent as the original last
+     * event handled before coEdge.
+     * @param coEdge the coEdge that belongs to the coNode of this node.
+     */
+    public void updateLastHandledEvent(CFAEdge coEdge) {
+        if (lastHandledEvent == null) {
+            // We have set lastHandledEvent to be null in coEdge.inNode.
+            // We just get this node by deep copy, so events should contain all events
+            // in coEdge.inNode.
+            // FIXME: we assume all atomic block access global vars, which means events
+            //  must be not empty.
+            Preconditions.checkArgument(!events.isEmpty(),
+                    "Encountering the node has no shared events.");
+            lastHandledEvent = events.get(events.size() - 1);
+        }
+
+        Preconditions.checkArgument(events.contains(lastHandledEvent)
+                && blockEdges.contains(coEdge));
+        // Reset lastHandledEvent's inEdge should happen before coEdge.
+        int i = blockEdges.indexOf(coEdge),
+                j = blockEdges.indexOf(lastHandledEvent.getInEdge()),
+                k = events.indexOf(lastHandledEvent);
+        SharedEvent resetLastHandledE = lastHandledEvent;
+        while (i <= j) {
+            k = events.indexOf(resetLastHandledE) - 1;
+            if (k < 0) break;
+            resetLastHandledE = events.get(k);
+            j = blockEdges.indexOf(resetLastHandledE.getInEdge());
+        }
+        Preconditions.checkArgument(i > j,
+                "Update lastHandledEvent failed.");
+        lastHandledEvent = resetLastHandledE;
+    }
+
+    /**
+     * If the edge we are visiting has a coEdge that has been visited, then we should
+     * delete the edges after coEdge (including coEdge) because we are now in a new
+     * branch and may meet some new edges.
+     */
+    public void removeCoEdge(CFAEdge coEdge) {
+        Iterator<CFAEdge> it = blockEdges.iterator(), ite = blockEdges.iterator();
+        CFAEdge tmp = it.next();
+        while (tmp != coEdge && it.hasNext()) {
+            ite.next();
+            tmp = it.next();
+        }
+        Preconditions.checkState(tmp == coEdge,
+                "coEdge not in node: " + this);
+        while (ite.hasNext()) {
+            ite.next();
+            ite.remove();
         }
     }
 }

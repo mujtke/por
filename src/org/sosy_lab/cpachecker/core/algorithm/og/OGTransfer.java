@@ -394,8 +394,6 @@ public class OGTransfer {
         }
         graph.setLastNode(node);
         graph.setTraceLen(graph.getTraceLen() + 1);
-        // TODO: Set RE when we add a new node to the graph?
-        graph.setRE();
     }
 
     // Add rf and mo for the newly added node.

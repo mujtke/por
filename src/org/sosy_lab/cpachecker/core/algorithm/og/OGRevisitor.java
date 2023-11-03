@@ -82,10 +82,12 @@ public class OGRevisitor {
                     + (++depth));
             ObsGraph G0 = RG.remove(0);
             for (SharedEvent a; !G0.getRE().isEmpty();) {
-                // When revisiting, we handle the read events before the write ones.
+                // FIXME: When revisiting, we handle the read events before the write ones.
                 // If we are handling event e, then in the resulting graphs, it will not be
                 // handled again. Otherwise, we may get redundant results.
                 a = G0.getRE().remove(0);
+                // Update event 'a' to be the new lastHandledEvent.
+                a.getInNode().setLastHandledEvent(a);
                 if (debug) System.out.println("\tSize of G0.RE: " + G0.getRE().size());
                 if (debug) System.out.println("\tEntering for loop.");
                 switch (a.getAType()) {

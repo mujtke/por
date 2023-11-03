@@ -66,8 +66,12 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
             // For complex node, set thread loc info only when we meet the start edge.
             if (inNode.isSimpleNode() || edge.equals(inNode.getBlockStartEdge())) {
                 inNode.setInThread(chOGState.getInThread());
-//                inNode.setThreadsLoc(parOGState.getThreads());
                 inNode.setThreadsLoc(chOGState.getThreads());
+                // For coNodes of the inNode, we set their thread locations, too.
+                for (OGNode coNode : inNode.getCoNodes().values()) {
+                    coNode.setInThread(chOGState.getInThread());
+                    coNode.setThreadsLoc(chOGState.getThreads());
+                }
             }
         }
 

@@ -52,7 +52,9 @@ public class OGNodeBuilder {
             Set<CFANode> withBlock = new HashSet<>();
             Set<Integer> visitedEdges = new HashSet<>();
             Map<CFANode, Stack<Var>> locks = new HashMap<>();
-            Map<CFANode, OGNode> blockNodeMap = new HashMap<>();
+            // Because of inner branches, one cfa node may correspond to more than one
+            // OGNode.
+            Map<CFANode, Stack<OGNode>> blockNodeMap = new HashMap<>();
             waitlist.push(funcEntryNode);
 
             while (!waitlist.isEmpty()) {
@@ -72,6 +74,13 @@ public class OGNodeBuilder {
                                 && ogNodes.get(edge.hashCode()).getBlockEdges().contains(edge))) {
                             continue;
                         }
+                        // Else, we are in a block and reach an edge we have visited,
+                        // we add the edge to the current Node.
+                        // FIXME: current node is the last one in blockNodeMap.get(pre)?
+                        Preconditions.checkArgument(blockNodeMap.containsKey(pre),
+                                "Missing key for CFANode: " + pre);
+                        OGNode curNode = blockNodeMap.get(pre).peek();
+                        curNode.getBlockEdges().add(edge);
                     }
 
                     if (pre.getLeavingSummaryEdge() != null) {
@@ -86,9 +95,9 @@ public class OGNodeBuilder {
                     System.out.println(edge);
 
                     if (withBlock.contains(pre)) {
-                        OGNode preNode = blockNodeMap.get(pre);
-                        Preconditions.checkState(preNode != null,
+                        Preconditions.checkState(!blockNodeMap.get(pre).isEmpty(),
                                 "Missing OGNode for edge: " + edge);
+                        OGNode preNode = blockNodeMap.get(pre).peek();
 
                         // Handle the conditional branches inside the block.
                         if (edge instanceof AssumeEdge) {
@@ -103,9 +112,11 @@ public class OGNodeBuilder {
                                 // Before setting the coNode, we have to remove the
                                 // coEdge of the current edge, and update the
                                 // blockEdges and read events.
-                                node.removeLastBlockEdge(coEdge);
                                 node.getCoNodes().put(pre, preNode);
                                 node.getCoNodes().putAll(preNode.getCoNodes());
+                                // We should the lastHandledEvent for the node.
+                                node.updateLastHandledEvent(coEdge);
+                                node.removeCoEdge(coEdge);
                                 preNode.getCoNodes().put(pre, node);
                                 preNode = node;
                             }
@@ -123,6 +134,10 @@ public class OGNodeBuilder {
 
                         if (!hasAtomicEnd(locks, edge, sharedEvents)) {
                             withBlock.add(suc);
+                        } else {
+                            // FIXME At the end fo a block, we set lastHandledEvent to be
+                            //  null?
+                            preNode.setLastHandledEvent(null);
                         }
 
                         if (locks.containsKey(pre)) {
@@ -136,8 +151,12 @@ public class OGNodeBuilder {
                         }
 
                         preNode.getBlockEdges().add(edge);
-                        ogNodes.put(edge.hashCode(), preNode);
-                        blockNodeMap.put(suc, preNode);
+                        if (!ogNodes.containsKey(edge.hashCode())) {
+                            ogNodes.put(edge.hashCode(), preNode);
+                        }
+                        Stack<OGNode> nodeStack =
+                                blockNodeMap.computeIfAbsent(suc, cfaN -> new Stack<>());
+                        nodeStack.push(preNode);
                     } else {
                         Preconditions.checkState(!ogNodes.containsKey(edge.hashCode()),
                                 "Duplicated key for Edge: %s", edge.getRawStatement());
@@ -182,7 +201,9 @@ public class OGNodeBuilder {
                             handleEvents(sharedEvents, newBlockNode);
                         }
                         ogNodes.put(edge.hashCode(), newBlockNode);
-                        blockNodeMap.put(suc, newBlockNode);
+                        Stack<OGNode> nodeStack =
+                                blockNodeMap.computeIfAbsent(suc, cfaN -> new Stack<>());
+                        nodeStack.push(newBlockNode);
                     }
                     visitedEdges.add(edge.hashCode());
                     waitlist.add(suc);
@@ -201,7 +222,6 @@ public class OGNodeBuilder {
         sharedEvents.forEach(e -> {
             switch (e.getAType()) {
                 case READ:
-                    // for the same read var, only the first read will be added.
                     Set<SharedEvent> sameR = ogNode.getRs()
                             .stream()
                             .filter(r -> r.getVar().getName().equals(e.getVar().getName()))
@@ -210,15 +230,12 @@ public class OGNodeBuilder {
                                     .stream()
                                     .filter(w -> w.getVar().getName().equals(e.getVar().getName()))
                                     .collect(Collectors.toSet());
-                    if (!sameR.isEmpty()) {
-                        break;
-                    } else if(!sameW.isEmpty()) {
+                    if (!sameR.isEmpty() || !sameW.isEmpty()) {
+                        // For the same read var, only the first read will be added.
                         // If there is a w writes the same var with r, then r could be
                         // ignored, because it will always read the same value.
-                        break;
                     } else {
-                        ogNode.getRs().add(e);
-                        e.setInNode(ogNode);
+                        ogNode.addEvent(e);
                     }
                     break;
                 case WRITE:
@@ -228,10 +245,9 @@ public class OGNodeBuilder {
                             .filter(w -> w.getVar().getName().equals(e.getVar().getName()))
                             .collect(Collectors.toSet());
                     if (!sameW.isEmpty()) {
-                        ogNode.getWs().removeAll(sameW);
+                        sameW.forEach(ogNode::removeEvent);
                     }
-                    ogNode.getWs().add(e);
-                    e.setInNode(ogNode);
+                    ogNode.addEvent(e);
                 default:
             }
         });
