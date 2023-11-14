@@ -34,20 +34,23 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
 
     public List<SharedEvent> getRE() {
-        List<SharedEvent> events = lastNode.getEvents();
-        SharedEvent lastHandledE = lastNode.getLastHandledEvent();
-        if (lastHandledE == null) {
-            if (!RE.isEmpty()) RE.clear();
-            RE.addAll(events);
-        } else {
-            // FIXME
-            Preconditions.checkArgument(events.contains(lastHandledE));
-            int i = events.indexOf(lastHandledE);
-            i++;
-            for (; i < events.size(); i++) {
-                RE.add(events.get(i));
+        if (lastNode != null) {
+            List<SharedEvent> events = lastNode.getEvents();
+            SharedEvent lastHandledE = lastNode.getLastHandledEvent();
+            if (lastHandledE == null) {
+                if (!RE.isEmpty()) RE.clear();
+                RE.addAll(events);
+            } else {
+                // FIXME
+                Preconditions.checkArgument(events.contains(lastHandledE));
+                int i = events.indexOf(lastHandledE);
+                i++;
+                for (; i < events.size(); i++) {
+                    RE.add(events.get(i));
+                }
             }
         }
+
         return RE;
     }
 
@@ -521,5 +524,10 @@ public class ObsGraph implements Copier<ObsGraph> {
         corNode.setInThread(corNode.getInThread());
 
         return cor;
+    }
+
+    public void removeLastNode() {
+        lastNode = lastNode.getPredecessor();
+        nodes.remove(lastNode);
     }
 }

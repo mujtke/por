@@ -82,7 +82,6 @@ public class OGRevisitor {
                     + (++depth));
             ObsGraph G0 = RG.remove(0);
             for (SharedEvent a; !G0.getRE().isEmpty();) {
-                // FIXME: When revisiting, we handle the read events before the write ones.
                 // If we are handling event e, then in the resulting graphs, it will not be
                 // handled again. Otherwise, we may get redundant results.
                 a = G0.getRE().remove(0);
@@ -111,7 +110,7 @@ public class OGRevisitor {
                                     "is finished. RG adds the new graph Gr.");
                             // Gr.RE = G0.RE \ {a}.
 //                            Gr.RESubtract(ap);
-                            RG.add(Gr);
+//                            RG.add(Gr);
                             if (debug) System.out.println("\tChecking the consistency " +
                                     "of Gr.");
                             if (consistent(Gr)) {
@@ -123,9 +122,21 @@ public class OGRevisitor {
                                 if (debug) System.out.println("\tHaving gotten the " +
                                         "pivot state s" + ((ARGState) pivotState).getStateId()
                                         + ", add the Gr to the revisit result.");
+                            } else {
+                                RG.add(Gr);
+                            }
+
+                            if (!ap.getInNode().isSimpleNode() && Gr.getRE().isEmpty()) {
+                                ap.getInNode().setLastHandledEvent(null);
                             }
                         }
+
+                        if (!a.getInNode().isSimpleNode() && G0.getRE().isEmpty()) {
+                            a.getInNode().setLastHandledEvent(null);
+                        }
+
                         break;
+
                     case WRITE:
                         if (debug) System.out.println("\t'a' is W(" + a.getVar().getName()
                                 + "). Try to get the events that have the same location" +
@@ -169,9 +180,17 @@ public class OGRevisitor {
                                             + ", add the Gr to the revisit result.");
                                 }
                             }
-
+                            // fixme: If the last event in RE is write, then when we finish
+                            //  the revisit for it, set lastHandledEvent = null?
+                            if (Gw.getRE().isEmpty()) {
+                                ap.getInNode().setLastHandledEvent(null);
+                            }
+                        }
+                        if (G0.getRE().isEmpty()) {
+                            a.getInNode().setLastHandledEvent(null);
                         }
                         break;
+
                     case UNKNOWN:
                 }
             }

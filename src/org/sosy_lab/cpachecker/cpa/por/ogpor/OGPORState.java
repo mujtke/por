@@ -207,8 +207,8 @@ public class OGPORState implements AbstractState, Graphable {
             }
         }
         // Debug.
-        System.out.println(cfaEdge + "@" + (!loops.get(inThread).isEmpty() ?
-                loopDepthTable.get(loops.get(inThread).peek()) : 0));
+//        System.out.println(cfaEdge + "@" + (!loops.get(inThread).isEmpty() ?
+//                loopDepthTable.get(loops.get(inThread).peek()) : 0));
     }
 
     /**

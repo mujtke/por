@@ -1,11 +1,13 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Preconditions;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.DeepCopier;
@@ -14,6 +16,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.porf;
@@ -35,6 +38,41 @@ public class OGTransfer {
 
     public NLTComparator getNltcmp() {
         return nltcmp;
+    }
+
+
+    /**
+     * Compute whether there exists nondeterminism among the edges from parState to
+     * successors.
+     * @return List of the  assume-edge successors that belong to current thread and have
+     * the same predecessor.
+     */
+    public List<AbstractState> hasNonDet(ARGState parState,
+                                     Collection<? extends AbstractState> successors) {
+        if (successors.size() < 2)  return new ArrayList<>();
+        OGPORState parOgState = AbstractStates.extractStateByType(parState, OGPORState.class);
+        Preconditions.checkArgument(parOgState != null, "OGPORCPA required.");
+        String curThread = parOgState.getInThread();
+        Preconditions.checkArgument(curThread != null,
+                "Try to obtain current thread failed.");
+        List<AbstractState> nonDetSucs = new ArrayList<>(), tmp;
+        tmp = successors.stream()
+                .filter(s -> {
+                    OGPORState ogState = AbstractStates.extractStateByType(s,
+                            OGPORState.class);
+                    String thread = ogState.getInThread();
+                    return curThread.equals(thread);
+                })
+                .filter(s -> {
+                    CFAEdge edge = parState.getEdgeToChild((ARGState) s);
+                    return edge instanceof AssumeEdge;
+                })
+                .collect(Collectors.toList());
+
+        if (tmp.size() == 2) {
+            nonDetSucs.addAll(tmp);
+        }
+        return nonDetSucs;
     }
 
     private static class NLTComparator implements Comparator<AbstractState> {
@@ -80,18 +118,63 @@ public class OGTransfer {
                                        CFAEdge edge,
                                        ARGState parState, /* lead state */
                                        ARGState chState) {
+        // Debug.
+        boolean debug = true;
         Preconditions.checkArgument(graphWrapper.size() == 1);
         ObsGraph graph = graphWrapper.iterator().next();
         OGNode node = nodeMap.get(edge.hashCode());
-        // If the edge is in a block but not the first one of it, then we just transfer
+        // If an edge is in a block but not the first one of that, then we just transfer
         // the graph simply. Also, for the edge that doesn't access global variables.
         // For a block, the first edge decides whether we could transfer the graph.
         if (node == null /* No OGNode for the edge. */) {
+            // FIXME: Handle the possible co-Node.
+            if (graph.getLastNode() != null &&
+                    graph.getLastNode().getCoNodes().containsKey(edge.getPredecessor())) {
+                OGNode oldLastNode = graph.getLastNode();
+                List<CFAEdge> coEdges = new ArrayList<>();
+                CFAEdge coEdge, tmpEdge;
+                for (int i = 0; i < edge.getPredecessor().getNumLeavingEdges(); i++) {
+                    tmpEdge = edge.getPredecessor().getLeavingEdge(i);
+                    if (edge.equals(tmpEdge)) continue;
+                    coEdges.add(tmpEdge);
+                }
+                Preconditions.checkArgument(coEdges.size() == 1,
+                        "Incorrect co-edge number: " + coEdges.size());
+                coEdge = coEdges.iterator().next();
+                Preconditions.checkArgument(oldLastNode.getBlockEdges().contains(coEdge),
+                        "Old last node doesn't contain the edge: " + edge);
+                // Replace lastNode with the co-node. Just remove the old last node and
+                // add it's co-node?
+                Preconditions.checkArgument(oldLastNode.getSuccessors().isEmpty(),
+                        "When handle the co-nodes, current node should be" +
+                                "the last node.");
+                OGNode curNode = nodeMap.get(edge.hashCode());
+                SharedEvent coLastHandledEnt = oldLastNode.getLastHandledEvent();
+                if (coLastHandledEnt != null) {
+                    // oldLastNode is the node that we may need to revisit.
+                    int lastHEIdx = oldLastNode.getEvents().indexOf(coLastHandledEnt);
+                    curNode.setLastHandledEvent(curNode.getEvents().get(lastHEIdx));
+                } else {
+                    // oldLastNode is not the node that we need to revisit.
+                }
+                curNode.setLoopDepth(getLoopDepth(chState));
+                graph.removeLastNode();
+                // curNode's preState should be equal to coNode's.
+                addNewNode(graph, curNode, oldLastNode.getPreState(), chState);
+                graph.setNeedToRevisit(false);
+                addGraphToFull(graph, chState.getStateId());
+                graphWrapper.clear();
+                if (debug) System.out.println("Transferring from s" + parState.getStateId()
+                        + " -> s" + chState.getStateId() + ": " + edge);
+                return graph;
+            }
             // Transfer graph from parState to chSate simply. I.e., just return the graph.
             graph.setNeedToRevisit(false);
             // Debug.
             addGraphToFull(graph, chState.getStateId());
             graphWrapper.clear();
+            if (debug) System.out.println("Transferring from s" + parState.getStateId()
+                    + " -> s" + chState.getStateId() + ": " + edge);
             return graph;
         }
 
@@ -115,6 +198,8 @@ public class OGTransfer {
                 // Inside the non-simple node, just return.
                 updatePreSucState(edge, innerNode, parState, chState);
                 graphWrapper.clear();
+                if (debug) System.out.println("Transferring from s" + parState.getStateId()
+                        + " -> s" + chState.getStateId() + ": " + edge);
                 return graph;
             }
             // Not inside the non-simple node, check the conflict.
@@ -123,16 +208,27 @@ public class OGTransfer {
                 // still not be, then the transfer is not allowed.
                 return null;
             }
-            // Update the last node for the graph.
-            // This will also update the mo relations for the last node.
-            updateLastNode(graph, idx,
-                    node.isSimpleNode() ? parState : node.getPreState(),
-                    chState);
-            // Update the loop depth and thread info.
-            innerNode.setLoopDepth(loopDepth);
+            // FIXME: When co-nodes exist, we may need to continue the revisit.
+            if (innerNode.getLastHandledEvent() != null) {
+                if (innerNode.getEvents().indexOf(innerNode.getLastHandledEvent()) <
+                        innerNode.getEvents().size()) {
+                    graph.setNeedToRevisit(true);
+                }
+                // No more revisit needed for the graph. fixme: We set lastHandledEvent =
+                // null here?
+                innerNode.setLastHandledEvent(null);
+            } else {
+                // Update the last node for the graph.
+                // This will also update the mo relations for the last node.
+                updateLastNode(graph, idx,
+                        node.isSimpleNode() ? parState : node.getPreState(),
+                        chState);
+                // Update the loop depth and thread info.
+                innerNode.setLoopDepth(loopDepth);
 //            innerNode.setThreadInfo(chState);
-            // In this case, needn't revisit the graph.
-            graph.setNeedToRevisit(false);
+                // In this case, needn't revisit the graph.
+                graph.setNeedToRevisit(false);
+            }
         } else {
             if (node.isSimpleNode() || edge.equals(node.getBlockStartEdge())) {
                 // The node is not in the graph.
@@ -147,6 +243,8 @@ public class OGTransfer {
                 addGraphToFull(graph, chState.getStateId());
                 updatePreSucState(edge, node, parState, chState);
                 graphWrapper.clear();
+                if (debug) System.out.println("Transferring from s" + parState.getStateId()
+                        + " -> s" + chState.getStateId() + ": " + edge);
                 return graph;
             }
             // Add the node to the graph.
@@ -163,6 +261,7 @@ public class OGTransfer {
             addNewNode(graph, newNode,
                     node.isSimpleNode() ? parState : node.getPreState(),
                     chState);
+            graph.setNeedToRevisit(true);
 //            getDot(graph);
 //            System.out.println("");
         }
@@ -170,6 +269,8 @@ public class OGTransfer {
         // Debug.
         addGraphToFull(graph, chState.getStateId());
         graphWrapper.clear();
+        if (debug) System.out.println("Transferring from s" + parState.getStateId()
+                + " -> s" + chState.getStateId() + ": " + edge);
         return graph;
     }
 
@@ -202,19 +303,19 @@ public class OGTransfer {
     }
 
     /**
-     *
      * @param graphWrapper A container used to justify whether we should stop the
      *                     enumeration for the states in the inWait or notInWait. If
      *                     the container has no graph anymore, which means the graph has
      *                     been transferred, then there is no need to handle the left
      *                     states.
+     * @return
      */
-    public void multiStepTransfer(Vector<AbstractState> waitlist,
+    public Pair<AbstractState, ObsGraph> multiStepTransfer(Vector<AbstractState> waitlist,
                                   ARGState leadState,
                                   List<ObsGraph> graphWrapper) {
-        Preconditions.checkArgument(graphWrapper.size() == 1, "one and only one graph " +
-                "in graphWrapper is allowed.");
-        // Divide children of leadState into two parts: in the waitlist and not.
+        Preconditions.checkArgument(graphWrapper.size() == 1,
+                "Only one graph in graphWrapper is allowed.");
+        // Divide children of leadState into two parts: in the waitlist or not.
         List<ARGState> inWait = new ArrayList<>(), notInWait = new ArrayList<>();
         leadState.getChildren().forEach(s -> {
             if (waitlist.contains(s)) inWait.add(s);
@@ -225,10 +326,10 @@ public class OGTransfer {
         notInWait.sort(nltcmp);
         // Handle states in the waitlist first.
         for (ARGState chState : inWait) {
-            if (graphWrapper.isEmpty()) return;
+            if (graphWrapper.isEmpty()) return null;
             CFAEdge etp = leadState.getEdgeToChild(chState);
             assert etp != null;
-            // assert node != null: "Could not find OGNode for edge " + etp;
+            // assert node != null: "Could not find OGNode for edge " + etp;//
             ObsGraph chGraph = singleStepTransfer(graphWrapper, etp, leadState, chState);
             if (chGraph != null) {
                 // Transfer stop, we have found the target state.
@@ -238,12 +339,12 @@ public class OGTransfer {
                 // Adjust waitlist to ensure chState will be explored before its
                 // siblings that has no graphs.
                 adjustWaitlist(OGMap, waitlist, chState);
-                return;
+                return Pair.of(chState, chGraph);
             }
         }
         // Handel states not in the waitlist.
         for (ARGState chState : notInWait) {
-            if (graphWrapper.isEmpty()) return;
+            if (graphWrapper.isEmpty()) return null;
             CFAEdge etp = leadState.getEdgeToChild(chState);
             assert etp != null;
             // assert node != null: "Could not find OGNode for edge " + etp;
@@ -252,20 +353,21 @@ public class OGTransfer {
                 if (chState.getChildren().isEmpty()) {
                     // FIXME: chState may be neither in the waitlist nor have any child.
                     // In this case, should we add the chState to the waitlist again?
-                    // At the same time, when we can add states to waitlist, do we
-                    // still need to adjust the waitlist?
+                    // At the same time, when we can add states to the waitlist, do we
+                    // still need to adjust it?
                     waitlist.add(chState);
                     OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
                     List<ObsGraph> chGraphs = OGMap.get(chState.getStateId());
                     chGraphs.add(chGraph);
-                    return;
+                    return Pair.of(chState, chGraph);
                 }
                 // Else, find target state recursively.
                 List<ObsGraph> newGraphWrapper = new ArrayList<>();
                 newGraphWrapper.add(chGraph);
-                multiStepTransfer(waitlist, chState, newGraphWrapper);
+                return multiStepTransfer(waitlist, chState, newGraphWrapper);
             }
         }
+        return null;
     }
 
 
@@ -387,7 +489,7 @@ public class OGTransfer {
         node.setSucState(newSucState);
         node.setInGraph(true);
         graph.getNodes().add(node);
-        graph.setNeedToRevisit(true);
+//        graph.setNeedToRevisit(true);
         if (graph.getLastNode() != null) {
             graph.getLastNode().setTrBefore(node);
             node.setTrAfter(graph.getLastNode());
