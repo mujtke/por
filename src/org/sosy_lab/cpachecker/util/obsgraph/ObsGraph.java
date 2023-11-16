@@ -5,6 +5,7 @@ import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
+import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 
@@ -14,7 +15,6 @@ import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
-import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class ObsGraph implements Copier<ObsGraph> {
 
@@ -37,8 +37,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         if (lastNode != null) {
             List<SharedEvent> events = lastNode.getEvents();
             SharedEvent lastHandledE = lastNode.getLastHandledEvent();
+            if (!RE.isEmpty()) RE.clear();
             if (lastHandledE == null) {
-                if (!RE.isEmpty()) RE.clear();
                 RE.addAll(events);
             } else {
                 // FIXME
@@ -209,8 +209,8 @@ public class ObsGraph implements Copier<ObsGraph> {
             OGNode nodei = nodes.get(i);
             if (a.getAType() == READ) {
                 SharedEvent arf = a.getReadFrom();
-                // jump nodes after arf.inNode.
-                if (i >= nodes.indexOf(arf.getInNode())) continue;
+                // fixme: could we skip some nodes.
+                if (i == nodes.indexOf(arf.getInNode())) continue;
                 for (SharedEvent w : nodei.getWs()) {
                     if (w.accessSameVarWith(a)) {
                         result.add(w);
@@ -526,8 +526,19 @@ public class ObsGraph implements Copier<ObsGraph> {
         return cor;
     }
 
-    public void removeLastNode() {
-        lastNode = lastNode.getPredecessor();
-        nodes.remove(lastNode);
-    }
+    public void replaceCoNode(int idx,
+            OGNode node) {
+        Preconditions.checkArgument(idx < nodes.size(),
+                "Try to remove a node not in Graph.nodes.");
+        OGNode rmNode = nodes.get(idx);
+        Preconditions.checkArgument(rmNode.equals(this.lastNode),
+                "CoNode should be the last node when trying to remove it.");
+        // When remove the rmNode, update the last node to its tr-predecessor.
+        this.setLastNode(rmNode.getTrAfter());
+        this.traceLen -= 1;
+        rmNode.getEvents().forEach(this::removeAllRelations);
+        removeAllRelations(rmNode);
+        // Replace the rmNode with the node.
+        nodes.set(idx, node);
+    };
 }

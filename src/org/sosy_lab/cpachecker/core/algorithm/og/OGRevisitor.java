@@ -81,10 +81,11 @@ public class OGRevisitor {
             if (debug) System.out.println("Size of RG: " + RG.size() + ", loop depth: "
                     + (++depth));
             ObsGraph G0 = RG.remove(0);
-            for (SharedEvent a; !G0.getRE().isEmpty();) {
+            List<SharedEvent> RE = new ArrayList<>(G0.getRE());
+            for (SharedEvent a; !RE.isEmpty();) {
                 // If we are handling event e, then in the resulting graphs, it will not be
                 // handled again. Otherwise, we may get redundant results.
-                a = G0.getRE().remove(0);
+                a = RE.remove(0);
                 // Update event 'a' to be the new lastHandledEvent.
                 a.getInNode().setLastHandledEvent(a);
                 if (debug) System.out.println("\tSize of G0.RE: " + G0.getRE().size());
@@ -125,14 +126,6 @@ public class OGRevisitor {
                             } else {
                                 RG.add(Gr);
                             }
-
-                            if (!ap.getInNode().isSimpleNode() && Gr.getRE().isEmpty()) {
-                                ap.getInNode().setLastHandledEvent(null);
-                            }
-                        }
-
-                        if (!a.getInNode().isSimpleNode() && G0.getRE().isEmpty()) {
-                            a.getInNode().setLastHandledEvent(null);
                         }
 
                         break;
@@ -180,16 +173,7 @@ public class OGRevisitor {
                                             + ", add the Gr to the revisit result.");
                                 }
                             }
-                            // fixme: If the last event in RE is write, then when we finish
-                            //  the revisit for it, set lastHandledEvent = null?
-                            if (Gw.getRE().isEmpty()) {
-                                ap.getInNode().setLastHandledEvent(null);
-                            }
                         }
-                        if (G0.getRE().isEmpty()) {
-                            a.getInNode().setLastHandledEvent(null);
-                        }
-                        break;
 
                     case UNKNOWN:
                 }

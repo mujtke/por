@@ -127,47 +127,6 @@ public class OGTransfer {
         // the graph simply. Also, for the edge that doesn't access global variables.
         // For a block, the first edge decides whether we could transfer the graph.
         if (node == null /* No OGNode for the edge. */) {
-            // FIXME: Handle the possible co-Node.
-            if (graph.getLastNode() != null &&
-                    graph.getLastNode().getCoNodes().containsKey(edge.getPredecessor())) {
-                OGNode oldLastNode = graph.getLastNode();
-                List<CFAEdge> coEdges = new ArrayList<>();
-                CFAEdge coEdge, tmpEdge;
-                for (int i = 0; i < edge.getPredecessor().getNumLeavingEdges(); i++) {
-                    tmpEdge = edge.getPredecessor().getLeavingEdge(i);
-                    if (edge.equals(tmpEdge)) continue;
-                    coEdges.add(tmpEdge);
-                }
-                Preconditions.checkArgument(coEdges.size() == 1,
-                        "Incorrect co-edge number: " + coEdges.size());
-                coEdge = coEdges.iterator().next();
-                Preconditions.checkArgument(oldLastNode.getBlockEdges().contains(coEdge),
-                        "Old last node doesn't contain the edge: " + edge);
-                // Replace lastNode with the co-node. Just remove the old last node and
-                // add it's co-node?
-                Preconditions.checkArgument(oldLastNode.getSuccessors().isEmpty(),
-                        "When handle the co-nodes, current node should be" +
-                                "the last node.");
-                OGNode curNode = nodeMap.get(edge.hashCode());
-                SharedEvent coLastHandledEnt = oldLastNode.getLastHandledEvent();
-                if (coLastHandledEnt != null) {
-                    // oldLastNode is the node that we may need to revisit.
-                    int lastHEIdx = oldLastNode.getEvents().indexOf(coLastHandledEnt);
-                    curNode.setLastHandledEvent(curNode.getEvents().get(lastHEIdx));
-                } else {
-                    // oldLastNode is not the node that we need to revisit.
-                }
-                curNode.setLoopDepth(getLoopDepth(chState));
-                graph.removeLastNode();
-                // curNode's preState should be equal to coNode's.
-                addNewNode(graph, curNode, oldLastNode.getPreState(), chState);
-                graph.setNeedToRevisit(false);
-                addGraphToFull(graph, chState.getStateId());
-                graphWrapper.clear();
-                if (debug) System.out.println("Transferring from s" + parState.getStateId()
-                        + " -> s" + chState.getStateId() + ": " + edge);
-                return graph;
-            }
             // Transfer graph from parState to chSate simply. I.e., just return the graph.
             graph.setNeedToRevisit(false);
             // Debug.
@@ -182,6 +141,39 @@ public class OGTransfer {
         // FIXME: only use depth is enough?
         int loopDepth = getLoopDepth(chState),
                 idx = graph.contain(node, loopDepth, edge.getPredecessor());
+        // Handle the possible co-nodes.
+        if (edge instanceof AssumeEdge && idx < 0) {
+            OGNode coNode = node.getCoNodes().getOrDefault(edge.getPredecessor(), null);
+            int coIdx = coNode == null ?
+                    -1 : graph.contain(coNode, loopDepth, edge.getPredecessor());
+            if (coIdx >= 0) {
+                // Replace lastNode with the co-node. Just remove the old last node and
+                // add it's co-node?
+                node = node.deepCopy(new HashMap<>());
+                coNode = graph.getNodes().get(coIdx);
+                SharedEvent coLastHandledEnt = coNode.getLastHandledEvent();
+                int lastHEIdx = coNode.getEvents().indexOf(coLastHandledEnt);
+                if (coLastHandledEnt != null) {
+                    // oldLastNode is the node that we may need to revisit.
+                    node.setLastHandledEvent(node.getEvents().get(lastHEIdx));
+                    if (lastHEIdx < coNode.getEvents().size() - 1) {
+                        graph.setNeedToRevisit(true);
+                    }
+                } else {
+                    // oldLastNode is not the node that we need to revisit.
+                    graph.setNeedToRevisit(false);
+                }
+                node.setLoopDepth(getLoopDepth(chState));
+                // curNode's preState should be equal to coNode's.
+                graph.replaceCoNode(coIdx, node);
+                addNewNode(graph, node, coNode.getPreState(), chState);
+                addGraphToFull(graph, chState.getStateId());
+                graphWrapper.clear();
+                if (debug) System.out.println("Transferring from s" + parState.getStateId()
+                        + " -> s" + chState.getStateId() + ": " + edge);
+                return graph;
+            }
+        }
         // Whether there is any node in the graph still unmet.
         boolean hasNodeUnmet = hasUnmetNode(graph);
         // In the case that the graph still has some nodes unmet and doesn't contain the
@@ -209,26 +201,22 @@ public class OGTransfer {
                 return null;
             }
             // FIXME: When co-nodes exist, we may need to continue the revisit.
-            if (innerNode.getLastHandledEvent() != null) {
-                if (innerNode.getEvents().indexOf(innerNode.getLastHandledEvent()) <
-                        innerNode.getEvents().size()) {
-                    graph.setNeedToRevisit(true);
-                }
-                // No more revisit needed for the graph. fixme: We set lastHandledEvent =
-                // null here?
-                innerNode.setLastHandledEvent(null);
+            if (innerNode.getLastHandledEvent() != null
+                    && innerNode.getEvents().indexOf(innerNode.getLastHandledEvent()) <
+                    innerNode.getEvents().size()) {
+                graph.setNeedToRevisit(true);
             } else {
-                // Update the last node for the graph.
-                // This will also update the mo relations for the last node.
-                updateLastNode(graph, idx,
-                        node.isSimpleNode() ? parState : node.getPreState(),
-                        chState);
-                // Update the loop depth and thread info.
-                innerNode.setLoopDepth(loopDepth);
-//            innerNode.setThreadInfo(chState);
-                // In this case, needn't revisit the graph.
+                // Otherwise, we needn't revisit the graph.
                 graph.setNeedToRevisit(false);
             }
+            // Update the last node for the graph.
+            // This will also update the mo relations for the last node.
+            updateLastNode(graph, idx,
+                    node.isSimpleNode() ? parState : node.getPreState(),
+                    chState);
+            // Update the loop depth and thread info.
+            innerNode.setLoopDepth(loopDepth);
+//            innerNode.setThreadInfo(chState);
         } else {
             if (node.isSimpleNode() || edge.equals(node.getBlockStartEdge())) {
                 // The node is not in the graph.
@@ -236,6 +224,8 @@ public class OGTransfer {
                     // Some other nodes should happen before the node.
                     return null;
                 }
+                // fixme: When we meet a node, set its lastHandledEvent = null?
+                node.setLastHandledEvent(null);
             }
             if (!node.isSimpleNode() && !edge.equals(node.getLastBlockEdge())) {
                 graph.setNeedToRevisit(false);
@@ -375,7 +365,7 @@ public class OGTransfer {
      * Detect whether a node conflicts with a graph. No conflict means we could add the
      * node to the trace. A trace corresponds to an actual execution sequence of the
      * nodes in the graph, so, one graph may have more than one trace.
-     * @return true, if conflict.
+     * @return true, if conflicted.
      */
     // FIXME: throw away the write-before order.
     private boolean isConflict(ObsGraph graph, OGNode node, int nodeInGraph) {
@@ -487,8 +477,10 @@ public class OGTransfer {
         // 2. Add the new node to the graph.
         node.setPreState(newPreState);
         node.setSucState(newSucState);
+        if (!graph.getNodes().contains(node)) {
+            graph.getNodes().add(node);
+        }
         node.setInGraph(true);
-        graph.getNodes().add(node);
 //        graph.setNeedToRevisit(true);
         if (graph.getLastNode() != null) {
             graph.getLastNode().setTrBefore(node);

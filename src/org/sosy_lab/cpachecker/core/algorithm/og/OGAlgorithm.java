@@ -258,6 +258,7 @@ public class OGAlgorithm implements Algorithm {
             }
 
             // Perform transfer for all graphs in 'revisitResult'.
+            List<Pair<AbstractState, ObsGraph>> toAdd = new ArrayList<>();
             for (Iterator<Pair<AbstractState, ObsGraph>> it = revisitResult.iterator();
                  it.hasNext(); ) {
                 Pair<AbstractState, ObsGraph> aoPair = it.next();
@@ -273,10 +274,14 @@ public class OGAlgorithm implements Algorithm {
                 if (transferResult != null) {
                     graph = transferResult.getSecondNotNull();
                     if (graph.isNeedToRevisit()) {
-                        revisitResult.add(transferResult);
+//                        revisitResult.add(transferResult);
+                        toAdd.add(transferResult);
                     }
                 }
+//                it.remove();
             }
+            revisitResult.clear();
+            revisitResult.addAll(toAdd);
         } while (!revisitResult.isEmpty());
 
         return false;
