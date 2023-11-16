@@ -81,11 +81,13 @@ public class OGRevisitor {
             if (debug) System.out.println("Size of RG: " + RG.size() + ", loop depth: "
                     + (++depth));
             ObsGraph G0 = RG.remove(0);
-            for (SharedEvent a; !G0.getRE().isEmpty();) {
-                // When revisiting, we handle the read events before the write ones.
+            List<SharedEvent> RE = new ArrayList<>(G0.getRE());
+            for (SharedEvent a; !RE.isEmpty();) {
                 // If we are handling event e, then in the resulting graphs, it will not be
                 // handled again. Otherwise, we may get redundant results.
-                a = G0.getRE().remove(0);
+                a = RE.remove(0);
+                // Update event 'a' to be the new lastHandledEvent.
+                a.getInNode().setLastHandledEvent(a);
                 if (debug) System.out.println("\tSize of G0.RE: " + G0.getRE().size());
                 if (debug) System.out.println("\tEntering for loop.");
                 switch (a.getAType()) {
@@ -109,7 +111,7 @@ public class OGRevisitor {
                                     "is finished. RG adds the new graph Gr.");
                             // Gr.RE = G0.RE \ {a}.
 //                            Gr.RESubtract(ap);
-                            RG.add(Gr);
+//                            RG.add(Gr);
                             if (debug) System.out.println("\tChecking the consistency " +
                                     "of Gr.");
                             if (consistent(Gr)) {
@@ -121,9 +123,13 @@ public class OGRevisitor {
                                 if (debug) System.out.println("\tHaving gotten the " +
                                         "pivot state s" + ((ARGState) pivotState).getStateId()
                                         + ", add the Gr to the revisit result.");
+                            } else {
+                                RG.add(Gr);
                             }
                         }
+
                         break;
+
                     case WRITE:
                         if (debug) System.out.println("\t'a' is W(" + a.getVar().getName()
                                 + "). Try to get the events that have the same location" +
@@ -167,9 +173,8 @@ public class OGRevisitor {
                                             + ", add the Gr to the revisit result.");
                                 }
                             }
-
                         }
-                        break;
+
                     case UNKNOWN:
                 }
             }
@@ -368,44 +373,30 @@ public class OGRevisitor {
                     e2 = CSHandler.handleAssumeStatement(G, e2, e1);
                     if (e2.getInNode() != e2n) {
                         e2n = e2.getInNode();
-//                        // e2n may change. If so, we should set the read-from
-//                        // relations for the left read events in the e2n.
-//                        OGNode ne2n = e2.getInNode();
-//                        for (SharedEvent or : ne2n.getRs()) {
-//                            if (or.accessSameVarWith(e2)) continue;
-//                            for (SharedEvent r0 : e2n.getRs()) {
-//                                if (r0.accessSameVarWith(or)) {
-//                                    // We set 'or' read from the value that r0 reads.
-//                                    SharedEvent w0 = r0.getReadFrom();
-//                                    Preconditions.checkArgument(w0 != null,
-//                                            "r0 should read from some write.");
-//                                    OGNode w0n = w0.getInNode();
-//                                    or.setReadFrom(w0);
-//                                    if (!w0n.getReadBy().contains(ne2n))
-//                                        w0n.getReadBy().add(ne2n);
-//                                    if (!ne2n.getReadFrom().contains(w0n))
-//                                        ne2n.getReadFrom().add(w0n);
-//                                    w0.getReadBy().remove(r0);
-//                                    w0n.getReadBy().remove(e2n);
-//                                }
-//                            }
-//                        }
-//                        e2n = ne2n;
                     }
                 } catch (UnsupportedCodeException e) {
                     e.printStackTrace();
                 }
 
                 // e1 <_rf e2, e2 reads from e1.
-                SharedEvent e2rf = e2.getReadFrom();
-                if (e2rf != null) {
-                    OGNode e2rfn = e2rf.getInNode();
-                    e2rf.getReadBy().remove(e2);
-                    e2n.getReadFrom().remove(e2rfn);
-                    e2rfn.getReadBy().remove(e2n);
-                }
                 Preconditions.checkArgument(e2.getReadFrom() != e1);
+                SharedEvent e2rf = e2.getReadFrom();
                 e2.setReadFrom(e1);
+                if (e2rf != null) {
+                    e2rf.getReadBy().remove(e2);
+                    OGNode e2rfn = e2rf.getInNode();
+                    // Remove e2rfn from e2n's read-from set if e2rf is the last write
+                    // read by event in e2n.
+                    List<OGNode> re2rfn =
+                            e2n.getRs().stream().map(SharedEvent::getReadFrom)
+                                    .filter(Objects::nonNull)
+                                    .map(SharedEvent::getInNode)
+                                    .filter(n0 -> n0 == e2rfn).collect(Collectors.toList());
+                    if (re2rfn.isEmpty()) {
+                        e2n.getReadFrom().remove(e2rfn);
+                        e2rfn.getReadBy().remove(e2n);
+                    }
+                }
                 e1.getReadBy().add(e2);
                 if (!e2n.getReadFrom().contains(e1n)) e2n.getReadFrom().add(e1n);
                 if (!e1n.getReadBy().contains(e2n)) e1n.getReadBy().add(e2n);

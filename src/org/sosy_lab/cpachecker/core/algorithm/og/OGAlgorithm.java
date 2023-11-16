@@ -135,7 +135,7 @@ public class OGAlgorithm implements Algorithm {
 
             // debug.
             boolean debug = false;
-            debug = true;
+//            debug = true;
             if (debug) {
                 ARGState pars = (ARGState) state;
                 for (AbstractState ch : successors) {
@@ -143,9 +143,9 @@ public class OGAlgorithm implements Algorithm {
                     CFAEdge chtp = pars.getEdgeToChild(chs);
                     int parId = pars.getStateId(), chId = chs.getStateId();
                     // Debug.
-//                    System.out.println("s" + parId
-//                            + " -> s" + chId
-//                            + " [label=\"" + chtp + "\"]");
+                    System.out.println("s" + parId
+                            + " -> s" + chId
+                            + " [label=\"" + chtp + "\"]");
                 }
             }
 
@@ -156,6 +156,8 @@ public class OGAlgorithm implements Algorithm {
         List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),
                 noGraphs = new ArrayList<>();
         ARGState parState = (ARGState) state, chState;
+
+        List<AbstractState> nonDetSucs = transfer.hasNonDet(parState, successors);
 
         List<? extends AbstractState> nSuccessors = reorder(parState, successors);
 
@@ -204,7 +206,18 @@ public class OGAlgorithm implements Algorithm {
                     OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
                     List<ObsGraph> chGraphs = OGMap.get(chState.getStateId());
                     chGraphs.add(chGraph);
-                    toRemove.add(parGraph);
+                    // FIXME: in this case, parGraph doesn't contain edge yet?
+                    // So if nonDetSucs contains suc, we should not add parGraph to the
+                    // toRemove, because we also need transfer parGraph to the other suc
+                    // in the nonDetSucs.
+                    if (nonDetSucs.contains(suc)) {
+                        // Because of the nonDeterminism, we don't remove the parGraph when
+                        // we meet the suc in nonDetsucs the first time. But when we meet the
+                        // other suc next, we should remove the parGraph. So when we meet
+                        // the first time, we clear the nonDetSucs.
+                    } else {
+                        toRemove.add(parGraph);
+                    }
                 }
             }
             // Remove transferred graphs.
@@ -234,28 +247,42 @@ public class OGAlgorithm implements Algorithm {
 
         // Perform revisit for states with graphs.
         List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
-        for (Iterator<Pair<AbstractState, Precision>> it = withGraphs.iterator();
-             it.hasNext(); ) {
-            Pair<AbstractState, Precision> apPair = it.next();
-            ARGState ch = (ARGState) apPair.getFirstNotNull();
-            List<ObsGraph> chGraphs = OGMap.get(ch.getStateId());
-            assert chGraphs != null;
-            revisitor.apply(chGraphs, revisitResult);
-        }
+        do {
+            for (Iterator<Pair<AbstractState, Precision>> it = withGraphs.iterator();
+                 it.hasNext(); ) {
+                Pair<AbstractState, Precision> apPair = it.next();
+                ARGState ch = (ARGState) apPair.getFirstNotNull();
+                List<ObsGraph> chGraphs = OGMap.get(ch.getStateId());
+                assert chGraphs != null;
+                revisitor.apply(chGraphs, revisitResult);
+            }
 
-        // Perform transfer for all graphs in 'revisitResult'.
-        for (Iterator<Pair<AbstractState, ObsGraph>> it = revisitResult.iterator();
-             it.hasNext(); ) {
-            Pair<AbstractState, ObsGraph> aoPair = it.next();
-            ARGState leadState = (ARGState) aoPair.getFirstNotNull();
-            ObsGraph graph = aoPair.getSecondNotNull();
+            // Perform transfer for all graphs in 'revisitResult'.
+            List<Pair<AbstractState, ObsGraph>> toAdd = new ArrayList<>();
+            for (Iterator<Pair<AbstractState, ObsGraph>> it = revisitResult.iterator();
+                 it.hasNext(); ) {
+                Pair<AbstractState, ObsGraph> aoPair = it.next();
+                ARGState leadState = (ARGState) aoPair.getFirstNotNull();
+                ObsGraph graph = aoPair.getSecondNotNull();
 //            getAllDot(graph);
 //            System.out.printf("");
 //             Debug.
 //            transfer.addGraphToFull(graph, leadState.getStateId());
-            transfer.multiStepTransfer(waitlist, leadState,
-                    new ArrayList<>(List.of(graph)));
-        }
+                Pair<AbstractState, ObsGraph> transferResult =
+                        transfer.multiStepTransfer(waitlist, leadState,
+                        new ArrayList<>(List.of(graph)));
+                if (transferResult != null) {
+                    graph = transferResult.getSecondNotNull();
+                    if (graph.isNeedToRevisit()) {
+//                        revisitResult.add(transferResult);
+                        toAdd.add(transferResult);
+                    }
+                }
+//                it.remove();
+            }
+            revisitResult.clear();
+            revisitResult.addAll(toAdd);
+        } while (!revisitResult.isEmpty());
 
         return false;
     }

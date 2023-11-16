@@ -259,8 +259,8 @@ public class DebugAndTest {
             Process p = Runtime.getRuntime().exec(new String[] {
                     "/bin/bash",
                     "-c",
-                    "/usr/bin/cp " + fullDotFile + " /home/mujeke/mmm/js/ogs-visual" +
-                            "/model/; /usr/bin/cp " + argFile + " /home/mujeke/mmm/js" +
+                    "/usr/bin/cp " + fullDotFile + " $HOME/mmm/js/ogs-visual" +
+                            "/model/; /usr/bin/cp " + argFile + " $HOME/mmm/js" +
                             "/ogs-visual/model/"
             });
             // Copy fullDotFile to destination dir.

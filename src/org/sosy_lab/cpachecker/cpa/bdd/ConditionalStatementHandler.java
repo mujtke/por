@@ -59,7 +59,7 @@ public class ConditionalStatementHandler {
 
     /**
      * Before setting read-from relation, we should handle the case that r locates in
-     * an assume statement (e.g., x > 1). When setting r to read from w makes
+     * an assume statement (e.g., x > 1). When setting r to read from w that makes
      * the condition not hold, i.e., (x > 1) not hold, we replace r with the event
      * co-r ('co' means conjugate) that comes from the assume statement [!(x > 1)].
      * @return r if r is not in an assume edge or making r read from w doesn't affect
@@ -71,8 +71,9 @@ public class ConditionalStatementHandler {
             SharedEvent w) throws UnsupportedCodeException {
 
         OGNode rNode = r.getInNode(), wNode = w.getInNode();
-        // FIXME: When G doesn't contain rNode, can we change the assume node?
         if (G.contain(rNode, rNode.getLoopDepth()) < 0) {
+            // We are going to set read-from relation for the newly added node, so we
+            // don't have to change the node.
             return r;
         }
         CFAEdge rEdge = rNode.getBlockStartEdge(), wEdge = w.getInEdge();
