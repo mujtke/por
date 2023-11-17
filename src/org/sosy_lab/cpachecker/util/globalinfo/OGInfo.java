@@ -44,6 +44,10 @@ public class OGInfo {
             description = "this option is enabled iff we use OGPORCPA.")
     private boolean useOG = false;
 
+    @Option(secure = true,
+            description = "this option is enabled when we use nodeMap.")
+    private boolean useNodeMap = false;
+
     public OGInfo(final Configuration pConfig,
                   final ConfigurableProgramAnalysis pCpa,
                   final CFA pCfa,
@@ -52,8 +56,10 @@ public class OGInfo {
         pConfig.inject(this);
         if (useOG) {
             OGMap = new HashMap<>();
-            nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
-            nodeMap = nodeBuilder.build();
+            if (useNodeMap) {
+                nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
+                nodeMap = nodeBuilder.build();
+            }
             fullOGMap = new HashMap<>();
             transfer = new OGTransfer(OGMap, nodeMap);
             revisitor = new OGRevisitor(OGMap, nodeMap, pConfig, pCfa, pLogger);

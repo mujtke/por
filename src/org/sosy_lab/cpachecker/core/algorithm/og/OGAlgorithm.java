@@ -206,7 +206,7 @@ public class OGAlgorithm implements Algorithm {
                     OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
                     List<ObsGraph> chGraphs = OGMap.get(chState.getStateId());
                     chGraphs.add(chGraph);
-                    // FIXME: in this case, parGraph doesn't contain edge yet?
+                    // FIXME: in this case, parGraph doesn't contain the edge yet?
                     // So if nonDetSucs contains suc, we should not add parGraph to the
                     // toRemove, because we also need transfer parGraph to the other suc
                     // in the nonDetSucs.

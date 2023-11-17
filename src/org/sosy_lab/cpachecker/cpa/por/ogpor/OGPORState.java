@@ -2,21 +2,15 @@ package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
 
 import com.google.common.base.Preconditions;
-import org.junit.Assume;
-import org.sosy_lab.common.annotations.ReturnValuesAreNonnullByDefault;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
-import org.sosy_lab.cpachecker.cfa.model.BlankEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
 import org.sosy_lab.cpachecker.util.LoopStructure;
-import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
+import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 
-import javax.annotation.Nonnull;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -31,18 +25,43 @@ public class OGPORState implements AbstractState, Graphable {
     // its value in strengthen process.
     private String inThread;
     private final Map<String, String> threads;
-    // For a block, we record its preState when we meet its start edge. By doing so, we
-    // could avoid to backtrack along the path.
-    private AbstractState preservedState;
 
     // The variable is used to record all loops that all alive threads in.
     // Structure: thread -> Stack<CFANode>
-    // Use stack to record all loop starts we have met because the innter loops should
+    // Use stack to record all loop starts we have met because the inner loops should
     // always terminate before the outer ones.
     private final Map<String, Stack<CFANode>> loops = new HashMap<>();
     // The variable is used to record the depth of each loop we have met.
     private final Map<CFANode, Integer> loopDepthTable = new HashMap<>();
     private static final Map<CFANode, Set<CFANode>> loopExitNodes = new HashMap<>();
+
+    private final Map<String, OGNode> nodeTable = new HashMap<>();
+
+    private final Map<String, Stack<String>> locks = new HashMap<>();
+
+    public void setNodeTable(Map<String, OGNode> pNodeTable) {
+        nodeTable.putAll(pNodeTable);
+    }
+
+    public void setLocks(Map<String, Stack<String>> pLocks) {
+        locks.putAll(pLocks);
+    }
+
+    public Map<String, OGNode> getNodeTable() {
+        return nodeTable;
+    }
+
+    public Map<String, Stack<String>> getLocks() {
+        return locks;
+    }
+
+    public OGNode getNode(String thrd) {
+        return nodeTable.get(thrd);
+    }
+
+    public void updateNode(String thrd, OGNode node) {
+        nodeTable.put(thrd, node);
+    }
 
     @Override
     public int hashCode() {
@@ -131,14 +150,6 @@ public class OGPORState implements AbstractState, Graphable {
 
     public void setInThread(String thread) {
         this.inThread = thread;
-    }
-
-    public AbstractState getPreservedState() {
-        return preservedState;
-    }
-
-    public void setPreservedState(AbstractState preservedState) {
-        this.preservedState = preservedState;
     }
 
     public Map<String, Stack<CFANode>> getLoops() {
