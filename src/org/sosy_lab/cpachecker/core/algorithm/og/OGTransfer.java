@@ -122,10 +122,13 @@ public class OGTransfer {
         boolean debug = true;
         Preconditions.checkArgument(graphWrapper.size() == 1);
         ObsGraph graph = graphWrapper.iterator().next();
-        OGNode node = nodeMap.get(edge.hashCode());
+        OGPORState chOgState = AbstractStates.
+                extractStateByType(chState, OGPORState.class);
+        assert chOgState != null;
+        OGNode node = chOgState.getNode(chOgState.getInThread());
         // If an edge is in a block but not the first one of that, then we just transfer
         // the graph simply. Also, for the edge that doesn't access global variables.
-        // For a block, the first edge decides whether we could transfer the graph.
+        // For a block, the first edge determines whether we could transfer the graph.
         if (node == null /* No OGNode for the edge. */) {
             // Transfer graph from parState to chSate simply. I.e., just return the graph.
             graph.setNeedToRevisit(false);
@@ -140,7 +143,8 @@ public class OGTransfer {
         // Whether the graph contains the node.
         // FIXME: only use depth is enough?
         int loopDepth = getLoopDepth(chState),
-                idx = graph.contain(node, loopDepth, edge.getPredecessor());
+                idx = graph.contain(node, loopDepth);
+                // idx = graph.contain(node, loopDepth, edge.getPredecessor());
         // Handle the possible co-nodes.
         if (edge instanceof AssumeEdge && idx < 0) {
             OGNode coNode = node.getCoNodes().getOrDefault(edge.getPredecessor(), null);

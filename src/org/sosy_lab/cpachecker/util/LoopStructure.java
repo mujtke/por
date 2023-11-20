@@ -462,7 +462,7 @@ public final class LoopStructure implements Serializable {
 
   /**
    * Build loop-structure information for a CFA.
-   * Do not call this method outside of the frontend,
+   * Do not call this method outside the frontend,
    * use {@link org.sosy_lab.cpachecker.cfa.CFA#getLoopStructure()} instead.
    * @throws ParserException If the structure of the CFA is too complex for determining loops.
    */
