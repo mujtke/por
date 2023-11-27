@@ -16,6 +16,8 @@ a.out
 *.dot
 *.pdf 
 *.txt
+*.sh
+log
 
 /.checkstyle
 # /.classpath

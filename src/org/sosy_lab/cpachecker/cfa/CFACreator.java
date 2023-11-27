@@ -73,6 +73,7 @@ import org.sosy_lab.cpachecker.cfa.postprocessing.function.ThreadCreateTransform
 import org.sosy_lab.cpachecker.cfa.postprocessing.global.CFACloner;
 import org.sosy_lab.cpachecker.cfa.postprocessing.global.FunctionCallUnwinder;
 import org.sosy_lab.cpachecker.cfa.postprocessing.global.LabelAdder;
+import org.sosy_lab.cpachecker.cfa.postprocessing.global.LoopUnwinder;
 import org.sosy_lab.cpachecker.cfa.types.MachineModel;
 import org.sosy_lab.cpachecker.cfa.types.c.CComplexType.ComplexTypeKind;
 import org.sosy_lab.cpachecker.cfa.types.c.CDefaults;
@@ -157,6 +158,10 @@ public class CFACreator {
   @Option(secure=true, name="analysis.useLoopStructure",
       description="add loop-structure information to CFA.")
   private boolean useLoopStructure = true;
+
+  @Option(secure=true, name="analysis.unwindLoop",
+  description="unwind loop to the given max depth.")
+  private boolean unwindLoop = false;
 
   @Option(secure=true, name="cfa.export",
       description="export CFA as .dot file")
@@ -493,6 +498,10 @@ public class CFACreator {
     // (needs post-order information)
     if (useLoopStructure) {
       addLoopStructure(cfa);
+      if (unwindLoop) {
+        LoopUnwinder loopUnwinder = new LoopUnwinder(cfa, config);
+        loopUnwinder.unwindLoop();
+      }
     }
 
     // instrument the cfa, if any configuration regarding that is set (needs loop structure)

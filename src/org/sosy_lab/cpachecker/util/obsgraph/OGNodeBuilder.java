@@ -45,6 +45,12 @@ public class OGNodeBuilder {
         Map<Integer, OGNode> ogNodes = new HashMap<>();
         Set<CFANode> visitedFuncs = new HashSet<>();
 
+        // Debug.
+        boolean debug = true;
+        if (debug) {
+            return test();
+        }
+
         for (CFANode funcEntryNode : cfa.getAllFunctionHeads()) {
 
             if (visitedFuncs.contains(funcEntryNode)) continue;
@@ -58,10 +64,12 @@ public class OGNodeBuilder {
             waitlist.push(funcEntryNode);
 
             while (!waitlist.isEmpty()) {
+
                 CFANode pre = waitlist.pop();
 
                 if (pre instanceof FunctionExitNode) continue;
 
+                List<CFANode> toAdd = new ArrayList<>();
                 for (int i = 0; i < pre.getNumLeavingEdges(); i++) {
                     CFAEdge edge = pre.getLeavingEdge(i);
                     CFANode suc = edge.getSuccessor();
@@ -105,7 +113,8 @@ public class OGNodeBuilder {
                                     "The number of conditional branches != 2.");
                             CFAEdge coEdge = edge.equals(pre.getLeavingEdge(0)) ?
                                     pre.getLeavingEdge(1) : pre.getLeavingEdge(0);
-                            if (ogNodes.containsKey(coEdge.hashCode())) {
+                            if (ogNodes.containsKey(coEdge.hashCode())
+                                    && !ogNodes.containsKey(edge.hashCode())) {
                                 // If coEdge has been processed, then we should create a
                                 // new node (coNode) for the current edge.
                                 OGNode node = preNode.deepCopy(new HashMap<>());
@@ -132,14 +141,6 @@ public class OGNodeBuilder {
                             // FIXME: Inside a block, we don's start a new block.
                         }
 
-                        if (!hasAtomicEnd(locks, edge, sharedEvents)) {
-                            withBlock.add(suc);
-                        } else {
-                            // FIXME At the end fo a block, we set lastHandledEvent to be
-                            //  null?
-                            preNode.setLastHandledEvent(null);
-                        }
-
                         if (locks.containsKey(pre)) {
                             if (locks.containsKey(suc)) {
                                 locks.get(suc).clear();
@@ -154,9 +155,21 @@ public class OGNodeBuilder {
                         if (!ogNodes.containsKey(edge.hashCode())) {
                             ogNodes.put(edge.hashCode(), preNode);
                         }
+
                         Stack<OGNode> nodeStack =
                                 blockNodeMap.computeIfAbsent(suc, cfaN -> new Stack<>());
                         nodeStack.push(preNode);
+
+                        if (!hasAtomicEnd(locks, edge, sharedEvents)) {
+                            withBlock.add(suc);
+                        } else {
+                            // FIXME: At the end fo a block, pop the current node?
+                            //  set the last-handled event to null?
+                            //  continue to handle next edge?
+//                            blockNodeMap.get(pre).pop();
+                            blockNodeMap.get(pre).remove(preNode);
+                            preNode.setLastHandledEvent(null);
+                        }
                     } else {
                         Preconditions.checkState(!ogNodes.containsKey(edge.hashCode()),
                                 "Duplicated key for Edge: %s", edge.getRawStatement());
@@ -195,8 +208,10 @@ public class OGNodeBuilder {
                             }
                             if (sharedEvents.isEmpty()) {
                                 visitedEdges.add(edge.hashCode());
-                                waitlist.add(suc);
-                                continue;
+//                                waitlist.add(suc);
+                                toAdd.add(suc);
+//                                continue;
+                                break;
                             }
                             handleEvents(sharedEvents, newBlockNode);
                         }
@@ -206,12 +221,17 @@ public class OGNodeBuilder {
                         nodeStack.push(newBlockNode);
                     }
                     visitedEdges.add(edge.hashCode());
-                    waitlist.add(suc);
+//                    waitlist.add(suc);
+                    toAdd.add(suc);
                 }
+                Collections.reverse(toAdd);
+                waitlist.addAll(toAdd);
             }
         }
 
-        // export.
+        // Check the ogNodes.
+        check(ogNodes);
+        // Export.
         export(ogNodes);
 
         return ogNodes;
@@ -365,5 +385,221 @@ public class OGNodeBuilder {
         } catch(IOException e){
             e.printStackTrace();
         }
+    }
+
+    private void check(Map<Integer, OGNode> ogNodes) {
+        // Check the atomic beginning and ending.
+        for (OGNode node : ogNodes.values()) {
+            if (!node.isSimpleNode()) {
+                List<CFAEdge> edges = node.getBlockEdges();
+                boolean cond = edges.size() > 2;
+                Preconditions.checkState(cond, "At least 3 edges but "
+                                + edges.size() + " provided.");
+                cond = edges.get(0).getRawStatement().contains(THREAD_MUTEX_LOCK)
+                        || edges.get(0).getRawStatement().contains(VERIFIER_ATOMIC_BEGIN);
+                Preconditions.checkState(cond,
+                        "Missing atomic beginning: \n" + getString(edges));
+                cond = edges.get(edges.size() - 1).getRawStatement().contains(THREAD_MUTEX_UNLOCK)
+                        || edges.get(edges.size() - 1).getRawStatement().contains(VERIFIER_ATOMIC_END);
+                Preconditions.checkState(cond,
+                        "Missing atomic ending: \n" + getString(edges));
+            }
+        }
+    }
+
+    private String getString(List<CFAEdge> edges) {
+        StringBuilder stringBuilder = new StringBuilder();
+        edges.forEach(e -> stringBuilder.append(e).append("\n"));
+        return stringBuilder.toString();
+    }
+
+    // Debug.
+    Map<Integer, OGNode> test() {
+        Map<Integer, OGNode> ogNodes = new HashMap<>();
+        Set<CFANode> visitedFuncs = new HashSet<>();
+        for (CFANode funcEntryNode : cfa.getAllFunctionHeads()) {
+
+            if (visitedFuncs.contains(funcEntryNode)) continue;
+            Stack<CFANode> waitlist = new Stack<>();
+            Set<CFANode> withBlock = new HashSet<>();
+            Set<Integer> visitedEdges = new HashSet<>();
+            Map<CFANode, Stack<Var>> locks = new HashMap<>();
+            // Because of inner branches, one cfa node may correspond to more than one
+            // OGNode.
+            Map<CFANode, Stack<OGNode>> blockNodeMap = new HashMap<>();
+            Map<CFANode, OGNode> cfaNodeMap = new HashMap<>();
+            waitlist.push(funcEntryNode);
+
+            while (!waitlist.isEmpty()) {
+
+                CFANode pre = waitlist.pop();
+
+                if (pre instanceof FunctionExitNode) continue;
+
+                List<CFANode> toAdd = new ArrayList<>();
+                for (int i = 0; i < pre.getNumLeavingEdges(); i++) {
+                    CFAEdge edge = pre.getLeavingEdge(i);
+                    CFANode suc = edge.getSuccessor();
+
+                    if (visitedEdges.contains(edge.hashCode())) {
+                        // FIXME: The edge may be visited by other coNodes, if so, we
+                        //  should not skip it for the current node.
+                        if (!(withBlock.contains(pre)
+                                && ogNodes.containsKey(edge.hashCode())
+                                && ogNodes.get(edge.hashCode()).getBlockEdges().contains(edge))) {
+                            continue;
+                        }
+                        // Else, we are in a block and reach an edge we have visited,
+                        // we add the edge to the current Node.
+                        // FIXME: current node is the last one in blockNodeMap.get(pre)?
+                        Preconditions.checkArgument(blockNodeMap.containsKey(pre),
+                                "Missing key for CFANode: " + pre);
+//                        OGNode curNode = blockNodeMap.get(pre).peek();
+                        OGNode curNode = cfaNodeMap.get(pre);
+                        curNode.getBlockEdges().add(edge);
+                    }
+
+                    if (pre.getLeavingSummaryEdge() != null) {
+                        // edge is a function call. Don't enter the inside of the func,
+                        // use summaryEdge as a substitute, and suc should also change.
+//                        edge = pre.getLeavingSummaryEdge();
+//                        suc = edge.getSuccessor();
+                        suc = pre.getLeavingSummaryEdge().getSuccessor();
+                    }
+
+                    // debug
+//                    System.out.println(edge);
+
+                    if (withBlock.contains(pre)) {
+                        Preconditions.checkState(!blockNodeMap.get(pre).isEmpty(),
+                                "Missing OGNode for edge: " + edge);
+//                        OGNode preNode = blockNodeMap.get(pre).peek();
+                        OGNode preNode = cfaNodeMap.get(pre);
+
+                        // Handle the conditional branches inside the block.
+                        if (edge instanceof AssumeEdge) {
+                            Preconditions.checkArgument(pre.getNumLeavingEdges() == 2,
+                                    "The number of conditional branches != 2.");
+                            CFAEdge coEdge = edge.equals(pre.getLeavingEdge(0)) ?
+                                    pre.getLeavingEdge(1) : pre.getLeavingEdge(0);
+                            if (ogNodes.containsKey(coEdge.hashCode())
+                                    && !ogNodes.containsKey(edge.hashCode())) {
+                                // If coEdge has been processed, then we should create a
+                                // new node (coNode) for the current edge.
+                                OGNode node = preNode.deepCopy(new HashMap<>());
+                                // Before setting the coNode, we have to remove the
+                                // coEdge of the current edge, and update the
+                                // blockEdges and read events.
+                                node.getCoNodes().put(pre, preNode);
+                                node.getCoNodes().putAll(preNode.getCoNodes());
+                                // We should the lastHandledEvent for the node.
+                                node.updateLastHandledEvent(coEdge);
+                                node.removeCoEdge(coEdge);
+                                preNode.getCoNodes().put(pre, node);
+                                preNode = node;
+                            }
+                        }
+
+                        List<SharedEvent> sharedEvents =
+                                extractor.extractSharedVarsInfo(edge);
+                        if (sharedEvents != null && !sharedEvents.isEmpty()) {
+                            handleEvents(sharedEvents, preNode);
+                        }
+
+                        if (hasAtomicBegin(locks, edge, sharedEvents)) {
+                            // FIXME: Inside a block, we don's start a new block.
+                        }
+
+                        if (locks.containsKey(pre)) {
+                            if (locks.containsKey(suc)) {
+                                locks.get(suc).clear();
+                                locks.get(suc).addAll(locks.get(pre));
+                            } else {
+                                locks.put(suc, new Stack<>());
+                                locks.get(suc).addAll(locks.get(pre));
+                            }
+                        }
+
+                        preNode.getBlockEdges().add(edge);
+                        if (!ogNodes.containsKey(edge.hashCode())) {
+                            ogNodes.put(edge.hashCode(), preNode);
+                        }
+
+                        Stack<OGNode> nodeStack =
+                                blockNodeMap.computeIfAbsent(suc, cfaN -> new Stack<>());
+                        nodeStack.push(preNode);
+                        cfaNodeMap.put(suc, preNode);
+
+                        if (!hasAtomicEnd(locks, edge, sharedEvents)) {
+                            withBlock.add(suc);
+                        } else {
+                            // FIXME: At the end fo a block, pop the current node?
+                            //  set the last-handled event to null?
+                            //  continue to handle next edge?
+//                            blockNodeMap.get(pre).pop();
+//                            blockNodeMap.get(pre).remove(preNode);
+                            preNode.setLastHandledEvent(null);
+                        }
+                    } else {
+                        Preconditions.checkState(!ogNodes.containsKey(edge.hashCode()),
+                                "Duplicated key for Edge: %s", edge.getRawStatement());
+                        List<SharedEvent> sharedEvents =
+                                extractor.extractSharedVarsInfo(edge);
+                        OGNode newBlockNode;
+                        if (hasAtomicBegin(locks, edge, sharedEvents)) {
+                            // FIXME: an atomic block may have no global variables.
+                            newBlockNode = new OGNode(edge,
+                                    new ArrayList<>(List.of(edge)),
+                                    false, /* Complicated Node */
+                                    false,
+                                    new HashSet<>(),
+                                    new HashSet<>());
+                            withBlock.add(suc);
+                            if (!sharedEvents.isEmpty()) {
+                                handleEvents(sharedEvents, newBlockNode);
+                            }
+                        } else {
+                            // else, normal edge not in a block.
+                            // If no shared events, just skip.
+                            newBlockNode = new OGNode(edge,
+                                    new ArrayList<>(List.of(edge)),
+                                    true, /* Simple node */
+                                    false,
+                                    new HashSet<>(),
+                                    new HashSet<>());
+                            if (locks.containsKey(pre)) {
+                                if (locks.containsKey(suc)) {
+                                    locks.get(suc).clear();
+                                    locks.get(suc).addAll(locks.get(pre));
+                                } else {
+                                    locks.put(suc, new Stack<>());
+                                    locks.get(suc).addAll(locks.get(pre));
+                                }
+                            }
+                            if (sharedEvents.isEmpty()) {
+                                visitedEdges.add(edge.hashCode());
+//                                waitlist.add(suc);
+                                toAdd.add(suc);
+//                                continue;
+                                break;
+                            }
+                            handleEvents(sharedEvents, newBlockNode);
+                        }
+                        ogNodes.put(edge.hashCode(), newBlockNode);
+                        Stack<OGNode> nodeStack =
+                                blockNodeMap.computeIfAbsent(suc, cfaN -> new Stack<>());
+                        nodeStack.push(newBlockNode);
+                        cfaNodeMap.put(suc, newBlockNode);
+                    }
+                    visitedEdges.add(edge.hashCode());
+//                    waitlist.add(suc);
+                    toAdd.add(suc);
+                }
+                Collections.reverse(toAdd);
+                waitlist.addAll(toAdd);
+            }
+        }
+
+        return ogNodes;
     }
 }

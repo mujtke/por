@@ -445,7 +445,14 @@ public class OGNode implements Copier<OGNode> {
         SharedEvent resetLastHandledE = lastHandledEvent;
         while (i <= j) {
             k = events.indexOf(resetLastHandledE) - 1;
-            if (k < 0) break;
+            if (k < 0) {
+                // In this case, it means the old last handled event is the first event
+                // in events. So we set 'resetLastHandledE = null' and let j = -1 to
+                // make sure i > j.
+                resetLastHandledE = null;
+                j = -1;
+                break;
+            }
             resetLastHandledE = events.get(k);
             j = blockEdges.indexOf(resetLastHandledE.getInEdge());
         }

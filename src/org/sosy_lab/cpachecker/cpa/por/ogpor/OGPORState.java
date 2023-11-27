@@ -92,13 +92,14 @@ public class OGPORState implements AbstractState, Graphable {
         LoopStructure loopStructure = cfa.getLoopStructure().get();
         for (Loop loop : loopStructure.getAllLoops()) {
             // one loop just have one loop head?
+            // FIXME: use use loopHead as the loopStart?
             Set<CFANode> loopStarts = loop.getIncomingEdges()
                     .stream().map(CFAEdge::getSuccessor).collect(Collectors.toSet());
             Preconditions.checkState(loopStarts.size() == 1,
                     "Just one loop start node is expected.");
             CFANode loopStart= loopStarts.iterator().next();
             if (!loopStart.isLoopStart()) {
-                // In some special cases, loopStart is not the real loop start node. In
+                // IN some special cases, loopStart is not the real loop start node. In
                 // this case, we enumerate the nodes in loop to get the loop start node.
                 loopStart = null;
                 for (CFANode node : loop.getLoopNodes()) {
