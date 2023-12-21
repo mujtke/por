@@ -366,4 +366,52 @@ public class OGNodeBuilder {
             e.printStackTrace();
         }
     }
+
+    public void buildEdgeVarMap(HashMap<Integer, List<SharedEvent>> edgeVarMap) {
+
+        Set<CFANode> visitedFuncs = new HashSet<>();
+
+        for (CFANode funcEntryNode : cfa.getAllFunctionHeads()) {
+
+            if (visitedFuncs.contains(funcEntryNode)) continue;
+            Stack<CFANode> waitlist = new Stack<>();
+            Set<Integer> visitedEdges = new HashSet<>();
+            waitlist.push(funcEntryNode);
+
+            while (!waitlist.isEmpty()) {
+                CFANode pre = waitlist.pop();
+
+                if (pre instanceof FunctionExitNode) continue;
+
+                for (int i = 0; i < pre.getNumLeavingEdges(); i++) {
+                    CFAEdge edge = pre.getLeavingEdge(i);
+                    CFANode suc = edge.getSuccessor();
+
+                    if (visitedEdges.contains(edge.hashCode())) {
+                        continue;
+                    }
+
+                    if (pre.getLeavingSummaryEdge() != null) {
+                        // edge is a function call. Don't enter the inside of the func,
+                        // use summaryEdge as a substitute, and suc should also change.
+//                        edge = pre.getLeavingSummaryEdge();
+//                        suc = edge.getSuccessor();
+                        suc = pre.getLeavingSummaryEdge().getSuccessor();
+                    }
+
+                    // debug
+//                    System.out.println(edge);
+
+                    List<SharedEvent> sharedEvents = extractor.extractSharedVarsInfo(edge);
+                    if (!sharedEvents.isEmpty()) {
+                        edgeVarMap.put(edge.hashCode(), sharedEvents);
+                    }
+
+                    visitedEdges.add(edge.hashCode());
+                    waitlist.add(suc);
+                }
+            }
+        }
+    }
+
 }

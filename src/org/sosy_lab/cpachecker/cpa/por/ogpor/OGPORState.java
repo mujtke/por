@@ -241,4 +241,13 @@ public class OGPORState implements AbstractState, Graphable {
 
         return res;
     }
+
+    // Update the lock for current OGPORState.
+    public void updateLock(String curThread, String lock, String heldLock) {
+        if (!lock.equals(heldLock)) {
+            locks.get(curThread).push(lock);
+        } else {
+            locks.get(curThread).pop();
+        }
+    }
 }
