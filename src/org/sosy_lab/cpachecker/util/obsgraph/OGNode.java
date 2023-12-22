@@ -506,11 +506,12 @@ public class OGNode implements Copier<OGNode> {
      // Add new extracted events to the node.
     public void addEvents(List<SharedEvent> sharedEvents) {
         sharedEvents.forEach(e -> {
-            events.add(e);
+            SharedEvent nE = e.deepCopy(new HashMap<>());
+            events.add(nE);
             if (e.getAType() ==  READ) {
-                Rs.add(e);
+                Rs.add(nE);
             } else {
-                Ws.add(e);
+                Ws.add(nE);
             }
         });
     }
@@ -531,34 +532,58 @@ public class OGNode implements Copier<OGNode> {
         }
 
         Preconditions.checkState(coEdge != null,
-                "Cannot find coEdge: " + assumeEdge);
+                "Cannot find coEdge for: " + assumeEdge);
         Preconditions.checkState(blockEdges.contains(coEdge),
-                "Cannot replace edge not existed: " + coEdge);
+                "Cannot replace edge not in blockEdges: " + coEdge);
 
         // Replace.
-        // Remove all edges after the coEdge.
-        int coEdgeIdx = blockEdges.indexOf(coEdge);
-        blockEdges.removeIf(e -> blockEdges.indexOf(e) >= coEdgeIdx);
-        blockEdges.add(assumeEdge);
-        // Remove all shared events after the coEdge.
+        // Remove assumeEdge and all edges after it.
+        int assumeEdgeIdx = blockEdges.indexOf(assumeEdge),
+                lastHandledEventIdx = lastHandledEvent != null ?
+                        events.indexOf(lastHandledEvent) : -1;
+        blockEdges.removeIf(e -> blockEdges.indexOf(e) >= assumeEdgeIdx);
+        blockEdges.add(coEdge);
+        // Remove all shared events in or after the assumeEdge.
         List<SharedEvent> toRemove = events.stream()
-                .filter(e -> blockEdges.indexOf(e.getInEdge()) >= coEdgeIdx)
+                .filter(e -> blockEdges.indexOf(e.getInEdge()) >= assumeEdgeIdx)
                 .collect(Collectors.toList());
+        // Before removing these events, clear their relations firstly.
+        toRemove.forEach(SharedEvent::removeAllRelations);
         events.removeAll(toRemove);
         toRemove.forEach(Rs::remove);
         toRemove.forEach(Ws::remove);
+        // Remove all relations for the node, too.
+        this.removeAllRelations();
 
-        // Update last-visited edge if necessary.
+        // Update last-visited event if necessary.
+        // FIXME: more than one sharedEvent in an assume edge?
         if (lastHandledEvent.getInEdge() == coEdge) {
-            Preconditions.checkState(edgeVarMap.get(assumeEdge.hashCode()) != null,
-                    "Expected non-empty shared vars: " + assumeEdge);
+            // Replacing assumeEdge with its coEdge doesn't change the number of event.
+            Preconditions.checkState(lastHandledEventIdx < events.size() &&
+                    events.get(lastHandledEventIdx).getInEdge().equals(coEdge),
+                    "Cannot set lastHandledEvent for : " + coEdge);
             addEvents(edgeVarMap.get(assumeEdge.hashCode()));
-            List<SharedEvent> tmps = edgeVarMap.get(assumeEdge.hashCode())
-                    .stream().filter(e -> e.accessSameVarWith(lastHandledEvent)
-                                    && e.getAType() == READ).collect(Collectors.toList());
-            Preconditions.checkArgument(tmps.size() == 1,
-                    "Cannot replace old lastHandledEdge in " + coEdge);
-            lastHandledEvent = tmps.iterator().next();
+            lastHandledEvent = events.get(lastHandledEventIdx);
         }
+    }
+
+    private void removeAllRelations() {
+        // Remove rf, fr, to and mo for this.
+        // FIXME: keep po unchanged?
+        // rf.
+        readFrom.forEach(rfn -> rfn.getReadBy().remove(this));
+        readFrom.clear();
+        readBy.forEach(rbn -> rbn.getReadFrom().remove(this));
+        readBy.clear();
+        // fr.
+        fromRead.forEach(frn -> frn.getFromReadBy().remove(this));
+        fromRead.clear();
+        fromReadBy.forEach(frbn -> frbn.getFromRead().remove(this));
+        fromReadBy.clear();
+        // mo.
+        moBefore.forEach(mb -> mb.getMoAfter().remove(this));
+        moBefore.clear();
+        moAfter.forEach(ma -> ma.getMoBefore().remove(this));
+        moAfter.clear();
     }
 }

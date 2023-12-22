@@ -23,6 +23,27 @@ public class SharedEvent implements Copier<SharedEvent> {
         return allMoBefore;
     }
 
+    public void removeAllRelations() {
+        // Remove rf, fr and mo for this event.
+        // rf.
+        if (readFrom != null) {
+            readFrom.getReadBy().remove(this);
+            readFrom = null;
+        }
+        // fr.
+        fromRead.forEach(fr -> fr.getFromReadBy().remove(this));
+        fromRead.clear();
+        // mo.
+        if (moAfter != null) {
+            moAfter.setMoBefore(null);
+            moAfter = null;
+        }
+        if (moBefore != null) {
+            moBefore.setMoAfter(null);
+            moBefore = null;
+        }
+    }
+
     public enum AccessType { WRITE, READ, UNKNOWN; }
     private final Var var;
     private final AccessType aType;

@@ -267,47 +267,16 @@ public class OGTransfer {
                 // Handle conditional statements.
                 if (idx < 0) {
                     // node doesn't contain the edge.
-                    if (sharedEvents == null || sharedEvents.isEmpty()) {
-                        // edge has no shared events.
-                        node.replaceCoEdge(edgeVarMap, edge);
-                        node.setLastVisitedEdge(edge);
-                        graph.setNeedToRevisit(false);
-                        graphWrapper.clear();
-
-                        if (debug) debugActions(graph, parState, chState, edge);
-                        return graph;
-                    } else {
-                        // edge has shared events.
-                        // FIXME: is correct that we just replace the edge with its
-                        //  Coedge?
-                        node.replaceCoEdge(edgeVarMap, edge);
-                        node.setLastVisitedEdge(edge);
-                        graph.setNeedToRevisit(false);
-                        graphWrapper.clear();
-
-                        if (debug) debugActions(graph, parState, chState, edge);
-                        return graph;
-                    }
-                } else {
-                    // node contains the edge.
-                    if (sharedEvents == null || sharedEvents.isEmpty()) {
-                        // edge has no shared events.
-                        node.setLastVisitedEdge(edge);
-                        graph.setNeedToRevisit(false);
-                        graphWrapper.clear();
-
-                        if (debug) debugActions(graph, parState, chState, edge);
-                        return graph;
-                    } else {
-                        // edge has shared events.
-                        node.setLastVisitedEdge(edge);
-                        graph.setNeedToRevisit(false);
-                        graphWrapper.clear();
-
-                        if (debug) debugActions(graph, parState, chState, edge);
-                        return graph;
-                    }
+                    // FIXME: it is correct that we just replace the edge with its CoEdge?
+                    node.replaceCoEdge(edgeVarMap, edge);
                 }
+
+                node.setLastVisitedEdge(edge);
+                graph.setNeedToRevisit(false);
+                graphWrapper.clear();
+
+                if (debug) debugActions(graph, parState, chState, edge);
+                return graph;
             } else {
                 // Handle non-conditional statements.
                 Pair<LockStatus, String> l = getLock(edge);
@@ -337,6 +306,7 @@ public class OGTransfer {
                             }
                             if (idx < 0) {
                                 node.getBlockEdges().add(edge);
+                                addNewNode(graph, node, parState, chState);
                                 graph.setNeedToRevisit(true);
                             }
                             node.setLastVisitedEdge(edge);
@@ -682,7 +652,7 @@ public class OGTransfer {
         Set<SharedEvent> rFlag = new HashSet<>(node.getRs()),
                 wFlag = new HashSet<>(node.getWs());
         // Whether we have found the predecessor of the node.
-        boolean preFlag = false;
+        boolean preFlag = node.getPredecessor() != null;
         OGNode n = graph.getLastNode();
         // Backtracking along with the trace.
         while (n != null) {
