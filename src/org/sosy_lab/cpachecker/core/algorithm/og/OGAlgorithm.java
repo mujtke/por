@@ -9,9 +9,11 @@ import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.exceptions.CPAEnabledAnalysisPropertyViolationException;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
@@ -61,7 +63,8 @@ public class OGAlgorithm implements Algorithm {
         OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
         this.OGMap = ogInfo.getOGMap();
         this.nodeMap = ogInfo.getNodeMap();
-        assert OGMap != null && nodeMap != null;
+//        assert OGMap != null && nodeMap != null;
+        assert OGMap != null;
         this.revisitor = ogInfo.getRevisitor();
         this.transfer = ogInfo.getTransfer();
         this.waitlist = new Vector<>();
@@ -180,7 +183,7 @@ public class OGAlgorithm implements Algorithm {
             Precision pre = precAdjustmentResult.precision();
             chState = (ARGState) suc;
 
-            // Perform all possible single step transfer.
+            // Perform all possible single-step transferring.
             // I.e., transfer graphs from parent to its children.
             // NOTE: 'parGraphs == null' != 'parGraphs.isEmpty()'
             CFAEdge edge = parState.getEdgeToChild(chState);
@@ -264,10 +267,8 @@ public class OGAlgorithm implements Algorithm {
                 Pair<AbstractState, ObsGraph> aoPair = it.next();
                 ARGState leadState = (ARGState) aoPair.getFirstNotNull();
                 ObsGraph graph = aoPair.getSecondNotNull();
-//            getAllDot(graph);
-//            System.out.printf("");
-//             Debug.
-//            transfer.addGraphToFull(graph, leadState.getStateId());
+                // Before transferring the graph, set current nodes for threads.
+//                setInitalNodeTable(leadState, graph);
                 Pair<AbstractState, ObsGraph> transferResult =
                         transfer.multiStepTransfer(waitlist, leadState,
                         new ArrayList<>(List.of(graph)));
@@ -286,6 +287,13 @@ public class OGAlgorithm implements Algorithm {
 
         return false;
     }
+
+    // Set initial current nodes for threads.
+//    private void setInitalNodeTable(ARGState leadState, ObsGraph graph) {
+//        OGPORState ogporState = AbstractStates.extractStateByType(leadState, OGPORState.class);
+//        assert ogporState != null;
+//        ogporState.setInitialNodeTable(graph);
+//    }
 
     /**
      * We Assume a total order (<next) on all statements (edges), and this method

@@ -9,7 +9,6 @@ import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
 import org.sosy_lab.cpachecker.util.LoopStructure;
 import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
-import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -35,32 +34,14 @@ public class OGPORState implements AbstractState, Graphable {
     private final Map<CFANode, Integer> loopDepthTable = new HashMap<>();
     private static final Map<CFANode, Set<CFANode>> loopExitNodes = new HashMap<>();
 
-    private final Map<String, OGNode> nodeTable = new HashMap<>();
-
     private final Map<String, Stack<String>> locks = new HashMap<>();
-
-    public void setNodeTable(Map<String, OGNode> pNodeTable) {
-        nodeTable.putAll(pNodeTable);
-    }
 
     public void setLocks(Map<String, Stack<String>> pLocks) {
         locks.putAll(pLocks);
     }
 
-    public Map<String, OGNode> getNodeTable() {
-        return nodeTable;
-    }
-
     public Map<String, Stack<String>> getLocks() {
         return locks;
-    }
-
-    public OGNode getNode(String thrd) {
-        return nodeTable.get(thrd);
-    }
-
-    public void updateNode(String thrd, OGNode node) {
-        nodeTable.put(thrd, node);
     }
 
     @Override

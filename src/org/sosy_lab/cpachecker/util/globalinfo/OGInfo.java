@@ -42,8 +42,13 @@ public class OGInfo {
 
     // <next table.
     private final HashMap<Integer, Integer> nlt;
+
+    public HashMap<Integer, List<SharedEvent>> getEdgeVarMap() {
+        return edgeVarMap;
+    }
+
     // edge-sharedVars map.
-    private static HashMap<Integer, List<SharedEvent>> edgeVarMap;
+    private HashMap<Integer, List<SharedEvent>> edgeVarMap;
 
     @Option(secure = true,
             description = "this option is enabled iff we use OGPORCPA.")
@@ -72,6 +77,7 @@ public class OGInfo {
             }
 
             if (extractVarsForCFAEdge) {
+                nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
                 edgeVarMap = new HashMap<>();
                 nodeBuilder.buildEdgeVarMap(edgeVarMap);
             }

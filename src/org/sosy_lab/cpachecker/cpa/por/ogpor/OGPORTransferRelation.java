@@ -70,9 +70,9 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         shutdownNotifier = pShutdownNotifier;
         nodeMap = GlobalInfo.getInstance().getOgInfo().getNodeMap();
         OGMap = GlobalInfo.getInstance().getOgInfo().getOGMap();
-        if (nodeMap == null || OGMap == null) {
-            throw new InvalidConfigurationException("Please enable the utils.globalInfo" +
-                    ".OGInfo.useOG");
+        if (OGMap == null) {
+            throw new InvalidConfigurationException("OGMap unusable, please enable the " +
+                    "utils.globalInfo.OGInfo.useOG");
         }
     }
 
@@ -88,11 +88,10 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
             return Set.of();
         }
 
-        // Initialize the fields. Update them in other place like 'strengthen'.
+        // Initialize the fields. Update them in another place like 'strengthen'.
         OGPORState chOGState = new OGPORState(-1);
         chOGState.setLoops(parOGState.getLoops());
         chOGState.setLoopDepthTable(parOGState.getLoopDepthTable());
-        chOGState.setNodeTable(parOGState.getNodeTable());
         chOGState.setLocks(parOGState.getLocks());
 
         return Set.of(chOGState);
@@ -133,160 +132,14 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
 //                "\u001b[0m");
 
         // Update the current node map.
-        updateNodeTable(ogState, cfaEdge, activeThread);
+//        updateNodeTable(ogState, cfaEdge, activeThread);
 
         return Set.of(state);
     }
 
-    // TODO.
     private void updateNodeTable(OGPORState ogState, CFAEdge cfaEdge, String activeThread) {
-        String rawStatement = cfaEdge.getRawStatement();
-        Map<String, OGNode> nodeTable = ogState.getNodeTable();
-        Map<String, Stack<String>> locks = ogState.getLocks();
-        if (atomicBlockBeginFuncs.stream().anyMatch(rawStatement::contains)) {
-            // __VERIFIER_atomic_begin, etc.
-            if (locks.get(activeThread) != null) {
-               if (locks.get(activeThread).isEmpty()) {
-                    // No atomic block has already existed.
-                   locks.get(activeThread).push("__VERIFIER_atomic_begin");
-                   OGNode newNode = new OGNode(cfaEdge,
-                           new ArrayList<>(Collections.singleton(cfaEdge)),
-                           false,
-                           false);
-                   ogState.updateNode(activeThread, newNode);
-               } else {
-                   // some atomic blocks have existed.
-                   // We don't start a new block in this case.
-                   locks.get(activeThread).push("__VERIFIER_atomic_begin");
-               }
-            } else {
-                // No atomic block has already existed.
-                locks.put(activeThread, new Stack<>());
-                locks.get(activeThread).push("__VERIFIER_atomic_begin");
-                OGNode newNode = new OGNode(cfaEdge,
-                        new ArrayList<>(Collections.singleton(cfaEdge)),
-                        false,
-                        false);
-                ogState.updateNode(activeThread, newNode);
-            }
-        } else if (lockBeginFuncs.stream().anyMatch(rawStatement::contains)) {
-            // common locks.
-            // FIXME: it's not necessary to extract the shared vars each time we meet the
-            //  edge.
-            List<SharedEvent> sharedEvents = extractor.extractSharedVarsInfo(cfaEdge);
-            Preconditions.checkArgument(sharedEvents.size() == 1,
-                    "Exactly one lock variable is expected: " + cfaEdge);
-            String lock = sharedEvents.iterator().next().getVar().getName();
-            if (locks.get(activeThread) != null) {
-                if (locks.get(activeThread).isEmpty()) {
-                    // No atomic block has already existed.
-                    locks.get(activeThread).push(lock);
-                    OGNode newNode = new OGNode(cfaEdge,
-                            new ArrayList<>(Collections.singleton(cfaEdge)),
-                            false,
-                            false);
-                    ogState.updateNode(activeThread, newNode);
-                } else {
-                    // some atomic blocks have existed.
-                    // We don't start a new block in this case.
-                    locks.get(activeThread).push(lock);
-                }
-            } else {
-                // No atomic block has already existed.
-                locks.put(activeThread, new Stack<>());
-                locks.get(activeThread).push(lock);
-                OGNode newNode = new OGNode(cfaEdge,
-                        new ArrayList<>(Collections.singleton(cfaEdge)),
-                        false,
-                        false);
-                ogState.updateNode(activeThread, newNode);
-            }
-        } else if (atomicBlockEndFuncs.stream().anyMatch(rawStatement::contains)) {
-            Preconditions.checkArgument(locks.get(activeThread) != null
-                            && !locks.get(activeThread).isEmpty(),
-                    "Atomic end without a begin.");
-            // FIXME: multiple atomic-begin statements?
-            Preconditions.checkArgument("__VERIFIER_atomic_begin".equals(locks.get(activeThread).peek()),
-                    "Lock mismatches.");
-            locks.get(activeThread).pop();
-            if (locks.get(activeThread).isEmpty()) {
-                // An atomic block ends.
-                ogState.updateNode(activeThread, null);
-            } else {
-                // Atomic block hasn't ended yet because of the outer atomic blocks.
-            }
-        } else if (lockEndFuncs.stream().anyMatch(rawStatement::contains)) {
-            List<SharedEvent> sharedEvents = extractor.extractSharedVarsInfo(cfaEdge);
-            Preconditions.checkArgument(sharedEvents.size() == 1,
-                    "Exactly one lock variable is expected." + cfaEdge);
-            String lock = sharedEvents.iterator().next().getVar().getName();
-            Preconditions.checkArgument(lock.equals(locks.get(activeThread).peek()),
-                    "Lock mismatches.");
-            locks.get(activeThread).pop();
-            if (locks.get(activeThread).isEmpty()) {
-                // An atomic block ends.
-                ogState.updateNode(activeThread, null);
-            } else {
-                // Atomic block hasn't ended yet because of the outer atomic blocks.
-            }
-        } else {
-            // Inside an atomic block or not.
-            List<SharedEvent> sharedEvents = extractor.extractSharedVarsInfo(cfaEdge);
-            if (!sharedEvents.isEmpty()) {
-                OGNode curNode = nodeTable.get(activeThread);
-                if (curNode != null) {
-                    // We are inside a block, and just need to handle the events.
-                    handleEvents(sharedEvents, curNode);
-                } else {
-                    // Not in a block, we create a new node for the cfaEdge and update
-                    // the node table.
-                    OGNode newNode = new OGNode(cfaEdge,
-                            new ArrayList<>(Collections.singleton(cfaEdge)),
-                            true, /* Simple node */
-                            false);
-                    handleEvents(sharedEvents, newNode);
-                    ogState.updateNode(activeThread, newNode);
-                }
-            } else {
-                // In this case, we have nothing to do whether we are inside a block or not.
-            }
-        }
-    }
+        // TODO.
 
-    private void handleEvents(List<SharedEvent> sharedEvents, OGNode ogNode) {
-
-        sharedEvents.forEach(e -> {
-            switch (e.getAType()) {
-                case READ:
-                    Set<SharedEvent> sameR = ogNode.getRs()
-                            .stream()
-                            .filter(r -> r.getVar().getName().equals(e.getVar().getName()))
-                            .collect(Collectors.toSet()),
-                            sameW = ogNode.getWs()
-                                    .stream()
-                                    .filter(w -> w.getVar().getName().equals(e.getVar().getName()))
-                                    .collect(Collectors.toSet());
-                    if (!sameR.isEmpty() || !sameW.isEmpty()) {
-                        // For the same read var, only the first read will be added.
-                        // If there is a w writes the same var with r, then r could be
-                        // ignored, because it will always read the same value.
-                    } else {
-                        ogNode.addEvent(e);
-                    }
-                    break;
-                case WRITE:
-                    // for the same write var, only the last write will be added.
-                    sameW = ogNode.getWs()
-                            .stream()
-                            .filter(w -> w.getVar().getName().equals(e.getVar().getName()))
-                            .collect(Collectors.toSet());
-                    if (!sameW.isEmpty()) {
-                        sameW.forEach(ogNode::removeEvent);
-                    }
-                    ogNode.addEvent(e);
-                default:
-            }
-        });
     }
 
     @Nullable

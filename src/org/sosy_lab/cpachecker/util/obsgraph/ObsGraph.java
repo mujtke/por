@@ -6,6 +6,8 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 
@@ -28,9 +30,15 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     private final List<SharedEvent> RE;
 
+    private final Map<String, OGNode> nodeTable = new HashMap<>();
+
     public ObsGraph() {
         traceLen = 0;
         RE = new ArrayList<>();
+    }
+
+    public Map<String, OGNode> getNodeTable() {
+        return nodeTable;
     }
 
     public List<SharedEvent> getRE() {
@@ -41,11 +49,7 @@ public class ObsGraph implements Copier<ObsGraph> {
             if (lastHandledE == null) {
                 RE.addAll(events);
             } else {
-                // FIXME
-                Preconditions.checkArgument(events.contains(lastHandledE));
-                int i = events.indexOf(lastHandledE);
-                i++;
-                for (; i < events.size(); i++) {
+                for (int i = lastNode.getLheIndex() + 1; i < events.size(); i++) {
                     RE.add(events.get(i));
                 }
             }
@@ -331,7 +335,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     public void deduceFromRead() {
          // Deduce the fr according the po and rf in the graph.
          // Use adjacency matrix and Floyd Warshall Algorithm to compute the transitive
-         // closure of po and rf, i.e, porf+.
+         // closure of po and rf, i.e., porf+.
          int i, j, k, n = nodes.size();
          boolean[][] porf = new boolean[n][n];
          // Fill in the porf matrix with the original po and rf in the graph.
@@ -419,6 +423,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
 
     /**
+     * FIXME
      * When r locates in an assume edge and turns to read from a write event that
      * contradicts r, i.e., r /\ w -> false, we change r to its co-event cor. If r
      * comes from conditional branch d, then cor should come from !d. At the same time,
@@ -428,7 +433,7 @@ public class ObsGraph implements Copier<ObsGraph> {
      */
     public SharedEvent changeAssumeNode(SharedEvent r) {
         OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
-        Map<Integer, OGNode> nodeMap = ogInfo.getNodeMap();
+        Map<Integer, List<SharedEvent>> edgeVarMap = ogInfo.getEdgeVarMap();
         // Find the corEdge.
         CFAEdge rEdge = r.getInEdge(), corEdge = null;
         Preconditions.checkArgument(rEdge instanceof AssumeEdge);
@@ -444,85 +449,48 @@ public class ObsGraph implements Copier<ObsGraph> {
             }
         }
         Preconditions.checkArgument(corEdge != null,
-                "Finding corEdge failed.");
+                "Finding corEdge failed: " + rEdge);
 
-        // Replace rNode with corNode.
-        OGNode rNode = r.getInNode(), corNode = nodeMap.get(corEdge.hashCode());
+        OGNode rNode = r.getInNode();
         Preconditions.checkArgument(nodes.contains(rNode),
                 "rNode " + rNode + " should locate in the graph.");
-        nodes.set(nodes.indexOf(rNode), corNode);
 
-        // Update the relations for corNode.
-        Preconditions.checkArgument(rNode.getWs().isEmpty(),
-                "AssumeEdge contains write events is not expected.");
-        // Handle events.
-        // We should set the read-from relations for the left read events in
-        // the e2n (i.e., read events != cor, because we set read-from relation for cor
-        // in method 'setRelation' later.
+        // Removing rEdge and all edges after it.
+        int rEdgeIdx = rNode.getBlockEdges().indexOf(rEdge);
+        List<CFAEdge> toRemove = new ArrayList<>();
+        for (int i = rEdgeIdx; i < rNode.getBlockEdges().size(); i++) {
+            toRemove.add(rNode.getBlockEdges().get(i));
+        }
+        rNode.getBlockEdges().removeAll(toRemove);
+        // Replace rEdge with corEdge.
+        rNode.getBlockEdges().add(corEdge);
+
+        // We remove all events after the rEdge, and all relations they have.
+        // FIXME: Relations of the events before rEdge remain unchanged. After
+        //  replacing, events in rEdge and corEdge have the same relations.
+        int rIdx = rNode.getEvents().indexOf(r);
         SharedEvent cor = null;
-        for (SharedEvent r0 : rNode.getRs()) {
-            for (SharedEvent cor0 : corNode.getRs()) {
-                if (!r0.accessSameVarWith(cor0)) continue;
-                if (cor0.accessSameVarWith(r)) cor = cor0;
-
-                // Read from.
-                SharedEvent w0 = r0.getReadFrom();
-                Preconditions.checkArgument(w0 != null,
-                        "r0 should read from some write.");
-                OGNode w0n = w0.getInNode();
-                cor0.setReadFrom(w0);
-                w0.getReadBy().add(cor0);
-                if (!w0n.getReadBy().contains(corNode))
-                    w0n.getReadBy().add(corNode);
-                if (!corNode.getReadFrom().contains(w0n))
-                    corNode.getReadFrom().add(w0n);
-                r0.setReadFrom(null);
-                w0.getReadBy().remove(r0);
-                w0n.getReadBy().remove(rNode);
-                rNode.getReadFrom().remove(w0n);
-
-                // From read.
-                List<SharedEvent> fr0 = r0.getFromRead();
-                for (SharedEvent fr : fr0) {
-                    fr.getFromReadBy().remove(r0);
-                    fr.getInNode().getFromReadBy().remove(rNode);
-                }
+        List<SharedEvent> coEvents = edgeVarMap.get(corEdge.hashCode());
+        assert coEvents != null && !coEvents.isEmpty();
+        for (int i = rIdx; i < rNode.getEvents().size(); i++) {
+            SharedEvent event = rNode.getEvents().get(i);
+            if (Objects.equals(event.getInEdge(), rEdge)) {
+                // Events in rEdge.
+                SharedEvent coEvent = event.getCoEvent(coEvents);
+                assert coEvent != null;
+                if (i == rIdx) cor = coEvent;
+                // Replace event with coEvent.
+                rNode.setEvent(i, coEvent);
+                // Set relations for coEvent.
+                event.copyRelations(coEvent);
+            } else {
+                // Events after rEdge.
+                rNode.getEvents().remove(event);
+                event.removeAllRelations();
             }
         }
-        // Po.
-        OGNode predecessor = rNode.getPredecessor();
-        List<OGNode> successors = rNode.getSuccessors();
-        if (predecessor != null) {
-            predecessor.getSuccessors().remove(rNode);
-            predecessor.getSuccessors().add(corNode);
-            corNode.setPredecessor(predecessor);
-        }
 
-        // Trace order.
-        OGNode rTrAfter = rNode.getTrAfter(), rTrBefore = rNode.getTrBefore();
-        if (rTrAfter != null) {
-            rTrAfter.setTrBefore(corNode);
-            corNode.setTrAfter(rTrAfter);
-        }
-        if (rTrBefore != null) {
-            rTrBefore.setTrAfter(corNode);
-            corNode.setTrBefore(rTrBefore);
-        }
-
-        for (OGNode suc : successors) {
-            suc.setPredecessor(corNode);
-            corNode.getSuccessors().add(suc);
-        }
-
-        corNode.setInGraph(rNode.isInGraph());
-        if (rNode.equals(lastNode)) lastNode = corNode;
-        corNode.setPreState(rNode.getPreState());
-        // FIXME: sucState?
-
-        // Handle threadLoc and inThread.
-        corNode.setThreadsLoc(rNode.getThreadLoc());
-        corNode.setInThread(corNode.getInThread());
-
+        assert cor != null;
         return cor;
     }
 
@@ -541,4 +509,46 @@ public class ObsGraph implements Copier<ObsGraph> {
         // Replace the rmNode with the node.
         nodes.set(idx, node);
     };
+
+    // Set initial current nodes for threads.
+    public void setInitialCurrentNodeTable(ARGState initialState) {
+        assert !nodes.isEmpty();
+        OGNode firstNode = nodes.get(0);
+        String curThread = firstNode.getInThread();
+        nodeTable.put(curThread, firstNode);
+        OGPORState initialOgState =
+                AbstractStates.extractStateByType(initialState, OGPORState.class);
+        assert initialOgState != null;
+        // FIXME: initial state have one and only one thread.
+        for (String thrd : initialOgState.getThreads().keySet()) {
+            if (!Objects.equals(curThread, thrd)) {
+                nodeTable.put(thrd, null);
+            }
+        }
+    }
+
+    public OGNode getCurrentNode(String curThread) {
+        return nodeTable.get(curThread);
+    }
+
+    public void updateCurrentNode(String curThread, OGNode node) {
+        nodeTable.put(curThread, node);
+    }
+
+
+    // Update correct current nodes for threads.
+    public void updateCurrentNodeTable(String curThread, OGNode node) {
+        assert curThread != null && node != null;
+        // If the node has no successor for curThread, then we set value null for the
+        // current thread. Else, we will set its value as some node below.
+        nodeTable.put(curThread, null);
+        for (OGNode suc : node.getSuccessors()) {
+            String sucThrd = suc.getInThread();
+            // If node has more than one successor, then except the curThread, all
+            // threads should appear first time.
+            if (!Objects.equals(curThread, sucThrd))
+                assert !nodeTable.containsKey(sucThrd);
+            nodeTable.put(sucThrd, suc);
+        }
+    }
 }
