@@ -119,7 +119,6 @@ public class OGRevisitor {
                                         "to get the pivot state.");
                                 AbstractState pivotState = getPivotState(Gr);
                                 result.add(Pair.of(pivotState, Gr));
-//                                result.add(Pair.of(getPivotState(Gr), Gr));
                                 if (debug) System.out.println("\tHaving gotten the " +
                                         "pivot state s" + ((ARGState) pivotState).getStateId()
                                         + ", add the Gr to the revisit result.");
@@ -189,7 +188,7 @@ public class OGRevisitor {
         // Use the preState of the first node, for the simplicity.
         targetNode = G.getNodes().get(0);
         G.setLastNode(null);
-        // Before return, clear the trace order and modify order for nodes that
+        // Before return, clear the trace order and modify the order for nodes that
         // trace after the target node. At the same time, set those nodes invisible in
         // the graph.
         for (OGNode next = targetNode; next != null;) {
@@ -222,6 +221,9 @@ public class OGRevisitor {
 
         Preconditions.checkState(targetNode != null);
         Preconditions.checkState(targetNode.getPreState() != null);
+
+        G.setInitialCurrentNodeTable(targetNode.getPreState());
+
         return targetNode.getPreState();
     }
 
@@ -370,9 +372,11 @@ public class OGRevisitor {
         switch (type) {
             case "rf":
                 try {
-                    e2 = CSHandler.handleAssumeStatement(G, e2, e1);
-                    if (e2.getInNode() != e2n) {
-                        e2n = e2.getInNode();
+                    SharedEvent e2p = CSHandler.handleAssumeStatement(G, e2, e1);
+                    if (!Objects.equals(e2p, e2)) {
+                        // Having changed e2 to its coEvent.
+                        e2n = e2p.getInNode();
+                        e2 = e2p;
                     }
                 } catch (UnsupportedCodeException e) {
                     e.printStackTrace();
@@ -385,8 +389,8 @@ public class OGRevisitor {
                 if (e2rf != null) {
                     e2rf.getReadBy().remove(e2);
                     OGNode e2rfn = e2rf.getInNode();
-                    // Remove e2rfn from e2n's read-from set if e2rf is the last write
-                    // read by event in e2n.
+                    // Remove e2rfn from e2n's read-from set if there is no event in
+                    // other nodes reading from e2n.
                     List<OGNode> re2rfn =
                             e2n.getRs().stream().map(SharedEvent::getReadFrom)
                                     .filter(Objects::nonNull)

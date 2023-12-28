@@ -1,12 +1,8 @@
 package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
-import com.google.common.base.Function;
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.BiMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import edu.umd.cs.findbugs.annotations.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.annotations.ReturnValuesAreNonnullByDefault;
@@ -16,31 +12,19 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCall;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
-import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
 import org.sosy_lab.cpachecker.cpa.threading.ThreadingState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
-import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
-import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.*;
-import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
-import org.sosy_lab.cpachecker.util.threading.SingleThreadState;
-import org.sosy_lab.cpachecker.util.threading.ThreadOperator;
-import org.sosy_lab.cpachecker.cpa.location.LocationState;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @Options(prefix="cpa.ogpor")
 public class OGPORTransferRelation extends SingleEdgeTransferRelation {
@@ -60,6 +44,8 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
     @Option(secure = true,
             description = "the set of functions which release locks.")
     private Set<String> lockEndFuncs = ImmutableSet.of("pthread_mutex_unlock", "unlock");
+
+    private final SharedVarsExtractor extractor = new SharedVarsExtractor();
 
     // Map: stateId -> List of OG.
     private final Map<Integer, List<ObsGraph>> OGMap;
@@ -84,9 +70,9 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         shutdownNotifier = pShutdownNotifier;
         nodeMap = GlobalInfo.getInstance().getOgInfo().getNodeMap();
         OGMap = GlobalInfo.getInstance().getOgInfo().getOGMap();
-        if (nodeMap == null || OGMap == null) {
-            throw new InvalidConfigurationException("Please enable the utils.globalInfo" +
-                    ".OGInfo.useOG");
+        if (OGMap == null) {
+            throw new InvalidConfigurationException("OGMap unusable, please enable the " +
+                    "utils.globalInfo.OGInfo.useOG");
         }
     }
 
@@ -102,10 +88,11 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
             return Set.of();
         }
 
-        // Update the num when adjusting precision.
+        // Initialize the fields. Update them in another place like 'strengthen'.
         OGPORState chOGState = new OGPORState(-1);
         chOGState.setLoops(parOGState.getLoops());
         chOGState.setLoopDepthTable(parOGState.getLoopDepthTable());
+        chOGState.setLocks(parOGState.getLocks());
 
         return Set.of(chOGState);
     }
@@ -121,6 +108,7 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
             throws CPATransferException, InterruptedException {
         OGPORState ogState = (OGPORState) state;
         // Update threads.
+        String activeThread = null;
         for (AbstractState s : otherStates) {
             if (s instanceof ThreadingState) {
                 ThreadingState threadingState = (ThreadingState) s;
@@ -130,16 +118,28 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
                                 .getLocationNode()
                                 .toString()));
                 // Set 'inThread'.
-                ogState.setInThread(getActiveThread(cfaEdge, threadingState));
+                activeThread = getActiveThread(cfaEdge, threadingState);
+                ogState.setInThread(activeThread);
             }
         }
+        Preconditions.checkState(activeThread != null,
+                "Failed to get active thread: " + cfaEdge);
 
+        // Update loop depth table.
         ogState.updateLoopDepth(cfaEdge);
         // Debug.
 //        System.out.println("\u001b[31m" + cfaEdge + " @" + ogState.getLoopDepth() +
 //                "\u001b[0m");
 
+        // Update the current node map.
+//        updateNodeTable(ogState, cfaEdge, activeThread);
+
         return Set.of(state);
+    }
+
+    private void updateNodeTable(OGPORState ogState, CFAEdge cfaEdge, String activeThread) {
+        // TODO.
+
     }
 
     @Nullable

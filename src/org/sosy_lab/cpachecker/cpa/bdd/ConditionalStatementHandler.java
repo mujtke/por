@@ -58,6 +58,7 @@ public class ConditionalStatementHandler {
     }
 
     /**
+     * FIXME
      * Before setting read-from relation, we should handle the case that r locates in
      * an assume statement (e.g., x > 1). When setting r to read from w that makes
      * the condition not hold, i.e., (x > 1) not hold, we replace r with the event
@@ -76,7 +77,7 @@ public class ConditionalStatementHandler {
             // don't have to change the node.
             return r;
         }
-        CFAEdge rEdge = rNode.getBlockStartEdge(), wEdge = w.getInEdge();
+        CFAEdge rEdge = r.getInEdge(), wEdge = w.getInEdge();
 
         if (!(rEdge instanceof AssumeEdge)) {
             return r;
@@ -337,7 +338,7 @@ public class ConditionalStatementHandler {
         return cor;
     }
 
-    /** This function returns, if the variable is used in the Expression. */
+    /** This function returns true if the variable is used in the Expression. */
     private static boolean isUsedInExpression(String varName, CExpression exp) {
         return exp.accept(new VarCExpressionVisitor(varName));
     }

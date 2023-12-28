@@ -1,15 +1,17 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
-import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
-import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 
 import java.util.*;
+import java.util.stream.Collectors;
+
+import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
 
 public class OGNode implements Copier<OGNode> {
 
@@ -67,7 +69,11 @@ public class OGNode implements Copier<OGNode> {
     // Indicate whether this node is in a graph.
     // Here, in a graph means this node is in the trace of that graph.
     private boolean inGraph;
-    private SharedEvent lastHandledEvent;
+    // FIXME: use index to indicate the last handled event.
+//    private SharedEvent lastHandledEvent;
+    private int lheIndex = -1;
+
+    private CFAEdge lastVisitedEdge;
 
     public OGNode(final CFAEdge pBlockStartEdge,
                   final List<CFAEdge> pBlockEdges,
@@ -93,6 +99,7 @@ public class OGNode implements Copier<OGNode> {
         containNonDetVar = pContainNonDetVar;
         Rs = new HashSet<>();
         Ws = new HashSet<>();
+        lastVisitedEdge = pBlockStartEdge;
     }
 
     /**
@@ -133,8 +140,8 @@ public class OGNode implements Copier<OGNode> {
         // The left part will need to be copied in a deep way.
         /* events */
         this.events.forEach(r -> nNode.events.add(r.deepCopy(memo)));
-        nNode.lastHandledEvent = this.lastHandledEvent != null ?
-            this.lastHandledEvent.deepCopy(memo) : null;
+        nNode.lheIndex = this.lheIndex;
+        nNode.lastVisitedEdge = this.lastVisitedEdge;
         /* Rs & Ws. */
         this.Rs.forEach(r -> nNode.Rs.add(r.deepCopy(memo)));
         this.Ws.forEach(w -> nNode.Ws.add(w.deepCopy(memo)));
@@ -193,6 +200,10 @@ public class OGNode implements Copier<OGNode> {
             str.append("@").append(loopDepth);
         }
         return str.toString();
+    }
+
+    public CFAEdge getLastVisitedEdge() {
+        return lastVisitedEdge;
     }
 
     public CFAEdge getBlockStartEdge() {
@@ -372,12 +383,13 @@ public class OGNode implements Copier<OGNode> {
     }
 
     public void addEvent(SharedEvent event) {
-        // Because of the existence of coNode, we should insert the event into some
+        // Because of the existence of the coNode, we should insert the event into some
         // proper location in events.
-        if (lastHandledEvent == null) {
+//        if (lastHandledEvent == null) {
+        if (lheIndex == -1) {
             events.add(event);
         } else {
-            int i = events.indexOf(lastHandledEvent);
+            int i = lheIndex;
             if (i < events.size() - 1) {
                 // If lastHandledEvent is not the last event, then we insert the event
                 // after it.
@@ -387,9 +399,9 @@ public class OGNode implements Copier<OGNode> {
                 events.add(event);
             }
         }
-        lastHandledEvent = event;
+        lheIndex++;
         event.setInNode(this);
-        if (event.getAType() == SharedEvent.AccessType.READ) {
+        if (event.getAType() == READ) {
             Rs.add(event);
         } else if (event.getAType() == SharedEvent.AccessType.WRITE) {
             Ws.add(event);
@@ -400,21 +412,28 @@ public class OGNode implements Copier<OGNode> {
     }
 
     public void removeEvent(SharedEvent event) {
+        SharedEvent lastHandledEvent = events.get(lheIndex);
         if (event == lastHandledEvent) {
-            int i = events.indexOf(event);
-            lastHandledEvent = i > 0 ? events.get(i) : null;
+            lheIndex--;
         }
         events.remove(event);
-        if (event.getAType() == SharedEvent.AccessType.READ) Rs.remove(event);
-        else if (event.getAType() == SharedEvent.AccessType.WRITE) Ws.remove(event);
+        if (event.getAType() == READ) Rs.remove(event);
+        else Ws.remove(event);
     }
 
     public SharedEvent getLastHandledEvent() {
-        return lastHandledEvent;
+        return (lheIndex >= 0 && lheIndex < events.size()) ? events.get(lheIndex) : null;
+    }
+
+    public int getLheIndex() {
+        return lheIndex;
     }
 
     public void setLastHandledEvent(SharedEvent lastHandledEvent) {
-        this.lastHandledEvent = lastHandledEvent;
+        Preconditions.checkArgument(events.contains(lastHandledEvent),
+                "Cannot set the event that is not in the node as the " +
+                        "lastHandledEvent");
+        this.lheIndex = events.indexOf(lastHandledEvent);
     }
 
     /**
@@ -425,6 +444,8 @@ public class OGNode implements Copier<OGNode> {
      * @param coEdge the coEdge that belongs to the coNode of this node.
      */
     public void updateLastHandledEvent(CFAEdge coEdge) {
+        SharedEvent lastHandledEvent = (lheIndex < events.size() && lheIndex >= 0) ?
+                events.get(lheIndex) : null;
         if (lastHandledEvent == null) {
             // We have set lastHandledEvent to be null in coEdge.inNode.
             // We just get this node by deep copy, so events should contain all events
@@ -433,15 +454,15 @@ public class OGNode implements Copier<OGNode> {
             //  must be not empty.
             Preconditions.checkArgument(!events.isEmpty(),
                     "Encountering the node has no shared events.");
-            lastHandledEvent = events.get(events.size() - 1);
+            lheIndex = events.size() - 1;
+            lastHandledEvent = events.get(lheIndex);
         }
 
-        Preconditions.checkArgument(events.contains(lastHandledEvent)
-                && blockEdges.contains(coEdge));
+        Preconditions.checkArgument(blockEdges.contains(coEdge));
         // Reset lastHandledEvent's inEdge should happen before coEdge.
         int i = blockEdges.indexOf(coEdge),
                 j = blockEdges.indexOf(lastHandledEvent.getInEdge()),
-                k = events.indexOf(lastHandledEvent);
+                k = lheIndex;
         SharedEvent resetLastHandledE = lastHandledEvent;
         while (i <= j) {
             k = events.indexOf(resetLastHandledE) - 1;
@@ -451,7 +472,8 @@ public class OGNode implements Copier<OGNode> {
         }
         Preconditions.checkArgument(i > j,
                 "Update lastHandledEvent failed.");
-        lastHandledEvent = resetLastHandledE;
+//        lastHandledEvent = resetLastHandledE;
+        lheIndex = k;
     }
 
     /**
@@ -472,5 +494,187 @@ public class OGNode implements Copier<OGNode> {
             ite.next();
             ite.remove();
         }
+    }
+
+    public int contains(CFAEdge edge) {
+        return blockEdges.indexOf(edge);
+    }
+
+    // Set the new lastVisitedEdge, and return its index(-1 if we have reached the end
+    // of blockEdges).
+    public int setLastVisitedEdge(int idx) {
+        lastVisitedEdge = blockEdges.get(idx);
+        return idx + 1 < blockEdges.size() ? idx : -1;
+    }
+
+    public void setLastVisitedEdge(CFAEdge cfaEdge) {
+        lastVisitedEdge = cfaEdge;
+    }
+
+    public OGNode sameThrdSuc() {
+        List<OGNode> sts = successors.stream()
+                .filter(n -> inThread.equals(n.getInThread()))
+                .collect(Collectors.toList());
+        Preconditions.checkArgument(sts.size() <= 1,
+                "At most one same-thread successor is allowed.");
+        return sts.isEmpty() ? null : sts.iterator().next();
+    }
+
+     // Add new extracted events to the node.
+    public void addEvents(List<SharedEvent> sharedEvents) {
+        sharedEvents.forEach(e -> {
+            switch (e.getAType()) {
+                case READ:
+                    Set<SharedEvent> sameR = Rs.stream()
+                            .filter(r -> r.getVar().getName().equals(e.getVar().getName()))
+                            .collect(Collectors.toSet()),
+                            sameW = Ws.stream()
+                                    .filter(w -> w.getVar().getName().equals(e.getVar().getName()))
+                                    .collect(Collectors.toSet());
+                    if (!sameR.isEmpty() || !sameW.isEmpty()) {
+                        // For the same read var, only the first read will be added.
+                        // If there is a w writes the same var with r, then r could be
+                        // ignored, because it will always read the same value.
+                    } else {
+                        SharedEvent nE = e.deepCopy(new HashMap<>());
+                        events.add(nE);
+                        nE.setInNode(this);
+                        Rs.add(nE);
+                    }
+                    break;
+
+                case WRITE:
+                    // For multiple writes to the same var, only the last one will be
+                    // added.
+                    sameW = Ws.stream()
+                            .filter(w -> w.getVar().getName().equals(e.getVar().getName()))
+                            .collect(Collectors.toSet());
+                    if (!sameW.isEmpty()) {
+                        sameW.forEach(this::removeEvent);
+                    }
+                    SharedEvent nE = e.deepCopy(new HashMap<>());
+                    events.add(nE);
+                    nE.setInNode(this);
+                    Ws.add(nE);
+                default:
+            }
+        });
+    }
+
+    // Replace conflicted assumeEdge with assumeEdge's coEdge.
+    public CFAEdge replaceCoEdge(final Map<Integer, List<SharedEvent>> edgeVarMap,
+            CFAEdge assumeEdge) {
+        Preconditions.checkArgument(
+                assumeEdge.getPredecessor().getNumLeavingEdges() > 1,
+                "Predecessor of assume edge has less then two outgoing " +
+                        "edges is not allowed: " + assumeEdge);
+        CFAEdge coEdge = null, tmp;
+        for (int i = 0; i < assumeEdge.getLineNumber(); i++) {
+            tmp = assumeEdge.getPredecessor().getLeavingEdge(i);
+            if (tmp instanceof AssumeEdge && tmp != assumeEdge) {
+                coEdge = tmp;
+                break;
+            }
+        }
+
+        Preconditions.checkState(coEdge != null,
+                "Cannot find coEdge for: " + assumeEdge);
+        Preconditions.checkState(blockEdges.contains(assumeEdge),
+                "Cannot replace edge not in blockEdges: " + coEdge);
+
+        // Replace.
+        // Remove assumeEdge and all edges after it.
+        int assumeEdgeIdx = blockEdges.indexOf(assumeEdge);
+        blockEdges.removeIf(e -> blockEdges.indexOf(e) >= assumeEdgeIdx);
+        blockEdges.add(coEdge);
+        // Remove all shared events in or after the assumeEdge.
+        List<SharedEvent> toRemove = events.stream()
+                .filter(e -> blockEdges.indexOf(e.getInEdge()) >= assumeEdgeIdx)
+                .collect(Collectors.toList());
+        // Before removing these events, clear their relations firstly.
+        toRemove.forEach(SharedEvent::removeAllRelations);
+        events.removeAll(toRemove);
+        toRemove.forEach(Rs::remove);
+        toRemove.forEach(Ws::remove);
+
+        // Update the last-visited edge.
+//        lastVisitedEdge = coEdge;
+        // Update last-visited event if necessary.
+        // FIXME: more than one sharedEvent in an assume edge?
+        Preconditions.checkArgument(lheIndex < events.size() && lheIndex >= 0);
+        SharedEvent lastHandledEvent = events.get(lheIndex);
+        if (lastHandledEvent.getInEdge() == coEdge) {
+            // Replacing assumeEdge with its coEdge doesn't change the number of event.
+            addEvents(edgeVarMap.get(assumeEdge.hashCode()));
+        }
+
+        return coEdge;
+    }
+
+    public boolean shouldRevisit() {
+        return lheIndex >= 0 && lheIndex < events.size() - 1;
+    }
+
+    public int getRefCount(String type, OGNode other) {
+        int refCount = 0;
+        switch (type) {
+            case "rf":
+                for (SharedEvent r : Rs)
+                    if (other.Ws.contains(r.getReadFrom()))
+                        refCount++;
+                break;
+            case "rb":
+                for (SharedEvent w : Ws)
+                    for (SharedEvent r : w.getReadBy())
+                        if (other.Rs.contains(r))
+                            refCount++;
+                break;
+
+            case "fr":
+                for (SharedEvent r : Rs)
+                    for (SharedEvent fr : r.getFromRead())
+                        if (other.Ws.contains(fr))
+                            refCount++;
+                break;
+            case "frb":
+                for (SharedEvent w : other.Ws)
+                    for (SharedEvent r : w.getFromReadBy())
+                        if (Rs.contains(r))
+                            refCount++;
+                break;
+
+            case "ma":
+                for (SharedEvent w : Ws)
+                    if (other.Ws.contains(w.getMoAfter()))
+                        refCount++;
+                break;
+
+            case "mb":
+                for (SharedEvent w : Ws)
+                    if (other.Ws.contains(w.getMoBefore()))
+                        refCount++;
+                break;
+
+            default:
+        }
+
+        return refCount;
+    }
+
+    // FIXME
+//    public boolean needReplaceCoEdge(CFAEdge edge) {
+//        if (blockEdges.isEmpty()) return false;
+//        if (lastVisitedEdge == null) return false;
+//        if (blockEdges.indexOf(lastVisitedEdge) == blockEdges.size() - 1) return false;
+//        int coEdgeIdx = blockEdges.indexOf(lastVisitedEdge) + 1;
+//        return Objects.equals(blockEdges.get(coEdgeIdx).getPredecessor(),
+//                edge.getPredecessor());
+//    }
+
+    // Set events[i] = coEvent, at the same time, we also update Rs or Ws.
+    public void setEvent(int i, SharedEvent coEvent) {
+        Rs.remove(events.get(i));
+        events.set(i, coEvent);
+        Rs.add(coEvent);
     }
 }

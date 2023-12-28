@@ -9,13 +9,16 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNodeBuilder;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
+import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Options(prefix = "utils.globalInfo.OGInfo")
 public class OGInfo {
@@ -40,9 +43,24 @@ public class OGInfo {
     // <next table.
     private final HashMap<Integer, Integer> nlt;
 
+    public HashMap<Integer, List<SharedEvent>> getEdgeVarMap() {
+        return edgeVarMap;
+    }
+
+    // edge-sharedVars map.
+    private HashMap<Integer, List<SharedEvent>> edgeVarMap;
+
     @Option(secure = true,
             description = "this option is enabled iff we use OGPORCPA.")
     private boolean useOG = false;
+
+    @Option(secure = true,
+            description = "this option is enabled when we use nodeMap.")
+    private boolean useNodeMap = false;
+
+    @Option(secure = true,
+            description = "extract shared variables for every cfa edge.")
+    private boolean extractVarsForCFAEdge = true;
 
     public OGInfo(final Configuration pConfig,
                   final ConfigurableProgramAnalysis pCpa,
@@ -52,10 +70,20 @@ public class OGInfo {
         pConfig.inject(this);
         if (useOG) {
             OGMap = new HashMap<>();
-            nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
-            nodeMap = nodeBuilder.build();
+
+            if (useNodeMap) {
+                nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
+                nodeMap = nodeBuilder.build();
+            }
+
+            if (extractVarsForCFAEdge) {
+                nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
+                edgeVarMap = new HashMap<>();
+                nodeBuilder.buildEdgeVarMap(edgeVarMap);
+            }
+
             fullOGMap = new HashMap<>();
-            transfer = new OGTransfer(OGMap, nodeMap);
+            transfer = new OGTransfer(OGMap, nodeMap, edgeVarMap);
             revisitor = new OGRevisitor(OGMap, nodeMap, pConfig, pCfa, pLogger);
             nlt = new HashMap<>();
         } else {

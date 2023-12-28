@@ -1,8 +1,13 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
+import org.sosy_lab.cpachecker.cfa.ast.AExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
@@ -14,6 +19,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.DeepCopier;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
+import scala.concurrent.impl.FutureConvertersImpl;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -21,19 +27,41 @@ import java.util.stream.Collectors;
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.porf;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
+import static org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer.CriticalAreaAction.*;
+import static org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer.LockStatus.LOCK;
+import static org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer.LockStatus.UNLOCK;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class OGTransfer {
 
     private final Map<Integer, List<ObsGraph>> OGMap;
     private final Map<Integer, OGNode> nodeMap;
+    private final Map<Integer, List<SharedEvent>> edgeVarMap;
     private final DeepCopier copier = new DeepCopier();
+    private final Set<String> atomicBegins = ImmutableSet.of("__VERIFIER_atomic_begin");
+    private final Set<String> atomicEnds = ImmutableSet.of("__VERIFIER_atomic_end");
+    private final Set<String> lockBegins = ImmutableSet.of("pthread_lock", "lock");
+    private final Set<String> lockEnds = ImmutableSet.of("pthread_unlock", "unlock");
+
+    protected enum CriticalAreaAction {
+        START,
+        CONTINUE,
+        END
+    }
+
+    protected enum LockStatus {
+        LOCK,
+        UNLOCK
+    }
 
     private final NLTComparator nltcmp = new NLTComparator();
+
     public OGTransfer(Map<Integer, List<ObsGraph>> pOGMap,
-                      Map<Integer, OGNode> pNodeMap) {
+                      Map<Integer, OGNode> pNodeMap,
+            Map<Integer, List<SharedEvent>> pEdgeVarMap) {
         this.OGMap = pOGMap;
         this.nodeMap = pNodeMap;
+        this.edgeVarMap = pEdgeVarMap;
     }
 
     public NLTComparator getNltcmp() {
@@ -119,149 +147,375 @@ public class OGTransfer {
                                        ARGState parState, /* lead state */
                                        ARGState chState) {
         // Debug.
-        boolean debug = false;
+        boolean debug = true;
+
         Preconditions.checkArgument(graphWrapper.size() == 1);
         ObsGraph graph = graphWrapper.iterator().next();
-        OGNode node = nodeMap.get(edge.hashCode());
-        // If an edge is in a block but not the first one of that, then we just transfer
-        // the graph simply. Also, for the edge that doesn't access global variables.
-        // For a block, the first edge decides whether we could transfer the graph.
-        if (node == null /* No OGNode for the edge. */) {
-            // Transfer graph from parState to chSate simply. I.e., just return the graph.
-            graph.setNeedToRevisit(false);
-            // Debug.
-//            addGraphToFull(graph, chState.getStateId());
-            graphWrapper.clear();
-            if (debug) System.out.println("Transferring from s" + parState.getStateId()
-                    + " -> s" + chState.getStateId() + ": " + edge);
-            return graph;
-        }
+        OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class),
+                parOgState = AbstractStates.extractStateByType(parState, OGPORState.class);
+        assert chOgState != null && parOgState != null;
+        String curThread = chOgState.getInThread();
 
-        // Whether the graph contains the node.
-        // FIXME: only use depth is enough?
-        int loopDepth = getLoopDepth(chState),
-                idx = graph.contain(node, loopDepth, edge.getPredecessor());
-        // Handle the possible co-nodes.
-        if (edge instanceof AssumeEdge && idx < 0) {
-            OGNode coNode = node.getCoNodes().getOrDefault(edge.getPredecessor(), null);
-            int coIdx = coNode == null ?
-                    -1 : graph.contain(coNode, loopDepth, edge.getPredecessor());
-            if (coIdx >= 0) {
-                // Replace lastNode with the co-node. Just remove the old last node and
-                // add it's co-node?
-                node = node.deepCopy(new HashMap<>());
-                coNode = graph.getNodes().get(coIdx);
-                SharedEvent coLastHandledEnt = coNode.getLastHandledEvent();
-                int lastHEIdx = coNode.getEvents().indexOf(coLastHandledEnt);
-                if (coLastHandledEnt != null) {
-                    // oldLastNode is the node that we may need to revisit.
-                    node.setLastHandledEvent(node.getEvents().get(lastHEIdx));
-                    if (lastHEIdx < coNode.getEvents().size() - 1) {
-                        graph.setNeedToRevisit(true);
+        // Get OGNode for the current thread.
+        OGNode node = graph.getCurrentNode(curThread);
+        List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
+        Stack<String> locks = chOgState.getLocks().get(curThread);
+
+        if (node == null) {
+            // No node for the current thread.
+            if (hasUnmetNode(graph)) {
+                // If there still are some nodes from other threads not visited, we
+                // should visit them first, i.e., we shouldn't transfer the graph.
+                return null;
+            } else {
+                // No unmet nodes.
+                if (sharedEvents == null || sharedEvents.isEmpty()) {
+                    // Edge has no shared events.
+                    Pair<LockStatus, String> l = getLock(edge);
+                    if (l != null) {
+                        // The edge contains some lock.
+                        CriticalAreaAction action = handleLock(locks, l);
+                        switch (action) {
+                            case START:
+                                OGNode newNode = new OGNode(edge,
+                                        new ArrayList<>(Collections.singleton(edge)),
+                                        true,
+                                        false);
+                                newNode.setThreadInfo(chState);
+//                                chOgState.setNodeTable(parOgState.getNodeTable());
+//                                chOgState.updateNode(curThread, newNode);
+                                updatePreSucState(edge, newNode, parState, chState);
+                                graph.setNeedToRevisit(false);
+                                graph.updateCurrentNode(curThread, newNode);
+                                graphWrapper.clear();
+
+                                if (debug) debugActions(graph, parState, chState, edge);
+                                return graph;
+                            case CONTINUE:
+                                throw new UnsupportedOperationException("Nesting locks " +
+                                        "is not allowed when node == null: " + edge);
+                            case END:
+                                throw new UnsupportedOperationException("Unlocking " +
+                                        "is not allowed when node == null: " + edge);
+                            default:
+                                throw new UnsupportedOperationException("Missing " +
+                                        "action: " + edge);
+                        }
+                    } else {
+                        // Else, the edge just accesses the non-lock local vars.
+                        // We just need to transfer graph from parState to chSate.
+                        graph.setNeedToRevisit(false);
+                        graphWrapper.clear();
+
+                        // Debug.
+                        if (debug) debugActions(graph, parState, chState, edge);
+                        return graph;
                     }
                 } else {
-                    // oldLastNode is not the node that we need to revisit.
-                    graph.setNeedToRevisit(false);
-                }
-                node.setLoopDepth(getLoopDepth(chState));
-                // curNode's preState should be equal to coNode's.
-                graph.replaceCoNode(coIdx, node);
-                addNewNode(graph, node, coNode.getPreState(), chState);
-                addGraphToFull(graph, chState.getStateId());
-                graphWrapper.clear();
-                if (debug) System.out.println("Transferring from s" + parState.getStateId()
-                        + " -> s" + chState.getStateId() + ": " + edge);
-                return graph;
-            }
-        }
-        // Whether there is any node in the graph still unmet.
-        boolean hasNodeUnmet = hasUnmetNode(graph);
-        // In the case that the graph still has some nodes unmet and doesn't contain the
-        // current 'node', just skip the 'node' simply.
-        if (hasNodeUnmet && (idx < 0)) return null;
+                    // The edge has some shared events.
+                    // TODO: Shared lock begin or end.
+                    Pair<LockStatus, String> l = getLock(edge);
+                    if (l != null) {
+                        CriticalAreaAction action = handleLock(locks, l);
+                        switch (action) {
+                            case START:
+                                OGNode newNode = new OGNode(edge,
+                                        new ArrayList<>(Collections.singleton(edge)),
+                                        true,
+                                        false);
+                                newNode.setThreadInfo(chState);
+//                                chOgState.setNodeTable(parOgState.getNodeTable());
+//                                chOgState.updateNode(curThread, newNode);
+                                updatePreSucState(edge, newNode, parState, chState);
+                                graph.updateCurrentNode(curThread, newNode);
+                                graph.setNeedToRevisit(false);
+                                graphWrapper.clear();
+                                if (debug) debugActions(graph, parState, chState, edge);
+                                return graph;
+                            case CONTINUE:
+                                throw new UnsupportedOperationException("Nesting locks " +
+                                        "is not allowed when node == null: " + edge);
+                            case END:
+                                throw new UnsupportedOperationException("Unlocking " +
+                                        "is not allowed when node == null: " + edge);
+                            default:
+                                throw new UnsupportedOperationException("Missing " +
+                                        "action: " + edge);
+                        }
+                    } else {
+                        // The edge contains non-lock shared vars.
+                        OGNode newNode = new OGNode(edge,
+                                new ArrayList<>(Collections.singleton(edge)),
+                                true,
+                                false);
+                        newNode.addEvents(sharedEvents);
+                        newNode.setThreadInfo(chState);
+//                        chOgState.setNodeTable(parOgState.getNodeTable());
+//                        chOgState.updateNode(curThread, null);
+                        updatePreSucState(edge, newNode, parState, chState);
+                        visitNode(graph, newNode, false);
 
-        // no unmet nodes or idx >= 0.
-        if (idx >= 0) {
-            // The node has been in the graph.
-            OGNode innerNode = graph.getNodes().get(idx);
-            if (!node.isSimpleNode() && !edge.equals(node.getBlockStartEdge())) {
-                // Debug.
-//                addGraphToFull(graph, chState.getStateId());
-                // Inside the non-simple node, just return.
-                updatePreSucState(edge, innerNode, parState, chState);
-                graphWrapper.clear();
-                if (debug) System.out.println("Transferring from s" + parState.getStateId()
-                        + " -> s" + chState.getStateId() + ": " + edge);
-                return graph;
+                        graph.updateCurrentNode(curThread, null);
+                        graph.setNeedToRevisit(true);
+                        graphWrapper.clear();
+
+                        if (debug) debugActions(graph, parState, chState, edge);
+                        return graph;
+                    }
+                }
             }
-            // Not inside the non-simple node, check the conflict.
-            if (isConflict(graph, node, idx)) {
-                // If some other nodes should be 'added' to the graph before the node but
-                // still not be, then the transfer is not allowed.
-                return null;
-            }
-            // FIXME: When co-nodes exist, we may need to continue the revisit.
-            if (innerNode.getLastHandledEvent() != null
-                    && innerNode.getEvents().indexOf(innerNode.getLastHandledEvent()) <
-                    innerNode.getEvents().size()) {
-                graph.setNeedToRevisit(true);
-            } else {
-                // Otherwise, we needn't revisit the graph.
-                graph.setNeedToRevisit(false);
-            }
-            // Update the last node for the graph.
-            // This will also update the mo relations for the last node.
-            updateLastNode(graph, idx,
-                    node.isSimpleNode() ? parState : node.getPreState(),
-                    chState);
-            // Update the loop depth and thread info.
-            innerNode.setLoopDepth(loopDepth);
-//            innerNode.setThreadInfo(chState);
         } else {
-            if (node.isSimpleNode() || edge.equals(node.getBlockStartEdge())) {
-                // The node is not in the graph.
-                if (isConflict(graph, node, -1)) {
-                    // Some other nodes should happen before the node.
+            // node != null.
+            int idx = node.contains(edge);
+            boolean isInsideNode = isInsideNode(node, edge);
+
+            if (isConflict(graph, curThread, node)) {
+                // Conflict means we should visit nodes of other threads first. Despite
+                // this, we could still transfer the graph since the current thread is
+                // equal to the thread of the node. The difference is that the node
+                // table doesn't change at all after the transfer.
+                if (idx >= 0 || isInsideNode) {
                     return null;
+                } else {
+                    // The edge just accesses local vars, we transfer graph simply
+                    // without any change to nodeTable.
+                    graph.setNeedToRevisit(false);
+                    graphWrapper.clear();
+
+                    if (debug) debugActions(graph, parState, chState, edge);
+                    return graph;
                 }
-                // fixme: When we meet a node, set its lastHandledEvent = null?
-                node.setLastHandledEvent(null);
             }
-            if (!node.isSimpleNode() && !edge.equals(node.getLastBlockEdge())) {
+
+            if (edge instanceof AssumeEdge) {
+                // Handle conditional statements.
+                if (isInsideNode) {
+                    if (idx < 0) {
+                        // The node doesn't contain the edge. Because the edge is an
+                        // assumption and inside the node, we need to replace it with its
+                        // coEdge.The process of replacing the coEdge will also add the
+                        // coEdge and all possible shared events to blockEdges and events
+                        // of the node, separately.
+                        edge = node.replaceCoEdge(edgeVarMap, edge);
+                    } else if (node.isSimpleNode()){
+                        updatePreSucState(edge, node, parState, chState);
+                        visitNode(graph, node, true);
+                        graph.updateCurrentNodeTable(curThread, node);
+                    }
+                }
+
+//                chOgState.setNodeTable(parOgState.getNodeTable());
+                node.setLastVisitedEdge(edge);
                 graph.setNeedToRevisit(false);
-                // Debug.
-//                addGraphToFull(graph, chState.getStateId());
-                updatePreSucState(edge, node, parState, chState);
                 graphWrapper.clear();
-                if (debug) System.out.println("Transferring from s" + parState.getStateId()
-                        + " -> s" + chState.getStateId() + ": " + edge);
+
+                if (debug) debugActions(graph, parState, chState, edge);
                 return graph;
+            } else {
+                // Handle non-conditional statements.
+                Pair<LockStatus, String> l = getLock(edge);
+                if (l != null) {
+                    CriticalAreaAction action = handleLock(locks, l);
+                    switch (action) {
+                        case START:
+                            throw new UnsupportedOperationException("Cannot " +
+                                    "start a new node when there has been one: " + edge);
+                        case CONTINUE:
+                            if (sharedEvents != null && !sharedEvents.isEmpty()) {
+                                node.addEvents(sharedEvents);
+                            }
+                            if (idx < 0) {
+                                // The node does not contain the edge.
+                                node.getBlockEdges().add(edge);
+                            }
+                            node.setLastVisitedEdge(edge);
+//                            chOgState.setNodeTable(parOgState.getNodeTable());
+                            graph.setNeedToRevisit(false);
+                            graphWrapper.clear();
+
+                            if (debug) debugActions(graph, parState, chState, edge);
+                            return graph;
+                        case END:
+//                            chOgState.setNodeTable(parOgState.getNodeTable());
+                            if (idx < 0) {
+                                if (sharedEvents != null && !sharedEvents.isEmpty()) {
+                                    node.addEvents(sharedEvents);
+                                }
+                                node.getBlockEdges().add(edge);
+                                visitNode(graph, node, false);
+                                if (node.shouldRevisit()) {
+                                    graph.setNeedToRevisit(true);
+                                }
+                            } else {
+                                // Update the current nodes for threads.
+//                                chOgState.updateNodeTable(curThread, node);
+                                graph.updateCurrentNodeTable(curThread, node);
+                                visitNode(graph, node, true);
+                            }
+
+                            node.setLastVisitedEdge(edge);
+                            updatePreSucState(edge, node, parState, chState);
+                            graphWrapper.clear();
+
+                            if (debug) debugActions(graph, parState, chState, edge);
+                            return graph;
+                        default:
+                            throw new UnsupportedOperationException("Missing " +
+                                    "action: " + edge);
+                    }
+                } else {
+                    // Non-lock edge.
+//                    chOgState.setNodeTable(parOgState.getNodeTable());
+                    if (isInsideNode) {
+                        // If the node is simple, update the current node.
+                        if (node.isSimpleNode()) {
+//                        chOgState.updateNodeTable(curThread, node);
+                            updatePreSucState(edge, node, parState, chState);
+                            visitNode(graph,node, true);
+                            graph.updateCurrentNodeTable(curThread, node);
+                        } else if (idx < 0) {
+                            // We continue to add the edge to the current node, at the
+                            // same time we add the shared events (if existed), too.
+                            if (sharedEvents != null && !sharedEvents.isEmpty()) {
+                                node.addEvents(sharedEvents);
+                            }
+                            node.getBlockEdges().add(edge);
+                        }
+                        node.setLastVisitedEdge(edge);
+                    }
+
+                    graph.setNeedToRevisit(false);
+                    graphWrapper.clear();
+
+                    if (debug) debugActions(graph, parState, chState, edge);
+                    return graph;
+                }
             }
-            // Add the node to the graph.
-            // If we add a new node to the graph, we should use its deep copy.
-            OGNode newNode = copier.deepCopy(node);
-            // Update the loopDepth.
-            newNode.setLoopDepth(loopDepth);
-//            newNode.setThreadInfo(chState);
-            // Debug.
-//            System.out.println("\u001b[32m" + newNode + "\u001b[0m");
-            updatePreSucState(edge, newNode, parState, chState);
-//            getDot(graph);
-//            System.out.println("");
-            addNewNode(graph, newNode,
-                    node.isSimpleNode() ? parState : node.getPreState(),
-                    chState);
-            graph.setNeedToRevisit(true);
-//            getDot(graph);
-//            System.out.println("");
+        }
+    }
+
+    private boolean isInsideNode(OGNode node, CFAEdge edge) {
+        if (node.isSimpleNode()) {
+            return node.contains(edge) == 0;
+        } else {
+            return node.getLastVisitedEdge() != null
+                    && node.contains(node.getLastVisitedEdge()) > 0;
+        }
+    }
+
+    // TODO
+    private CriticalAreaAction handleLock(Stack<String> locks,
+            Pair<LockStatus, String> pL) {
+        LockStatus lockStatus = pL.getFirstNotNull();
+        String l = pL.getSecondNotNull();
+
+        if (locks.isEmpty()) {
+            if (lockStatus == UNLOCK) {
+                throw new UnsupportedOperationException("Unlocking " +
+                        "is not allowed when no lock held.");
+            }
+            locks.push(l);
+            return START;
+        } else {
+            String l0 = locks.peek();
+            if (Objects.equals(l, l0)) {
+                if (lockStatus == LOCK) {
+                    // TODO: Try to acquire a holding lock.
+                    return CONTINUE;
+                } else {
+                    // Unlock.
+                    locks.pop();
+                    return locks.isEmpty() ? END : CONTINUE;
+                }
+            } else {
+                if (lockStatus == LOCK) {
+                    locks.push(l);
+                    return CONTINUE;
+                } else {
+                    // Unlock.
+                    if (locks.contains(l)) {
+                        // Critical area preserved.
+                        locks.remove(l);
+                        Preconditions.checkArgument(!locks.isEmpty(),
+                                "Unlocking a lock that doesn't at the top of " +
+                                        "lock stack makes locks not empty");
+                        return CONTINUE;
+                    } else {
+                        throw new UnsupportedOperationException("Unlocking " +
+                                "is not allowed when no lock held.");
+                    }
+                }
+            }
+        }
+    }
+
+    // Get the name of the lock var form the given edge.
+    private Pair<LockStatus, String> getLock(CFAEdge edge) {
+
+        if (!(edge instanceof CFunctionCallEdge)) {
+            return null;
         }
 
-        // Debug.
-//        addGraphToFull(graph, chState.getStateId());
-        graphWrapper.clear();
-        if (debug) System.out.println("Transferring from s" + parState.getStateId()
+        CFunctionCallEdge cFuncEdge = (CFunctionCallEdge) edge;
+
+        if (hasAtomicBegin(edge)) {
+            return Pair.of(LOCK, "__VERIFIER_atomic_begin");
+        }
+        if (hasAtomicEnd(edge)) {
+            return Pair.of(UNLOCK,"__VERIFIER_atomic_end");
+        }
+
+        if (hasLockBegin(edge)) {
+            return Pair.of(LOCK, getLockVarName(cFuncEdge));
+        }
+        if (hasLockEnd(edge)) {
+            return Pair.of(UNLOCK, getLockVarName(cFuncEdge));
+        }
+
+        return null;
+    }
+
+    private String getLockVarName(CFunctionCallEdge edge) {
+        List<? extends AExpression> arguments = edge.getArguments();
+        Preconditions.checkArgument(arguments.size() == 1,
+                "More than one vars in lock function is not supported." + edge);
+        AExpression arg = arguments.iterator().next();
+        Preconditions.checkArgument(arguments instanceof CUnaryExpression);
+        CUnaryExpression unaryExpression = (CUnaryExpression) arg;
+        CIdExpression lockIdExpression = (CIdExpression) unaryExpression.getOperand();
+        return lockIdExpression.getName();
+    }
+
+    private void debugActions(ObsGraph graph,
+            ARGState parState, ARGState chState, CFAEdge edge) {
+
+        addGraphToFull(graph, chState.getStateId());
+        System.out.println("Transferring from s" + parState.getStateId()
                 + " -> s" + chState.getStateId() + ": " + edge);
-        return graph;
+    }
+
+    private boolean hasLockEnd(CFAEdge cfaEdge) {
+        for (String le : lockEnds)
+            if (cfaEdge.getRawStatement().contains(le)) return true;
+        return false;
+    }
+
+    private boolean hasAtomicEnd(CFAEdge cfaEdge) {
+        for (String ae : atomicEnds)
+            if (cfaEdge.getRawStatement().contains(ae)) return true;
+        return false;
+    }
+
+    private boolean hasLockBegin(CFAEdge cfaEdge) {
+        for (String lb : lockBegins)
+            if (cfaEdge.getRawStatement().contains(lb)) return true;
+        return false;
+    }
+
+    private boolean hasAtomicBegin(CFAEdge cfaEdge) {
+        for (String ab : atomicBegins)
+            if (cfaEdge.getRawStatement().contains(ab)) return true;
+        return false;
     }
 
     private int getLoopDepth(ARGState chState) {
@@ -273,10 +527,10 @@ public class OGTransfer {
     private void updatePreSucState(CFAEdge edge, OGNode node, ARGState parState,
                                 ARGState chState) {
         if (node.isSimpleNode() /* Simple node. */) {
-            // Update the preState and SucStat for the node, if it's not null;
+            // Update the preState and SucStat for the node if it's not null;
             node.setPreState(parState);
             node.setSucState(chState);
-        } else { // Not simple node.
+        } else { // Not a simple node.
             if (edge.equals(node.getBlockStartEdge())) {
                 node.setPreState(parState);
             }
@@ -360,14 +614,12 @@ public class OGTransfer {
         return null;
     }
 
-
     /**
      * Detect whether a node conflicts with a graph. No conflict means we could add the
      * node to the trace. A trace corresponds to an actual execution sequence of the
      * nodes in the graph, so, one graph may have more than one trace.
      * @return true, if conflicted.
      */
-    // FIXME: throw away the write-before order.
     private boolean isConflict(ObsGraph graph, OGNode node, int nodeInGraph) {
         int i = graph.getTraceLen(), j = nodeInGraph;
         if (j < 0) {
@@ -389,7 +641,7 @@ public class OGTransfer {
         for (OGNode n : graph.getNodes()) {
             if (nodej == n || n.isInGraph()) continue;
             // n != nodej && n not in graph.
-            if (nodej.getFromReadBy().contains(n) || porf(n, nodej)) {
+            if (n.getFromRead().contains(nodej) || porf(n, nodej)) {
                 // || nodej.getWAfter().contains(n)
                 return true;
             }
@@ -398,6 +650,25 @@ public class OGTransfer {
         return false;
     }
 
+    /**
+     * it's regarded as a conflict if the nodes from other threads happen before the
+     * node of the current thread.
+     */
+    private boolean isConflict(ObsGraph graph, String curThread, OGNode curNode) {
+        Set<OGNode> otherNodes = new HashSet<>();
+        graph.getNodeTable().forEach((k, v) -> {
+             if (!curThread.equals(k) && v != null && !v.isInGraph())
+                 otherNodes.add(v);
+        });
+
+        for (OGNode on : otherNodes) {
+            if (on.getFromRead().contains(curNode) || porf(on, curNode)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
     /**
      * Update the last node and calculate trace order and modify order for it.
      * This function is called only when the new last node has already been in the graph.
@@ -437,16 +708,18 @@ public class OGTransfer {
         }
     }
 
-    // FIXME
-    private void addNewNode(ObsGraph graph,
-                            OGNode node,
-                            ARGState newPreState,
-                            ARGState newSucState) {
-        // 1. Add rf, mo, fr relations.
-        Set<SharedEvent> rFlag = new HashSet<>(node.getRs()),
-                wFlag = new HashSet<>(node.getWs());
+    private void visitNode(ObsGraph graph, OGNode node,
+//                            ARGState newPreState,
+//                            ARGState newSucState,
+            boolean hasVisited) {
+        // 1.1 Add rf, mo, fr relations if the node is visited the first time.
+        // For the visited nodes, just updating mo.
+        Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>(node.getWs());
+        if (!hasVisited) {
+            rFlag.addAll(node.getRs());
+        }
         // Whether we have found the predecessor of the node.
-        boolean preFlag = false;
+        boolean preFlag = node.getPredecessor() != null;
         OGNode n = graph.getLastNode();
         // Backtracking along with the trace.
         while (n != null) {
@@ -467,21 +740,20 @@ public class OGTransfer {
                     continue;
                 }
             }
-//            getAllDot(graph);
-//            System.out.println("");
+
             addRfMoForNewNode(graph, n, rFlag, wFlag);
-//            getAllDot(graph);
-//            System.out.println("");
             n = n.getTrAfter();
         }
-        // 2. Add the new node to the graph.
-        node.setPreState(newPreState);
-        node.setSucState(newSucState);
-        if (!graph.getNodes().contains(node)) {
+
+        // 1.2 Add the node to the graph if we visit it the first time.
+        if (!hasVisited) {
+            assert !graph.getNodes().contains(node)
+                    : "Try to add a node that has been added before";
             graph.getNodes().add(node);
         }
+
+        // 2. Update the info for the node and graph.
         node.setInGraph(true);
-//        graph.setNeedToRevisit(true);
         if (graph.getLastNode() != null) {
             graph.getLastNode().setTrBefore(node);
             node.setTrAfter(graph.getLastNode());
