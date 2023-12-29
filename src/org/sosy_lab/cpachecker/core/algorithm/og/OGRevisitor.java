@@ -444,6 +444,7 @@ public class OGRevisitor {
      * @implNote porf only contains po and rf relations.
      */
     public static boolean porf(OGNode A, OGNode B) {
+        // FIXME: avoid endless loop.
         if (A == null || B == null) return false;
         for (OGNode n : A.getSuccessors()) {
             if (n == B) return true;
