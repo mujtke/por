@@ -253,7 +253,7 @@ public class OGTransfer {
 //                        chOgState.setNodeTable(parOgState.getNodeTable());
 //                        chOgState.updateNode(curThread, null);
                         updatePreSucState(edge, newNode, parState, chState);
-                        visitNode(graph, newNode, false);
+                        visitNode(graph, newNode, chOgState, false);
 
                         graph.updateCurrentNode(curThread, null);
                         graph.setNeedToRevisit(true);
@@ -299,7 +299,7 @@ public class OGTransfer {
                         edge = node.replaceCoEdge(edgeVarMap, edge);
                     } else if (node.isSimpleNode()){
                         updatePreSucState(edge, node, parState, chState);
-                        visitNode(graph, node, true);
+                        visitNode(graph, node, chOgState, true);
                         graph.updateCurrentNodeTable(curThread, node);
                     }
                 }
@@ -342,7 +342,7 @@ public class OGTransfer {
                                     node.addEvents(sharedEvents);
                                 }
                                 node.getBlockEdges().add(edge);
-                                visitNode(graph, node, false);
+                                visitNode(graph, node, chOgState, false);
                                 if (node.shouldRevisit()) {
                                     graph.setNeedToRevisit(true);
                                 }
@@ -350,7 +350,7 @@ public class OGTransfer {
                                 // Update the current nodes for threads.
 //                                chOgState.updateNodeTable(curThread, node);
                                 graph.updateCurrentNodeTable(curThread, node);
-                                visitNode(graph, node, true);
+                                visitNode(graph, node, chOgState, true);
                             }
 
                             node.setLastVisitedEdge(edge);
@@ -371,7 +371,7 @@ public class OGTransfer {
                         if (node.isSimpleNode()) {
 //                        chOgState.updateNodeTable(curThread, node);
                             updatePreSucState(edge, node, parState, chState);
-                            visitNode(graph,node, true);
+                            visitNode(graph,node, chOgState, true);
                             graph.updateCurrentNodeTable(curThread, node);
                         } else if (idx < 0) {
                             // We continue to add the edge to the current node, at the
@@ -709,8 +709,7 @@ public class OGTransfer {
     }
 
     private void visitNode(ObsGraph graph, OGNode node,
-//                            ARGState newPreState,
-//                            ARGState newSucState,
+            OGPORState chOgState,
             boolean hasVisited) {
         // 1.1 Add rf, mo, fr relations if the node is visited the first time.
         // For the visited nodes, just updating mo.
@@ -754,6 +753,7 @@ public class OGTransfer {
 
         // 2. Update the info for the node and graph.
         node.setInGraph(true);
+        node.setLoopDepth(chOgState.getLoopDepth());
         if (graph.getLastNode() != null) {
             graph.getLastNode().setTrBefore(node);
             node.setTrAfter(graph.getLastNode());
