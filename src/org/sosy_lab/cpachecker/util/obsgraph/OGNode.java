@@ -196,7 +196,7 @@ public class OGNode implements Copier<OGNode> {
     public String toString() {
         StringBuilder str = new StringBuilder();
         str.append(blockEdges.toString());
-        if (loopDepth > 0) {
+        if (loopDepth != 0) {
             str.append("@").append(loopDepth);
         }
         return str.toString();

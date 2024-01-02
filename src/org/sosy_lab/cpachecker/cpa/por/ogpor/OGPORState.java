@@ -211,9 +211,6 @@ public class OGPORState implements AbstractState, Graphable {
         if (loops.get(inThread).isEmpty()) {
             return 0;
         }
-//        CFANode curLoop = loops.get(inThread).peek();
-//
-//        return loopDepthTable.get(curLoop);
         int res = 0;
         for (CFANode loop : loops.get(inThread)) {
             int depth = loopDepthTable.get(loop);

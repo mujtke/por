@@ -2,12 +2,16 @@ package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
+import org.eclipse.cdt.internal.core.dom.parser.c.CFunction;
 import org.sosy_lab.cpachecker.cfa.ast.AExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
@@ -453,11 +457,14 @@ public class OGTransfer {
     // Get the name of the lock var form the given edge.
     private Pair<LockStatus, String> getLock(CFAEdge edge) {
 
-        if (!(edge instanceof CFunctionCallEdge)) {
+        if (!(edge instanceof CStatementEdge) && !(edge instanceof CFunctionCallEdge)) {
             return null;
         }
 
-        CFunctionCallEdge cFuncEdge = (CFunctionCallEdge) edge;
+        if (edge instanceof CStatementEdge
+                && !(((CStatementEdge) edge).getStatement() instanceof CFunctionCallStatement)) {
+            return null;
+        }
 
         if (hasAtomicBegin(edge)) {
             return Pair.of(LOCK, "__VERIFIER_atomic_begin");
@@ -467,17 +474,28 @@ public class OGTransfer {
         }
 
         if (hasLockBegin(edge)) {
-            return Pair.of(LOCK, getLockVarName(cFuncEdge));
+            return Pair.of(LOCK, getLockVarName(edge));
         }
         if (hasLockEnd(edge)) {
-            return Pair.of(UNLOCK, getLockVarName(cFuncEdge));
+            return Pair.of(UNLOCK, getLockVarName(edge));
         }
 
         return null;
     }
 
-    private String getLockVarName(CFunctionCallEdge edge) {
-        List<? extends AExpression> arguments = edge.getArguments();
+    private String getLockVarName(CFAEdge edge) {
+        List<? extends AExpression> arguments;
+        if (edge instanceof CFunctionCallEdge) {
+            arguments = ((CFunctionCallEdge)edge).getArguments();
+        } else {
+            assert edge instanceof CStatementEdge;
+            CStatement cStatement = ((CStatementEdge) edge).getStatement();
+            assert cStatement instanceof CFunctionCallStatement;
+            CFunctionCallStatement cFunctionCallStatement =
+                    (CFunctionCallStatement) cStatement;
+            arguments = cFunctionCallStatement.getFunctionCallExpression().getParameterExpressions();
+        }
+
         Preconditions.checkArgument(arguments.size() == 1,
                 "More than one vars in lock function is not supported." + edge);
         AExpression arg = arguments.iterator().next();

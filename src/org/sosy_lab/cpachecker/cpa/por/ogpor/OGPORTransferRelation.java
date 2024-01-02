@@ -130,9 +130,7 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         // Debug.
 //        System.out.println("\u001b[31m" + cfaEdge + " @" + ogState.getLoopDepth() +
 //                "\u001b[0m");
-
-        // Update the current node map.
-//        updateNodeTable(ogState, cfaEdge, activeThread);
+        // TODO: udpate locks.
 
         return Set.of(state);
     }
