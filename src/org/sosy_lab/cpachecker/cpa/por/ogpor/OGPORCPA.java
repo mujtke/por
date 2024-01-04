@@ -7,6 +7,7 @@ import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.DummyCFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
@@ -61,7 +62,7 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
     public AbstractState getInitialState(CFANode node, StateSpacePartition partition) throws InterruptedException {
 
         String mainFuncName = cfa.getMainFunction().getFunctionName();
-        OGPORState initState = new OGPORState(0);
+        OGPORState initState = new OGPORState(0, new DummyCFAEdge(null, null));
         initState.getThreads().put(mainFuncName, "N" + node.getNodeNumber());
         initState.setCfa(cfa);
         initState.setLoopInfo();
