@@ -2,18 +2,33 @@ package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.ast.AExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
+import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
 import org.sosy_lab.cpachecker.util.LoopStructure;
 import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
+import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
+import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
+import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
+import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction.*;
+import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.LockStatus.LOCK;
+import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.LockStatus.UNLOCK;
 
 public class OGPORState implements AbstractState, Graphable {
 
@@ -21,7 +36,7 @@ public class OGPORState implements AbstractState, Graphable {
     private int num;
     // Assume there is an edge: sn -- Ei --> sm, then the value of 'inThread' will be
     // the activeThread of 'Ei', which comes from the threadingState in sn. We set
-    // its value in strengthen process.
+    // its value in a 'strengthen' process.
     private String inThread;
     private final Map<String, String> threads;
 
@@ -36,6 +51,33 @@ public class OGPORState implements AbstractState, Graphable {
 
     private final Map<String, Stack<String>> locks = new HashMap<>();
 
+    public enum LockStatus {
+        LOCK,
+        UNLOCK,
+        LOCK_FREE,
+    }
+
+    public enum CriticalAreaAction {
+        START, /* start a critical area */
+        CONTINUE, /* inside a critical area */
+        END, /* end a critical area */
+        NOT_IN, /* not any one above, lock-free */
+    }
+
+    private CriticalAreaAction caa = NOT_IN;
+
+    // Record the entering edge.
+    CFAEdge enteringEdge;
+    // Record whether the enteringEdge is the normal edge.
+    boolean isNormalEnteringEdge = true;
+    private static HashMap<Integer, List<SharedEvent>> edgeVarMap;
+    private static Set<String> atomicBegins = ImmutableSet.of("__VERIFIER_atomic_begin");
+    private static Set<String> atomicEnds = ImmutableSet.of("__VERIFIER_atomic_end");
+    private static Set<String> lockBegins = ImmutableSet.of("pthread_lock", "lock");
+    private static Set<String> lockEnds = ImmutableSet.of("pthread_unlock", "unlock");
+
+    public CriticalAreaAction getCaa() { return caa; }
+
     public void setLocks(Map<String, Stack<String>> pLocks) {
         locks.putAll(pLocks);
     }
@@ -43,6 +85,9 @@ public class OGPORState implements AbstractState, Graphable {
     public Map<String, Stack<String>> getLocks() {
         return locks;
     }
+
+    public boolean enteringEdgeIsNormal() { return isNormalEnteringEdge; }
+    public CFAEdge getEnteringEdge() { return enteringEdge; }
 
     @Override
     public int hashCode() {
@@ -81,9 +126,47 @@ public class OGPORState implements AbstractState, Graphable {
         return true;
     }
 
-    public OGPORState(int pNum) {
+    public OGPORState(int pNum, CFAEdge pEdge) {
         num = pNum;
         threads = new HashMap<>();
+        enteringEdge = pEdge;
+        if (edgeVarMap == null) {
+            try {
+                GlobalInfo globalInfo = GlobalInfo.getInstance();
+                assert globalInfo != null : "Initialize edgeVarMap for OGPORState " +
+                        "failed since the absence of the GlobalInfo";
+                OGInfo ogInfo = globalInfo.getOgInfo();
+                assert ogInfo != null : "Initialize edgeVarMap for OGPORState failed " +
+                        "since the absence of the ogInfo.";
+                edgeVarMap = ogInfo.getEdgeVarMap();
+            } catch (Exception e) {
+                throw e;
+            }
+        }
+        isNormalEnteringEdge = isNormalEdge(pEdge);
+    }
+
+    private boolean isNormalEdge(CFAEdge edge) {
+        // FIXME: should we consider the block ends?
+        // Check whether the given edge is a normal edge, i.e., the edge neither accesses
+        // any shared vars nor begin any atomic block.
+
+        if (edge instanceof CStatementEdge) {
+            CStatement cStatement = ((CStatementEdge) edge).getStatement();
+            if (cStatement instanceof CFunctionCallStatement)
+                if (hasAtomicBegin(edge) || hasLockBegin(edge))
+                    return false;
+        } else if (edge instanceof CFunctionCallEdge) {
+            if (hasAtomicBegin(edge) || hasLockBegin(edge))
+                return false;
+        }
+
+        // Not a fun call.
+        if (edgeVarMap.get(edge.hashCode()) != null &&
+                !edgeVarMap.get(edge.hashCode()).isEmpty())
+            return false;
+
+        return true;
     }
 
     public void setLoopInfo() {
@@ -211,9 +294,6 @@ public class OGPORState implements AbstractState, Graphable {
         if (loops.get(inThread).isEmpty()) {
             return 0;
         }
-//        CFANode curLoop = loops.get(inThread).peek();
-//
-//        return loopDepthTable.get(curLoop);
         int res = 0;
         for (CFANode loop : loops.get(inThread)) {
             int depth = loopDepthTable.get(loop);
@@ -223,12 +303,163 @@ public class OGPORState implements AbstractState, Graphable {
         return res;
     }
 
-    // Update the lock for current OGPORState.
-    public void updateLock(String curThread, String lock, String heldLock) {
-        if (!lock.equals(heldLock)) {
-            locks.get(curThread).push(lock);
+    // Update the lock status.
+    public void updateLockStatus(CFAEdge edge) {
+        if (!locks.containsKey(inThread)) {
+            locks.put(inThread, new Stack<>());
+        }
+
+        Pair<LockStatus, String> l = getLock(edge);
+        if (l == null) {
+            caa = NOT_IN;
+            return;
+        }
+
+        Stack<String> curLocks = locks.get(inThread);
+        caa = handleLock(curLocks, l);
+    }
+
+    // Get the name of the lock var form the given edge.
+    private Pair<LockStatus, String> getLock(CFAEdge edge) {
+
+        if (!(edge instanceof CStatementEdge) && !(edge instanceof CFunctionCallEdge)) {
+            return null;
+        }
+
+        if (edge instanceof CStatementEdge
+                && !(((CStatementEdge) edge).getStatement() instanceof CFunctionCallStatement)) {
+            return null;
+        }
+
+        if (hasAtomicBegin(edge)) {
+            return Pair.of(LOCK, "__VERIFIER_atomic_begin");
+        }
+        if (hasAtomicEnd(edge)) {
+            return Pair.of(UNLOCK,"__VERIFIER_atomic_end");
+        }
+
+        if (hasLockBegin(edge)) {
+            return Pair.of(LOCK, getLockVarName(edge));
+        }
+        if (hasLockEnd(edge)) {
+            return Pair.of(UNLOCK, getLockVarName(edge));
+        }
+
+        return null;
+    }
+
+    private boolean hasLockEnd(CFAEdge cfaEdge) {
+        for (String le : lockEnds)
+            if (cfaEdge.getRawStatement().contains(le)) return true;
+        return false;
+    }
+
+    private boolean hasAtomicEnd(CFAEdge cfaEdge) {
+        for (String ae : atomicEnds)
+            if (cfaEdge.getRawStatement().contains(ae)) return true;
+        return false;
+    }
+
+    private boolean hasLockBegin(CFAEdge cfaEdge) {
+        for (String lb : lockBegins)
+            if (cfaEdge.getRawStatement().contains(lb)) return true;
+        return false;
+    }
+
+    private boolean hasAtomicBegin(CFAEdge cfaEdge) {
+        for (String ab : atomicBegins)
+            if (cfaEdge.getRawStatement().contains(ab)) return true;
+        return false;
+    }
+
+    private String getLockVarName(CFAEdge edge) {
+        List<? extends AExpression> arguments;
+        if (edge instanceof CFunctionCallEdge) {
+            arguments = ((CFunctionCallEdge)edge).getArguments();
         } else {
-            locks.get(curThread).pop();
+            assert edge instanceof CStatementEdge;
+            CStatement cStatement = ((CStatementEdge) edge).getStatement();
+            assert cStatement instanceof CFunctionCallStatement;
+            CFunctionCallStatement cFunctionCallStatement =
+                    (CFunctionCallStatement) cStatement;
+            arguments = cFunctionCallStatement.getFunctionCallExpression().getParameterExpressions();
+        }
+
+        Preconditions.checkArgument(arguments.size() == 1,
+                "More than one vars in lock function is not supported." + edge);
+        AExpression arg = arguments.iterator().next();
+        Preconditions.checkArgument(arguments instanceof CUnaryExpression);
+        CUnaryExpression unaryExpression = (CUnaryExpression) arg;
+        CIdExpression lockIdExpression = (CIdExpression) unaryExpression.getOperand();
+        return lockIdExpression.getName();
+    }
+
+    private CriticalAreaAction handleLock(Stack<String> curLocks,
+            Pair<LockStatus, String> pL) {
+        LockStatus lockStatus = pL.getFirstNotNull();
+        String l = pL.getSecondNotNull();
+
+        if (curLocks.isEmpty()) {
+            if (lockStatus == UNLOCK) {
+                throw new UnsupportedOperationException("Unlocking " +
+                        "is not allowed when no lock held.");
+            }
+            curLocks.push(l);
+            return START;
+        } else {
+            String l0 = curLocks.peek();
+
+            if (lockMatch(l, l0)) {
+                if (lockStatus == LOCK) {
+                    // TODO: Try to acquire a holding lock.
+                    return CONTINUE;
+                } else {
+                    // Unlock.
+                    curLocks.pop();
+                    return curLocks.isEmpty() ? END : CONTINUE;
+                }
+            } else {
+                if (lockStatus == LOCK) {
+                    curLocks.push(l);
+                    return CONTINUE;
+                } else {
+                    // Unlock.
+                    if (curLocks.contains(l)) {
+                        // Critical area preserved.
+                        curLocks.remove(l);
+                        Preconditions.checkArgument(!curLocks.isEmpty(),
+                                "Unlocking a lock that doesn't at the top of " +
+                                        "stack should make locks not empty");
+                        return CONTINUE;
+                    } else {
+                        throw new UnsupportedOperationException("Unlocking " +
+                                "is not allowed when no lock held.");
+                    }
+                }
+            }
         }
     }
+
+    private boolean lockMatch(String l, String l0) {
+        if (Objects.equals(l, l0)) {
+            return true;
+        }
+        // else, l0 and l must be like '__VERIFIER_atomic_begin' and
+        // '__VERIFIER_atomic_end'.
+        if (!atomicBegins.contains(l0) || !atomicEnds.contains(l)) {
+            return false;
+        }
+
+        String lPrefix, l0Prefix;
+        if (l0.matches(".*(begin|Begin|BEGIN)$")
+                || l0.matches(".*(start|Start|START)$")) {
+            l0Prefix = l0.substring(0, l0.length() - 5); /* e.g., '__VERIFIER_atomic_' */
+            if (l.matches(".*(end|End|END)$")) {
+                lPrefix = l.substring(0, l.length() - 3); /* '__VERIFER_atomic_' */
+                return Objects.equals(l0Prefix, lPrefix);
+            }
+        }
+        return false;
+    }
+
 }

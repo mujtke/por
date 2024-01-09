@@ -1,6 +1,7 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Sets;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -89,7 +90,7 @@ public class OGNode implements Copier<OGNode> {
         Ws = pWs;
     }
 
-    public OGNode (final CFAEdge pBlockStartEdge,
+    public OGNode(final CFAEdge pBlockStartEdge,
                    final List<CFAEdge> pBlockEdges,
                    boolean pSimpleNode,
                    boolean pContainNonDetVar) {
@@ -195,8 +196,22 @@ public class OGNode implements Copier<OGNode> {
     @Override
     public String toString() {
         StringBuilder str = new StringBuilder();
-        str.append(blockEdges.toString());
-        if (loopDepth > 0) {
+        for (int i = 0; i < blockEdges.size(); i++) {
+            CFAEdge e = blockEdges.get(i);
+            if (i == 0) {
+                str.append(e);
+                str.append("\n");
+                continue;
+            }
+            str.append(e.getPredecessor());
+            str.append(" -{");
+            str.append(e.getRawStatement());
+            str.append("}-> ");
+            str.append(e.getSuccessor());
+            str.append("\n");
+        }
+
+        if (loopDepth != 0) {
             str.append("@").append(loopDepth);
         }
         return str.toString();
@@ -612,7 +627,8 @@ public class OGNode implements Copier<OGNode> {
     }
 
     public boolean shouldRevisit() {
-        return lheIndex >= 0 && lheIndex < events.size() - 1;
+        // FIXME
+        return lheIndex < 0 || lheIndex < events.size() - 1;
     }
 
     public int getRefCount(String type, OGNode other) {
@@ -676,5 +692,28 @@ public class OGNode implements Copier<OGNode> {
         Rs.remove(events.get(i));
         events.set(i, coEvent);
         Rs.add(coEvent);
+    }
+
+    public boolean isPredecessorOf(OGNode pNode) {
+        // There two cases where this node is the predecessor of pNode.
+        // Case1: pNode is not the first one of its thread and this node is located in
+        // the same thread.
+        if (inThread.equals(pNode.inThread)) {
+            return true;
+        }
+
+        // Case2: pNode is the first one of its thread, and this node is
+        // located in its parent thread.
+        // Sets.difference(set1, set2): This method returns a set containing all elements
+        // that are contained by set1 and not contained by set2.
+        Set<String> set1 = threadLoc.keySet(), set2 = pNode.threadLoc.keySet(),
+        subtract1 = Sets.difference(set1, set2), subtract2 = Sets.difference(set2, set1);
+        if (subtract1.isEmpty() /* this node doesn't contain any thread that pNode not contain */
+                && subtract2.contains(pNode.inThread)
+                && subtract2.size() == 1 /* pNode just contain one more thread than this node */) {
+            return true;
+        }
+
+        return false;
     }
 }

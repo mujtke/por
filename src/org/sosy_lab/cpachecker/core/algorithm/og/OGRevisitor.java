@@ -215,6 +215,8 @@ public class OGRevisitor {
             next.getMoBefore().clear();
             // Set node invisible.
             next.setInGraph(false);
+            // Set lastVisitedEdge null.
+            next.setLastVisitedEdge(null);
             G.setTraceLen(G.getTraceLen() - 1);
             next = tmp;
         }

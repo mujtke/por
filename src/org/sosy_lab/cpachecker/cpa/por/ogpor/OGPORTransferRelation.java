@@ -89,7 +89,7 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         }
 
         // Initialize the fields. Update them in another place like 'strengthen'.
-        OGPORState chOGState = new OGPORState(-1);
+        OGPORState chOGState = new OGPORState(-1, cfaEdge);
         chOGState.setLoops(parOGState.getLoops());
         chOGState.setLoopDepthTable(parOGState.getLoopDepthTable());
         chOGState.setLocks(parOGState.getLocks());
@@ -125,21 +125,18 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         Preconditions.checkState(activeThread != null,
                 "Failed to get active thread: " + cfaEdge);
 
+        assert cfaEdge != null;
         // Update loop depth table.
         ogState.updateLoopDepth(cfaEdge);
+
         // Debug.
 //        System.out.println("\u001b[31m" + cfaEdge + " @" + ogState.getLoopDepth() +
 //                "\u001b[0m");
 
-        // Update the current node map.
-//        updateNodeTable(ogState, cfaEdge, activeThread);
+        // Update lock status.
+        ogState.updateLockStatus(cfaEdge);
 
         return Set.of(state);
-    }
-
-    private void updateNodeTable(OGPORState ogState, CFAEdge cfaEdge, String activeThread) {
-        // TODO.
-
     }
 
     @Nullable
