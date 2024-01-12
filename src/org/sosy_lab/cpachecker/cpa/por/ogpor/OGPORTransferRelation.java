@@ -93,6 +93,7 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         chOGState.setLoops(parOGState.getLoops());
         chOGState.setLoopDepthTable(parOGState.getLoopDepthTable());
         chOGState.setLocks(parOGState.getLocks());
+        chOGState.setCaas(parOGState.getCaas());
 
         return Set.of(chOGState);
     }
