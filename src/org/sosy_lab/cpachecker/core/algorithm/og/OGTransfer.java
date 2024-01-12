@@ -136,7 +136,7 @@ public class OGTransfer {
         // Get OGNode for the current thread.
         OGNode node = graph.getCurrentNode(curThread);
         List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
-        CriticalAreaAction criticalAreaAction = chOgState.getCaa();
+        CriticalAreaAction criticalAreaAction = chOgState.getInCaa();
         boolean isNormalEdge = chOgState.enteringEdgeIsNormal(),
                 hasSharedVars = !(sharedEvents == null || sharedEvents.isEmpty());
 
@@ -278,14 +278,16 @@ public class OGTransfer {
                         visitNode(graph, node, chOgState, true);
                     }
 
+                    // TODO
+                    node.setLastVisitedEdge(null);
                     // Update the current nodes for threads.
                     graph.updateCurrentNodeTable(curThread, node);
                     updatePreSucState(edge, node, parState, chState);
                 } else {
+                    node.setLastVisitedEdge(edge);
                     graph.setNeedToRevisit(false);
                 }
 
-                node.setLastVisitedEdge(edge);
                 graphWrapper.clear();
 
                 if (debug) debugActions(graph, parState, chState, edge);
@@ -294,7 +296,7 @@ public class OGTransfer {
                 // We haven't entered the node yet, i.e., we still haven't met the
                 // start edge of the node. This also means the edge should be normal.
                 assert criticalAreaAction == NOT_IN : "Invalid critical area action " +
-                        "before entering the current node: " + edge;
+                        "before entering node: " + edge;
                 assert isNormalEdge :
                         "Invalid edge before entering the current node: " + edge;
                 // Just transfer the graph without changing the nodeTable.
@@ -350,8 +352,8 @@ public class OGTransfer {
             ARGState parState, ARGState chState, CFAEdge edge) {
 
         addGraphToFull(graph, chState.getStateId());
-        System.out.println("Transferring from s" + parState.getStateId()
-                + " -> s" + chState.getStateId() + ": " + edge);
+//        System.out.println("Transferring from s" + parState.getStateId()
+//                + " -> s" + chState.getStateId() + ": " + edge);
     }
 
     private void updatePreSucState(CFAEdge edge, OGNode node, ARGState parState,

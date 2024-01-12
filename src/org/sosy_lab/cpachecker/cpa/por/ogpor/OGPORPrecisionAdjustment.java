@@ -57,20 +57,10 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
                 OGPORState.class),
                 chOGState = (OGPORState) state;
 
-//        OGNode inNode = chOGState.getNode(chOGState.getInThread());
-//
-//        assert parOGState != null;
-//        // Set inThread and threadLoc for inNode.
-//        if (inNode != null) {
-//            // For complex node, set thread loc info only when we meet the start edge.
-//            if (inNode.isSimpleNode() || edge.equals(inNode.getBlockStartEdge())) {
-//                inNode.setInThread(chOGState.getInThread());
-//                inNode.setThreadsLoc(chOGState.getThreads());
-//            }
-//        }
-
         // Here, set the num for chOGState.
         chOGState.setNum(chState.getStateId());
+
+        System.out.println(chState.getStateId() + ": " + chOGState.getLocks());
 
         return Optional.of(PrecisionAdjustmentResult.create(state,
                 precision, PrecisionAdjustmentResult.Action.CONTINUE));

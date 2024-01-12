@@ -27,8 +27,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction.*;
-import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.LockStatus.LOCK;
-import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.LockStatus.UNLOCK;
+import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.LockStatus.*;
 
 public class OGPORState implements AbstractState, Graphable {
 
@@ -51,6 +50,11 @@ public class OGPORState implements AbstractState, Graphable {
 
     private final Map<String, Stack<String>> locks = new HashMap<>();
 
+    public CriticalAreaAction getInCaa() {
+        assert inThread != null;
+        return caas.get(inThread);
+    }
+
     public enum LockStatus {
         LOCK,
         UNLOCK,
@@ -59,12 +63,13 @@ public class OGPORState implements AbstractState, Graphable {
 
     public enum CriticalAreaAction {
         START, /* start a critical area */
-        CONTINUE, /* inside a critical area */
+        CONTINUE, /* be inside a critical area */
         END, /* end a critical area */
         NOT_IN, /* not any one above, lock-free */
     }
 
-    private CriticalAreaAction caa = NOT_IN;
+    // private CriticalAreaAction caa = NOT_IN;
+    private final Map<String, CriticalAreaAction> caas = new HashMap<>();
 
     // Record the entering edge.
     CFAEdge enteringEdge;
@@ -76,18 +81,26 @@ public class OGPORState implements AbstractState, Graphable {
     private static Set<String> lockBegins = ImmutableSet.of("pthread_lock", "lock");
     private static Set<String> lockEnds = ImmutableSet.of("pthread_unlock", "unlock");
 
-    public CriticalAreaAction getCaa() { return caa; }
-
     public void setLocks(Map<String, Stack<String>> pLocks) {
-        locks.putAll(pLocks);
+        // Deep copy needed for 'Stack<Sting>'
+        pLocks.forEach((k, v) -> {
+            Stack<String> newLocks = new Stack<>();
+            newLocks.addAll(v);
+            locks.put(k, newLocks);
+        });
     }
 
     public Map<String, Stack<String>> getLocks() {
         return locks;
     }
 
-    public boolean enteringEdgeIsNormal() { return isNormalEnteringEdge; }
-    public CFAEdge getEnteringEdge() { return enteringEdge; }
+    public boolean enteringEdgeIsNormal() {
+        return isNormalEnteringEdge;
+    }
+
+    public CFAEdge getEnteringEdge() {
+        return enteringEdge;
+    }
 
     @Override
     public int hashCode() {
@@ -146,6 +159,14 @@ public class OGPORState implements AbstractState, Graphable {
         isNormalEnteringEdge = isNormalEdge(pEdge);
     }
 
+    public Map<String, CriticalAreaAction> getCaas() {
+        return caas;
+    }
+
+    public void setCaas(Map<String, CriticalAreaAction> pCaas) {
+        caas.putAll(pCaas);
+    }
+
     private boolean isNormalEdge(CFAEdge edge) {
         // FIXME: should we consider the block ends?
         // Check whether the given edge is a normal edge, i.e., the edge neither accesses
@@ -179,7 +200,7 @@ public class OGPORState implements AbstractState, Graphable {
                     .stream().map(CFAEdge::getSuccessor).collect(Collectors.toSet());
             Preconditions.checkState(loopStarts.size() == 1,
                     "Just one loop start node is expected.");
-            CFANode loopStart= loopStarts.iterator().next();
+            CFANode loopStart = loopStarts.iterator().next();
             if (!loopStart.isLoopStart()) {
                 // In some special cases, loopStart is not the real loop start node. In
                 // this case, we enumerate the nodes in loop to get the loop start node.
@@ -309,33 +330,33 @@ public class OGPORState implements AbstractState, Graphable {
             locks.put(inThread, new Stack<>());
         }
 
-        Pair<LockStatus, String> l = getLock(edge);
-        if (l == null) {
-            caa = NOT_IN;
-            return;
+        if (!caas.containsKey(inThread)) {
+            caas.put(inThread, NOT_IN);
         }
 
+        // Possible lock variable in edge.
+        Pair<LockStatus, String> l = getLock(edge);
         Stack<String> curLocks = locks.get(inThread);
-        caa = handleLock(curLocks, l);
+        caas.put(inThread, handleLock(curLocks, l));
     }
 
     // Get the name of the lock var form the given edge.
     private Pair<LockStatus, String> getLock(CFAEdge edge) {
 
         if (!(edge instanceof CStatementEdge) && !(edge instanceof CFunctionCallEdge)) {
-            return null;
+            return Pair.of(LOCK_FREE, null);
         }
 
         if (edge instanceof CStatementEdge
                 && !(((CStatementEdge) edge).getStatement() instanceof CFunctionCallStatement)) {
-            return null;
+            return Pair.of(LOCK_FREE, null);
         }
 
         if (hasAtomicBegin(edge)) {
             return Pair.of(LOCK, "__VERIFIER_atomic_begin");
         }
         if (hasAtomicEnd(edge)) {
-            return Pair.of(UNLOCK,"__VERIFIER_atomic_end");
+            return Pair.of(UNLOCK, "__VERIFIER_atomic_end");
         }
 
         if (hasLockBegin(edge)) {
@@ -345,7 +366,7 @@ public class OGPORState implements AbstractState, Graphable {
             return Pair.of(UNLOCK, getLockVarName(edge));
         }
 
-        return null;
+        return Pair.of(LOCK_FREE, null);
     }
 
     private boolean hasLockEnd(CFAEdge cfaEdge) {
@@ -375,7 +396,7 @@ public class OGPORState implements AbstractState, Graphable {
     private String getLockVarName(CFAEdge edge) {
         List<? extends AExpression> arguments;
         if (edge instanceof CFunctionCallEdge) {
-            arguments = ((CFunctionCallEdge)edge).getArguments();
+            arguments = ((CFunctionCallEdge) edge).getArguments();
         } else {
             assert edge instanceof CStatementEdge;
             CStatement cStatement = ((CStatementEdge) edge).getStatement();
@@ -396,49 +417,80 @@ public class OGPORState implements AbstractState, Graphable {
 
     private CriticalAreaAction handleLock(Stack<String> curLocks,
             Pair<LockStatus, String> pL) {
+        String l = pL.getSecond(), l0;
         LockStatus lockStatus = pL.getFirstNotNull();
-        String l = pL.getSecondNotNull();
+        CriticalAreaAction caa = caas.get(inThread);
+        assert caa != null;
 
-        if (curLocks.isEmpty()) {
-            if (lockStatus == UNLOCK) {
-                throw new UnsupportedOperationException("Unlocking " +
-                        "is not allowed when no lock held.");
-            }
-            curLocks.push(l);
-            return START;
-        } else {
-            String l0 = curLocks.peek();
+        if (lockStatus == LOCK_FREE) {
+            // Current egde doesn't have a lock.
+            return (caa == START || caa == CONTINUE) ? CONTINUE : NOT_IN;
+        }
 
-            if (lockMatch(l, l0)) {
+        // l != null, which means lockStatus == LOCK or lockStatus == UNLOCK
+        switch (caa) {
+            case START:
+                assert !curLocks.isEmpty();
+                l0 = curLocks.peek();
                 if (lockStatus == LOCK) {
-                    // TODO: Try to acquire a holding lock.
+                    // FIXME
                     return CONTINUE;
                 } else {
-                    // Unlock.
-                    curLocks.pop();
-                    return curLocks.isEmpty() ? END : CONTINUE;
+                    if (lockMatch(l, l0)) {
+                        // Unlock.
+                        curLocks.pop();
+                        // FIXME: empty-content block?
+                        return curLocks.isEmpty() ? END : CONTINUE;
+                    } else if (curLocks.contains(l)) {
+                        // Current critical area preserved.
+                        curLocks.remove(l);
+                        Preconditions.checkArgument(!curLocks.isEmpty(),
+                                "Unlocking a lock that doesn't at the top of " +
+                                        "stack should leave locks not empty");
+                        return CONTINUE;
+                    }
+                    throw new UnsupportedOperationException("Cannot unlock a lock not held");
                 }
-            } else {
+
+            case CONTINUE:
                 if (lockStatus == LOCK) {
+                    // FIXME: nested locks.
                     curLocks.push(l);
+                    // Add a new lock couldn't terminate the current critical area.
                     return CONTINUE;
                 } else {
-                    // Unlock.
-                    if (curLocks.contains(l)) {
-                        // Critical area preserved.
+                    l0 = curLocks.peek();
+                    if (lockMatch(l, l0)) {
+                        // Unlock.
+                        curLocks.pop();
+                        return curLocks.isEmpty() ? END : CONTINUE;
+                    } else if (curLocks.contains(l)) {
                         curLocks.remove(l);
                         Preconditions.checkArgument(!curLocks.isEmpty(),
                                 "Unlocking a lock that doesn't at the top of " +
                                         "stack should make locks not empty");
                         return CONTINUE;
-                    } else {
-                        throw new UnsupportedOperationException("Unlocking " +
-                                "is not allowed when no lock held.");
                     }
+                    throw new UnsupportedOperationException("Cannot unlock a lock not held");
                 }
-            }
+
+            case END:
+                assert curLocks.isEmpty();
+            case NOT_IN:
+                if (lockStatus == LOCK) {
+                    curLocks.push(l);
+                    return START;
+                } else {
+                    throw new UnsupportedOperationException("Unlocking " +
+                            "is not allowed when no lock held.");
+                }
+
+            default:
         }
+
+        return NOT_IN;
     }
+
 
     private boolean lockMatch(String l, String l0) {
         if (Objects.equals(l, l0)) {
@@ -461,5 +513,4 @@ public class OGPORState implements AbstractState, Graphable {
         }
         return false;
     }
-
 }
