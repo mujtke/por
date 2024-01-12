@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!DOCTYPE benchmark PUBLIC "+//IDN sosy-lab.org//DTD BenchExec benchmark 1.9//EN" "https://www.sosy-lab.org/benchexec/benchmark-1.9.dtd">
-<benchmark tool="cpachecker" timelimit="15 min" memlimit="15 GB" threads="1">
+<benchmark tool="cpachecker" timelimit="15 min" memlimit="15 GB" threads="16">
 
   <resultfiles>**/*.graphml</resultfiles>
 
