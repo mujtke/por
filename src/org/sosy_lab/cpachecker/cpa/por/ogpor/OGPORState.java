@@ -337,15 +337,17 @@ public class OGPORState implements AbstractState, Graphable {
             caas.put(inThread, NOT_IN);
         }
 
+        // Possible lock variable in edge.
+        Pair<LockStatus, String> l = getLock(edge);
+        Stack<String> curLocks = locks.get(inThread);
+
         // FIXME: critical area end caused by exit and termination edge.
-        if (willTerminate(edge)) {
+        if (willTerminate(edge)
+                && (caas.get(inThread) == START || caas.get(inThread) == CONTINUE)) {
             caas.put(inThread, END);
             return;
         }
 
-        // Possible lock variable in edge.
-        Pair<LockStatus, String> l = getLock(edge);
-        Stack<String> curLocks = locks.get(inThread);
         caas.put(inThread, handleLock(curLocks, l));
     }
 

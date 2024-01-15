@@ -249,6 +249,7 @@ public class OGAlgorithm implements Algorithm {
             }
         });
         withGraphs.forEach(sp -> {
+            // FIXME: destroyed ARGState?
             waitlist.add(sp.getFirstNotNull());
             reachedSet.add(sp.getFirstNotNull(), sp.getSecondNotNull());
         });
