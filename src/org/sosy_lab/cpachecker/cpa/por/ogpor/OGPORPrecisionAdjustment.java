@@ -60,7 +60,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         // Here, set the num for chOGState.
         chOGState.setNum(chState.getStateId());
 
-        System.out.println(chState.getStateId() + ": " + chOGState.getLocks());
+        // System.out.println(chState.getStateId() + ": " + chOGState.getLocks());
 
         return Optional.of(PrecisionAdjustmentResult.create(state,
                 precision, PrecisionAdjustmentResult.Action.CONTINUE));
