@@ -10,6 +10,7 @@ import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
+import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
@@ -103,13 +104,13 @@ public class OGTransfer {
 
 
     /**
-     * This method transfer a given graph from a parent state {@parState} to its child
-     * State {@chState}. If the node conflict with the graph, then transfer stops
-     * and return null. Else, return the transferred graph.
-     * When no conflict exists, there are still two possible cases need to considered:
+     * This method transfers a given graph from a parent state {@parState} to its child
+     * State {@chState}. If the node conflicts with the graph, then transfer stops
+     * and returns null. Else, return the transferred graph.
+     * When no conflict exists, there are still two possible cases need to be considered:
      * 1) The graph has contained the node. In this case, we update the new last node of
-     * the graph (also update necessary relations like mo, etc).
-     * 2) The graph meet the node first time. In this case, we add the node to the graph
+     * the graph (also update the necessary relations like mo, etc.).
+     * 2) The graph meets the node first time. In this case, we add the node to the graph
      * and add all necessary relations, like rf, fr, wb and so on.
      * @implNode When add the node to the graph, we add its deep copy.
      * @param graphWrapper
@@ -232,7 +233,7 @@ public class OGTransfer {
             // Indicate whether we will enter, have been inside or still haven't reached
             // the start of the node.
             Triple<Integer, CFAEdge, Boolean> checkPosition = isInsideNode(node, edge,
-                    hasSharedVars, sharedEvents);
+                    hasSharedVars, sharedEvents, criticalAreaAction);
             assert checkPosition.getFirst() != null && checkPosition.getThird() != null;
             int position = checkPosition.getFirst();
             edge = checkPosition.getSecond();
@@ -258,7 +259,6 @@ public class OGTransfer {
                                 "area action when entering a complex node.";
                     }
 
-                    node.setLastVisitedEdge(edge);
                     graph.setNeedToRevisit(false);
                     graphWrapper.clear();
 
@@ -284,7 +284,7 @@ public class OGTransfer {
                     graph.updateCurrentNodeTable(curThread, node);
                     updatePreSucState(edge, node, parState, chState);
                 } else {
-                    node.setLastVisitedEdge(edge);
+                    if (edgeHasBeenVisited) node.setLastVisitedEdge(edge);
                     graph.setNeedToRevisit(false);
                 }
 
@@ -312,9 +312,10 @@ public class OGTransfer {
     private @NonNull Triple<Integer, CFAEdge, Boolean> isInsideNode(OGNode node,
             CFAEdge edge,
             boolean hasSharedVars,
-            List<SharedEvent> sharedEvents) {
+            List<SharedEvent> sharedEvents,
+            CriticalAreaAction caa) {
         if (node.isSimpleNode()) {
-            return node.contains(edge) == 0 ? Triple.of(0, edge, false)
+            return node.contains(edge) == 0 ? Triple.of(0, edge, true)
                     : Triple.of(-1, edge, false);
         } else {
             // Complex node.
@@ -324,7 +325,8 @@ public class OGTransfer {
             } else {
                 // The node (complex) doesn't contain the edge.
                 if (node.getLastVisitedEdge() != null) {
-                    // We are inside the node.
+                    boolean edgeHasBeenVisited = true;
+                    // We are inside a node that has been added to the graph.
                     if (edge instanceof AssumeEdge) {
                         // The node doesn't contain the edge. Because the edge is an
                         // assumption and inside the node, we need to replace it with its
@@ -332,18 +334,26 @@ public class OGTransfer {
                         // coEdge and all possible shared events to blockEdges and events
                         // of the node, separately.
                         edge = node.replaceCoEdge(edgeVarMap, edge);
-                    } else {
-                        // Just adding the edge to the node.
-                        node.getBlockEdges().add(edge);
-                        if (hasSharedVars) node.addEvents(sharedEvents);
+                        edgeHasBeenVisited = false;
                     }
 
                     return Triple.of(node.getBlockEdges().indexOf(node.getLastVisitedEdge()) + 1,
                             edge,
-                            false);
+                            edgeHasBeenVisited);
+                } else {
+                    if (caa == NOT_IN) {
+                        // We haven't entered a critical area yet.
+                        return Triple.of(-1, edge, false);
+                    } else {
+                        // We are inside a node that hasn't been added to the graph yet.
+                        // Add the edge to the node.
+                        node.getBlockEdges().add(edge);
+                        node.addEvents(sharedEvents);
+                        return Triple.of(node.getBlockEdges().size() + 1,
+                                edge,
+                                false);
+                    }
                 }
-
-                return Triple.of(-1, edge, false);
             }
         }
     }

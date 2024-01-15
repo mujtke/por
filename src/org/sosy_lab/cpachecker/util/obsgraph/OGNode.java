@@ -100,7 +100,7 @@ public class OGNode implements Copier<OGNode> {
         containNonDetVar = pContainNonDetVar;
         Rs = new HashSet<>();
         Ws = new HashSet<>();
-        lastVisitedEdge = pBlockStartEdge;
+//        lastVisitedEdge = pBlockStartEdge;
     }
 
     /**
@@ -537,6 +537,7 @@ public class OGNode implements Copier<OGNode> {
 
      // Add new extracted events to the node.
     public void addEvents(List<SharedEvent> sharedEvents) {
+        if (sharedEvents == null) return;
         sharedEvents.forEach(e -> {
             switch (e.getAType()) {
                 case READ:
