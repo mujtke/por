@@ -409,7 +409,7 @@ public class OGPORState implements AbstractState, Graphable {
         Preconditions.checkArgument(arguments.size() == 1,
                 "More than one vars in lock function is not supported." + edge);
         AExpression arg = arguments.iterator().next();
-        Preconditions.checkArgument(arguments instanceof CUnaryExpression);
+        Preconditions.checkArgument(arg instanceof CUnaryExpression);
         CUnaryExpression unaryExpression = (CUnaryExpression) arg;
         CIdExpression lockIdExpression = (CIdExpression) unaryExpression.getOperand();
         return lockIdExpression.getName();
