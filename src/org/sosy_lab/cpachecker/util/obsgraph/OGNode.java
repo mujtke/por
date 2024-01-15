@@ -205,7 +205,7 @@ public class OGNode implements Copier<OGNode> {
             }
             str.append(e.getPredecessor());
             str.append(" -{");
-            str.append(e.getRawStatement());
+            str.append(e.getCode());
             str.append("}-> ");
             str.append(e.getSuccessor());
             str.append("\n");
@@ -577,33 +577,34 @@ public class OGNode implements Copier<OGNode> {
         });
     }
 
-    // Replace conflicted assumeEdge with assumeEdge's coEdge.
+    // Replace conflicted assumeEdge d with its coEdge !d.
     public CFAEdge replaceCoEdge(final Map<Integer, List<SharedEvent>> edgeVarMap,
-            CFAEdge assumeEdge) {
+            CFAEdge d) {
         Preconditions.checkArgument(
-                assumeEdge.getPredecessor().getNumLeavingEdges() > 1,
+                d.getPredecessor().getNumLeavingEdges() > 1,
                 "Predecessor of assume edge has less then two outgoing " +
-                        "edges is not allowed: " + assumeEdge);
-        CFAEdge coEdge = null, tmp;
-        for (int i = 0; i < assumeEdge.getLineNumber(); i++) {
-            tmp = assumeEdge.getPredecessor().getLeavingEdge(i);
-            if (tmp instanceof AssumeEdge && tmp != assumeEdge) {
-                coEdge = tmp;
+                        "edges is not allowed: " + d);
+        CFAEdge nd = null, tmp;
+        for (int i = 0; i < d.getLineNumber(); i++) {
+            tmp = d.getPredecessor().getLeavingEdge(i);
+            if (tmp instanceof AssumeEdge && tmp != d) {
+                nd = tmp;
                 break;
             }
         }
 
-        Preconditions.checkState(coEdge != null,
-                "Cannot find coEdge for: " + assumeEdge);
-        Preconditions.checkState(blockEdges.contains(assumeEdge),
-                "Cannot replace edge not in blockEdges: " + coEdge);
+        Preconditions.checkState(nd != null,
+                "Cannot find coEdge for: " + d);
+        // this node should contain nd.
+        Preconditions.checkState(blockEdges.contains(nd),
+                "Cannot replace edge not in blockEdges: " + nd);
 
         // Replace.
         // Remove assumeEdge and all edges after it.
-        int assumeEdgeIdx = blockEdges.indexOf(assumeEdge);
+        int assumeEdgeIdx = blockEdges.indexOf(nd);
         blockEdges.removeIf(e -> blockEdges.indexOf(e) >= assumeEdgeIdx);
-        blockEdges.add(coEdge);
-        // Remove all shared events in or after the assumeEdge.
+        blockEdges.add(d);
+        // Remove all shared events in or after the nd.
         List<SharedEvent> toRemove = events.stream()
                 .filter(e -> blockEdges.indexOf(e.getInEdge()) >= assumeEdgeIdx)
                 .collect(Collectors.toList());
@@ -619,12 +620,12 @@ public class OGNode implements Copier<OGNode> {
         // FIXME: more than one sharedEvent in an assume edge?
         Preconditions.checkArgument(lheIndex < events.size() && lheIndex >= 0);
         SharedEvent lastHandledEvent = events.get(lheIndex);
-        if (lastHandledEvent.getInEdge() == coEdge) {
+        if (lastHandledEvent.getInEdge() == nd) {
             // Replacing assumeEdge with its coEdge doesn't change the number of event.
-            addEvents(edgeVarMap.get(assumeEdge.hashCode()));
+            addEvents(edgeVarMap.get(d.hashCode()));
         }
 
-        return coEdge;
+        return d;
     }
 
     public boolean shouldRevisit() {

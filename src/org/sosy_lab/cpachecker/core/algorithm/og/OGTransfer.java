@@ -125,7 +125,7 @@ public class OGTransfer {
                                        ARGState parState, /* lead state */
                                        ARGState chState) {
         // Debug.
-        boolean debug = false;
+        boolean debug = true;
 
         Preconditions.checkArgument(graphWrapper.size() == 1);
         ObsGraph graph = graphWrapper.iterator().next();

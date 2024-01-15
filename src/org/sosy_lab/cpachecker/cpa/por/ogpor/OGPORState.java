@@ -11,6 +11,7 @@ import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
 import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -78,8 +79,10 @@ public class OGPORState implements AbstractState, Graphable {
     private static HashMap<Integer, List<SharedEvent>> edgeVarMap;
     private static Set<String> atomicBegins = ImmutableSet.of("__VERIFIER_atomic_begin");
     private static Set<String> atomicEnds = ImmutableSet.of("__VERIFIER_atomic_end");
-    private static Set<String> lockBegins = ImmutableSet.of("pthread_lock", "lock");
-    private static Set<String> lockEnds = ImmutableSet.of("pthread_unlock", "unlock");
+    private static Set<String> lockBegins = ImmutableSet.of("pthread_mutex_lock",
+            "pthread_lock", "lock");
+    private static Set<String> lockEnds = ImmutableSet.of("pthread_mutex_unlock",
+            "pthread_unlock", "unlock");
 
     public void setLocks(Map<String, Stack<String>> pLocks) {
         // Deep copy needed for 'Stack<Sting>'
@@ -334,10 +337,38 @@ public class OGPORState implements AbstractState, Graphable {
             caas.put(inThread, NOT_IN);
         }
 
+        // FIXME: critical area end caused by exit and termination edge.
+        if (willTerminate(edge)) {
+            caas.put(inThread, END);
+            return;
+        }
+
         // Possible lock variable in edge.
         Pair<LockStatus, String> l = getLock(edge);
         Stack<String> curLocks = locks.get(inThread);
         caas.put(inThread, handleLock(curLocks, l));
+    }
+
+    private boolean willTerminate(CFAEdge edge) {
+        // If the thread/program terminates when the next edge comes.
+        CFANode successor = edge.getSuccessor();
+        // FIXME: only one exit edge?
+        if (successor.getNumLeavingEdges() != 1)
+            return false;
+
+        CFAEdge nextEdge = successor.getLeavingEdge(0);
+
+        return isTerminatingEdge(nextEdge) || isEndOfMainFunction(nextEdge);
+    }
+
+    /** the whole program will terminate after this edge */
+    private static boolean isTerminatingEdge(CFAEdge edge) {
+        return edge.getSuccessor() instanceof CFATerminationNode;
+    }
+
+    /** the whole program will terminate after this edge */
+    private boolean isEndOfMainFunction(CFAEdge edge) {
+        return Objects.equals(cfa.getMainFunction().getExitNode(), edge.getSuccessor());
     }
 
     // Get the name of the lock var form the given edge.
@@ -383,7 +414,10 @@ public class OGPORState implements AbstractState, Graphable {
 
     private boolean hasLockBegin(CFAEdge cfaEdge) {
         for (String lb : lockBegins)
-            if (cfaEdge.getRawStatement().contains(lb)) return true;
+            if (cfaEdge.getRawStatement().contains(lb)) {
+                return !Objects.equals(lb, "lock") ||
+                        !cfaEdge.getRawStatement().contains("unlock");
+            }
         return false;
     }
 
@@ -434,6 +468,8 @@ public class OGPORState implements AbstractState, Graphable {
                 l0 = curLocks.peek();
                 if (lockStatus == LOCK) {
                     // FIXME
+                    // Push a new lock after having pushed one before.
+                    curLocks.push(l);
                     return CONTINUE;
                 } else {
                     if (lockMatch(l, l0)) {

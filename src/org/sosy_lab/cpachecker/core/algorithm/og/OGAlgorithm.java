@@ -105,11 +105,11 @@ public class OGAlgorithm implements Algorithm {
             logger.log(Level.FINER, "Retrieved state from watilist");
             try {
                 if (handleState(state, precision, reachedSet)) {
-                    // if algorithm should terminate.
+                    // if the algorithm should terminate.
                     return status;
                 }
             } catch (Exception e) {
-                // Re-add 'state' to the waitlist, According CPAAlgorithm, there might be
+                // Re-add 'state' to the waitlist. According CPAAlgorithm, there might be
                 // some unhandled successors when exception happened.
                 throw e;
             }
@@ -164,6 +164,8 @@ public class OGAlgorithm implements Algorithm {
 
         List<? extends AbstractState> nSuccessors = reorder(parState, successors);
 
+        // TODO.
+        boolean findError = false;
         // Adjust precision and split children into two parts if possible.
         for (Iterator<? extends AbstractState> it = nSuccessors.iterator(); it.hasNext(); ) {
 
@@ -238,10 +240,13 @@ public class OGAlgorithm implements Algorithm {
         }
 
         // Add children without graphs to reachedSet first. (which will add states to
-        // waitlist too).
+        // the waitlist too).
         noGraphs.forEach(sp -> {
-            waitlist.add(sp.getFirstNotNull());
-            reachedSet.add(sp.getFirstNotNull(), sp.getSecondNotNull());
+            // FIXME: destroyed ARGState?
+            if (!((ARGState) sp.getFirstNotNull()).isDestroyed()) {
+                waitlist.add(sp.getFirstNotNull());
+                reachedSet.add(sp.getFirstNotNull(), sp.getSecondNotNull());
+            }
         });
         withGraphs.forEach(sp -> {
             waitlist.add(sp.getFirstNotNull());
@@ -286,14 +291,8 @@ public class OGAlgorithm implements Algorithm {
         } while (!revisitResult.isEmpty());
 
         return false;
+//        return findError;
     }
-
-    // Set initial current nodes for threads.
-//    private void setInitalNodeTable(ARGState leadState, ObsGraph graph) {
-//        OGPORState ogporState = AbstractStates.extractStateByType(leadState, OGPORState.class);
-//        assert ogporState != null;
-//        ogporState.setInitialNodeTable(graph);
-//    }
 
     /**
      * We Assume a total order (<next) on all statements (edges), and this method
