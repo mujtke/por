@@ -132,11 +132,17 @@ public class OGNode implements Copier<OGNode> {
         // one.
         nNode.loopDepth = this.loopDepth;
         // FIXME: When we copy the node from the nodeMap, we may miss the threadLoc.
-        nNode.inThread = this.inThread;
+        nNode.inThread = String.valueOf(this.inThread);
         nNode.threadLoc.putAll(this.threadLoc); /* Deep copy */
         // This variable is not in use now.
         nNode.isFirstNodeInThread = this.isFirstNodeInThread;
         nNode.inGraph = this.inGraph;
+        nNode.lheIndex = this.lheIndex;
+        nNode.lastVisitedEdge = this.lastVisitedEdge;
+
+        /* preState & sucState */
+        nNode.preState = this.preState; /* Shallow copy. */
+        nNode.sucState = this.sucState; /* Shallow copy. */
 
         // The left part will need to be copied in a deep way.
         /* events */
@@ -146,10 +152,6 @@ public class OGNode implements Copier<OGNode> {
         /* Rs & Ws. */
         this.Rs.forEach(r -> nNode.Rs.add(r.deepCopy(memo)));
         this.Ws.forEach(w -> nNode.Ws.add(w.deepCopy(memo)));
-
-        /* preState & sucState */
-        nNode.preState = this.preState; /* Shallow copy. */
-        nNode.sucState = this.sucState; /* Shallow copy. */
 
         /* predecessor & successors */
         nNode.predecessor = this.predecessor != null
@@ -427,7 +429,7 @@ public class OGNode implements Copier<OGNode> {
     }
 
     public void removeEvent(SharedEvent event) {
-        SharedEvent lastHandledEvent = events.get(lheIndex);
+        SharedEvent lastHandledEvent = lheIndex < 0 ? null : events.get(lheIndex);
         if (event == lastHandledEvent) {
             lheIndex--;
         }
@@ -621,7 +623,7 @@ public class OGNode implements Copier<OGNode> {
         Preconditions.checkArgument(lheIndex < events.size() && lheIndex >= 0);
         SharedEvent lastHandledEvent = events.get(lheIndex);
         if (lastHandledEvent.getInEdge() == nd) {
-            // Replacing assumeEdge with its coEdge doesn't change the number of event.
+            // Replacing assumeEdge with its coEdge doesn't change the number of events.
             addEvents(edgeVarMap.get(d.hashCode()));
         }
 

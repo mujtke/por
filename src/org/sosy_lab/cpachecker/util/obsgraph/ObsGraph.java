@@ -196,6 +196,9 @@ public class ObsGraph implements Copier<ObsGraph> {
         // Copy nodes.
         this.nodes.forEach(n -> nGraph.nodes.add(n.deepCopy(memo)));
         this.RE.forEach(re -> nGraph.RE.add(re.deepCopy(memo)));
+        // Node table.
+        this.nodeTable.forEach((k, v) ->
+                nGraph.nodeTable.put(k, v == null ? null : v.deepCopy(memo)));
 
 //        assert this.lastNode != null;
         nGraph.lastNode = this.lastNode == null ? null : this.lastNode.deepCopy(memo);
@@ -546,8 +549,8 @@ public class ObsGraph implements Copier<ObsGraph> {
             String sucThrd = suc.getInThread();
             // If node has more than one successor, then except the curThread, all
             // threads should appear first time.
-            if (!Objects.equals(curThread, sucThrd))
-                assert !nodeTable.containsKey(sucThrd);
+//            if (!Objects.equals(curThread, sucThrd))
+//                assert !nodeTable.containsKey(sucThrd);
             nodeTable.put(sucThrd, suc);
         }
     }

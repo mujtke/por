@@ -50,8 +50,8 @@ public class OGTransfer {
     /**
      * Compute whether there exists nondeterminism among the edges from parState to
      * successors.
-     * @return List of the  assume-edge successors that belong to current thread and have
-    * the same predecessor.
+     * @return List of the assume-edge successors that belong to the current thread and
+     * have the same predecessor.
      */
     public List<AbstractState> hasNonDet(ARGState parState,
                                      Collection<? extends AbstractState> successors) {
