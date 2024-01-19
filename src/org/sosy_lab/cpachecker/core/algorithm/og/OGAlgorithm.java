@@ -5,6 +5,7 @@ import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -14,6 +15,7 @@ import org.sosy_lab.cpachecker.exceptions.CPAEnabledAnalysisPropertyViolationExc
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
@@ -159,18 +161,22 @@ public class OGAlgorithm implements Algorithm {
         ARGState parState = (ARGState) state, chState;
         List<ObsGraph> parGraphs = OGMap.get(parState.getStateId());
 
-        List<AbstractState> nonDetSucs = transfer.hasNonDet(parState, successors);
-        boolean hasNonDet = nonDetSucs.size() == 2;
-        Map<Integer, Pair<Integer, Integer>> nonDetTable = new HashMap<>();
-        if (hasNonDet) {
-            // Handle indeterminate successors.
-            for (int i = 0; i < parGraphs.size(); i++) {
-                ObsGraph parGraph = parGraphs.get(i);
-                List<AbstractState> graphNonDetSuc = new ArrayList<>(nonDetSucs);
-                handleNonDet(parGraph, parState, graphNonDetSuc);
-                nonDetTable.put(i, Pair.of(graphNonDetSuc.size(), 1));
-            }
-        }
+//        Pair<Boolean, Map<String, Pair<Integer, Integer>>> nonDetInfo =
+//                transfer.hasNonDet(parState,
+//                successors);
+//        if (hasNonDet) {
+//            // Handle indeterminate successors.
+//            for (int i = 0; i < parGraphs.size(); i++) {
+//                ObsGraph parGraph = parGraphs.get(i);
+//                List<AbstractState> graphNonDetSuc = new ArrayList<>(nonDetSucs);
+//                handleNonDet(parGraph, parState, graphNonDetSuc);
+//                nonDetTable.put(i, Pair.of(graphNonDetSuc.size(), 1));
+//            }
+//        }
+        // Initializing all to false?
+        boolean[] hasBeenRemoved = new boolean[parGraphs.size()];
+        // Map from index of graph to CFANode, e.g., i -> N0.
+        Map<Integer, CFANode> nonDetTable = new HashMap<>();
 
         List<? extends AbstractState> nSuccessors = reorder(parState, successors);
 
@@ -207,20 +213,19 @@ public class OGAlgorithm implements Algorithm {
                 continue;
             }
 
-            List<ObsGraph> toRemove = new ArrayList<>();
+//            List<ObsGraph> toRemove = new ArrayList<>();
             for (int i = 0; i < parGraphs.size(); i++) {
+                if (hasBeenRemoved[i]) continue;
+                // TODO: transferred graph should be deep copy one?
                 ObsGraph parGraph = parGraphs.get(i);
-                if (hasNonDet) {
-                    // Handle possible indeterminate successors.
-                    int totalSucs = nonDetTable.get(i).getFirstNotNull(),
-                            visitedSucs = nonDetTable.get(i).getSecondNotNull();
-                    if (totalSucs == 0) {
+                // Indicate that whether the transfer is designated.
+                boolean constrainedTransfer = false;
+                if (nonDetTable.containsKey(i)) {
+                    CFANode wantedCFANode = nonDetTable.get(i);
+                    if (!Objects.equals(edge.getPredecessor(), wantedCFANode)) {
                         continue;
-                    } else if (totalSucs ==2 && visitedSucs == 2) {
-                        // Copy parGraph. The copy result is not in parGraphs, so there is
-                        // no need to remove it explicitly.
-                        parGraph = parGraph.deepCopy(new HashMap<>());
                     }
+                    constrainedTransfer = true;
                 }
 
                 // Single transfer.
@@ -238,18 +243,17 @@ public class OGAlgorithm implements Algorithm {
                     // So if nonDetSucs contains suc, we should not add parGraph to the
                     // toRemove, because we also need to transfer parGraph to the other
                     // suc in the nonDetSucs.
-                    if (hasNonDet) {
-                        int totalSucs = nonDetTable.get(i).getFirstNotNull(),
-                                visitedSucs = nonDetTable.get(i).getSecondNotNull();
-                        if (totalSucs == 2 && visitedSucs == 1) {
-                            nonDetTable.put(i, Pair.of(totalSucs, 2));
-                        } else if (totalSucs == visitedSucs) {
-                            // We have visited all necessary sucs.
-                            toRemove.add(parGraph);
+                    if (edge instanceof AssumeEdge) {
+                        if (constrainedTransfer) {
+                            hasBeenRemoved[i] = true;
+                        } else {
+                            CFANode constriantedCFANode =
+                                    transfer.handleNonDet();
                         }
                     } else {
                         // Suc belongs to a determinate statement.
-                        toRemove.add(parGraph);
+//                        toRemove.add(parGraph);
+                        hasBeenRemoved[i] = true;
                     }
                 }
             }
@@ -322,40 +326,6 @@ public class OGAlgorithm implements Algorithm {
 
         return false;
 //        return findError;
-    }
-
-    private void handleNonDet(ObsGraph G, ARGState parState, List<AbstractState> nonDetSucs) {
-        assert nonDetSucs.size() == 2;
-        ARGState nonDetSuc1 = (ARGState) nonDetSucs.get(0),
-                nonDetSuc2 = (ARGState) nonDetSucs.get(1);
-        OGPORState ogporState1 = AbstractStates.extractStateByType(nonDetSuc1, OGPORState.class);
-        assert ogporState1 != null;
-        String activeThread = ogporState1.getInThread();
-        assert activeThread != null;
-        OGNode curNode = G.getCurrentNode(activeThread);
-        if (curNode == null) {
-            boolean hasOtherNodes =
-                    G.getNodeTable().values().stream().anyMatch(Objects::nonNull);
-            if (hasOtherNodes) {
-                // We should visit other nodes first.
-                nonDetSucs.clear();
-            }
-            // Else, we should transfer graphs to both states in nonDetSucs.
-        } else {
-            if (curNode.getLastVisitedEdge() != null) {
-                // curNode has been visited.
-                // FIXME: in which case, we choose the edge inside the curNode?
-                CFAEdge edge1 = parState.getEdgeToChild(nonDetSuc1),
-                        edge2 = parState.getEdgeToChild(nonDetSuc2);
-                if (curNode.getBlockEdges().contains(edge1)) {
-                    nonDetSucs.remove(nonDetSuc2);
-                } else {
-                    assert curNode.getBlockEdges().contains(edge2);
-                    nonDetSucs.remove(nonDetSuc1);
-                }
-            }
-            // Else, we should transfer graphs to both states in nonDetSucs.
-        }
     }
 
     /**

@@ -4,13 +4,13 @@ import com.google.common.base.Preconditions;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
-import org.sosy_lab.cpachecker.util.automaton.AutomatonGraphmlCommon;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
@@ -18,7 +18,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.porf;
@@ -42,43 +42,70 @@ public class OGTransfer {
         this.edgeVarMap = pEdgeVarMap;
     }
 
-    public NLTComparator getNltcmp() {
-        return nltcmp;
+    public NLTComparator getNltcmp() { return nltcmp; }
+
+
+    public CFANode handleNonDet(ObsGraph G, ARGState parState,
+            ARGState chState, CFAEdge edge) {
+
+        OGPORState ogporState1 = AbstractStates.extractStateByType(nonDetSuc1,
+                OGPORState.class);
+        assert ogporState1 != null;
+        String activeThread = ogporState1.getInThread();
+        assert activeThread != null;
+        OGNode curNode = G.getCurrentNode(activeThread);
+        if (curNode == null) {
+            boolean hasOtherNodes =
+                    G.getNodeTable().values().stream().anyMatch(Objects::nonNull);
+            if (hasOtherNodes) {
+                // We should visit other nodes first.
+                nonDetSucs.clear();
+            }
+            // Else, we should transfer graphs to both states in nonDetSucs.
+        } else {
+            if (curNode.getLastVisitedEdge() != null) {
+                // curNode has been visited.
+                // FIXME: in which case, we choose the edge inside the curNode?
+                CFAEdge edge1 = parState.getEdgeToChild(nonDetSuc1),
+                        edge2 = parState.getEdgeToChild(nonDetSuc2);
+                if (curNode.getBlockEdges().contains(edge1)) {
+                    nonDetSucs.remove(nonDetSuc2);
+                } else {
+                    assert curNode.getBlockEdges().contains(edge2);
+                    nonDetSucs.remove(nonDetSuc1);
+                }
+            }
+            // Else, we should transfer graphs to both states in nonDetSucs.
+        }
     }
 
+    public Pair<Boolean, Map<String, Pair<Integer, Integer>>>
+    hasNonDet(ARGState parState, Collection<? extends AbstractState> successors) {
+        Map<String, Pair<Integer, Integer>> nonDetMap = new HashMap<>();
+        AtomicBoolean hasNonDet = new AtomicBoolean(false);
+        successors.forEach(s -> {
+            OGPORState ogporState = AbstractStates.extractStateByType(s, OGPORState.class);
+            assert ogporState != null : "OGPORCPA required.";
+            String curThread = ogporState.getInThread();
+            if (!nonDetMap.containsKey(curThread)) {
+                nonDetMap.put(curThread, Pair.of(0, 0));
+            }
+            Pair<Integer, Integer> pair = nonDetMap.get(curThread);
+            CFAEdge edge = parState.getEdgeToChild((ARGState) s);
+            // TODO.
+            if (edge instanceof AssumeEdge) {
+                if (pair.getFirstNotNull() == 0) {
+                    nonDetMap.put(curThread, Pair.of(1, 1));
+                } else {
+                    nonDetMap.put(curThread, Pair.of(pair.getFirstNotNull() + 1, 1));
+                    hasNonDet.set(true);
+                }
+                assert nonDetMap.get(curThread).getFirstNotNull() <= 2 : "At most two " +
+                        "assume edges is allowed for a thread once.";
+            }
+        });
 
-    /**
-     * Compute whether there exists nondeterminism among the edges from parState to
-     * successors.
-     * @return List of the assume-edge successors that belong to the current thread and
-     * have the same predecessor.
-     */
-    public List<AbstractState> hasNonDet(ARGState parState,
-                                     Collection<? extends AbstractState> successors) {
-        if (successors.size() < 2)  return new ArrayList<>();
-        OGPORState parOgState = AbstractStates.extractStateByType(parState, OGPORState.class);
-        Preconditions.checkArgument(parOgState != null, "OGPORCPA required.");
-        String curThread = parOgState.getInThread();
-        Preconditions.checkArgument(curThread != null,
-                "Try to obtain current thread failed.");
-        List<AbstractState> nonDetSucs = new ArrayList<>(), tmp;
-        tmp = successors.stream()
-                .filter(s -> {
-                    OGPORState ogState = AbstractStates.extractStateByType(s,
-                            OGPORState.class);
-                    String thread = ogState.getInThread();
-                    return curThread.equals(thread);
-                })
-                .filter(s -> {
-                    CFAEdge edge = parState.getEdgeToChild((ARGState) s);
-                    return edge instanceof AssumeEdge;
-                })
-                .collect(Collectors.toList());
-
-        if (tmp.size() == 2) {
-            nonDetSucs.addAll(tmp);
-        }
-        return nonDetSucs;
+        return Pair.of(hasNonDet.get(), nonDetMap);
     }
 
     private static class NLTComparator implements Comparator<AbstractState> {
