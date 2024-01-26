@@ -4,7 +4,6 @@ import com.google.common.base.Preconditions;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
@@ -18,7 +17,6 @@ import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.porf;
@@ -45,67 +43,41 @@ public class OGTransfer {
     public NLTComparator getNltcmp() { return nltcmp; }
 
 
-    public CFANode handleNonDet(ObsGraph G, ARGState parState,
-            ARGState chState, CFAEdge edge) {
-
-        OGPORState ogporState1 = AbstractStates.extractStateByType(nonDetSuc1,
-                OGPORState.class);
-        assert ogporState1 != null;
-        String activeThread = ogporState1.getInThread();
-        assert activeThread != null;
-        OGNode curNode = G.getCurrentNode(activeThread);
-        if (curNode == null) {
-            boolean hasOtherNodes =
-                    G.getNodeTable().values().stream().anyMatch(Objects::nonNull);
-            if (hasOtherNodes) {
-                // We should visit other nodes first.
-                nonDetSucs.clear();
-            }
-            // Else, we should transfer graphs to both states in nonDetSucs.
-        } else {
-            if (curNode.getLastVisitedEdge() != null) {
-                // curNode has been visited.
-                // FIXME: in which case, we choose the edge inside the curNode?
-                CFAEdge edge1 = parState.getEdgeToChild(nonDetSuc1),
-                        edge2 = parState.getEdgeToChild(nonDetSuc2);
-                if (curNode.getBlockEdges().contains(edge1)) {
-                    nonDetSucs.remove(nonDetSuc2);
-                } else {
-                    assert curNode.getBlockEdges().contains(edge2);
-                    nonDetSucs.remove(nonDetSuc1);
+    public ObsGraph handleNonDet(ObsGraph graph,
+            ARGState parState,
+            OGPORState chOgState,
+            CFAEdge edge,
+            boolean hasNonDet) {
+        // Ensure no redundant copy of the graph.
+        // For co-edges, we copy the graph only when meet the first one of them.
+        if (hasNonDet) {
+            for (ARGState ch : parState.getChildren()) {
+                CFAEdge tmpEdge = parState.getEdgeToChild(ch);
+                assert tmpEdge != null;
+                if (Objects.equals(edge.getPredecessor(), tmpEdge.getPredecessor())) {
+                    if (Objects.equals(edge, tmpEdge)) {
+                        return graph.deepCopy(new HashMap<>());
+                    }
+                    break;
                 }
             }
-            // Else, we should transfer graphs to both states in nonDetSucs.
         }
+
+        return null;
     }
 
-    public Pair<Boolean, Map<String, Pair<Integer, Integer>>>
-    hasNonDet(ARGState parState, Collection<? extends AbstractState> successors) {
-        Map<String, Pair<Integer, Integer>> nonDetMap = new HashMap<>();
-        AtomicBoolean hasNonDet = new AtomicBoolean(false);
-        successors.forEach(s -> {
-            OGPORState ogporState = AbstractStates.extractStateByType(s, OGPORState.class);
-            assert ogporState != null : "OGPORCPA required.";
-            String curThread = ogporState.getInThread();
-            if (!nonDetMap.containsKey(curThread)) {
-                nonDetMap.put(curThread, Pair.of(0, 0));
-            }
-            Pair<Integer, Integer> pair = nonDetMap.get(curThread);
-            CFAEdge edge = parState.getEdgeToChild((ARGState) s);
-            // TODO.
-            if (edge instanceof AssumeEdge) {
-                if (pair.getFirstNotNull() == 0) {
-                    nonDetMap.put(curThread, Pair.of(1, 1));
-                } else {
-                    nonDetMap.put(curThread, Pair.of(pair.getFirstNotNull() + 1, 1));
-                    hasNonDet.set(true);
-                }
-                assert nonDetMap.get(curThread).getFirstNotNull() <= 2 : "At most two " +
-                        "assume edges is allowed for a thread once.";
+    public boolean hasNonDet(ARGState parState, CFAEdge edge) {
+        // Check whether parState has indeterminate successors.
+        List<ARGState> coSuccessors = new ArrayList<>();
+        parState.getChildren().forEach(s -> {
+            CFAEdge tmpEdge = parState.getEdgeToChild(s);
+            assert tmpEdge != null;
+            if (Objects.equals(tmpEdge.getPredecessor(), edge.getPredecessor())) {
+                coSuccessors.add(s);
             }
         });
 
-        return Pair.of(hasNonDet.get(), nonDetMap);
+        return coSuccessors.size() == 2;
     }
 
     private static class NLTComparator implements Comparator<AbstractState> {
@@ -147,15 +119,18 @@ public class OGTransfer {
      * @return Transferred graph if no conflict found, else null.
      */
     // FIXME
-    public ObsGraph singleStepTransfer(List<ObsGraph> graphWrapper,
-                                       CFAEdge edge,
-                                       ARGState parState, /* lead state */
-                                       ARGState chState) {
+    public Pair<ObsGraph, ObsGraph> singleStepTransfer(
+            List<ObsGraph> graphWrapper,
+            CFAEdge edge,
+            ARGState parState, /* lead state */
+            ARGState chState,
+            boolean isSimpleTransfer) {
         // Debug.
         boolean debug = true;
 
         Preconditions.checkArgument(graphWrapper.size() == 1);
-        ObsGraph graph = graphWrapper.iterator().next();
+        // TODO: copied graph?
+        ObsGraph graph = graphWrapper.iterator().next(), copiedGraph = null;
         OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class),
                 parOgState = AbstractStates.extractStateByType(parState, OGPORState.class);
         assert chOgState != null && parOgState != null;
@@ -166,7 +141,9 @@ public class OGTransfer {
         List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
         CriticalAreaAction criticalAreaAction = chOgState.getInCaa();
         boolean isNormalEdge = chOgState.enteringEdgeIsNormal(),
-                hasSharedVars = !(sharedEvents == null || sharedEvents.isEmpty());
+                hasSharedVars = !(sharedEvents == null || sharedEvents.isEmpty()),
+                isAssumeEdge = edge instanceof AssumeEdge,
+                hasNonDet = isAssumeEdge && hasNonDet(parState, edge);
 
         if (node == null) {
             // No node for the current thread.
@@ -180,11 +157,26 @@ public class OGTransfer {
                 graphWrapper.clear();
 
                 if (debug) debugActions(graph, parState, chState, edge);
-                return graph;
+
+                // Handle possible assume edge.
+                // FIXME: how to get rid of redundancy?
+                if (isAssumeEdge) {
+                    if (isSimpleTransfer) {
+                        copiedGraph = handleNonDet(graph, parState, chOgState, edge,
+                                hasNonDet);
+                        graph.addVisitedAssumeEdge(curThread, edge, chOgState);
+                    } else {
+                        // Multiple-step transfer.
+                        if (!graph.matchCachedEdge(curThread, edge, chOgState)) {
+                            graph = null;
+                        }
+                    }
+                }
+                return Pair.of(graph, copiedGraph);
             } else {
                 // Else, transferring requires no unmet nodes.
                 if (hasUnmetNode(graph)) {
-                    return null;
+                    return Pair.of(null, null);
                 } else {
                     // No unmet nodes.
                     if (!hasSharedVars) {
@@ -204,7 +196,7 @@ public class OGTransfer {
                         graphWrapper.clear();
 
                         if (debug) debugActions(graph, parState, chState, edge);
-                        return graph;
+                        return Pair.of(graph, null);
                     } else {
                         // The edge has some shared events. In this case, the edge is
                         // not normal, which means the edge may be a fun call or just a
@@ -223,7 +215,15 @@ public class OGTransfer {
                                 graphWrapper.clear();
 
                                 if (debug) debugActions(graph, parState, chState, edge);
-                                return graph;
+                                if (isAssumeEdge) {
+                                    if (isSimpleTransfer) {
+                                        copiedGraph = handleNonDet(graph, parState,
+                                                chOgState, edge, hasNonDet);
+                                        // graph.addVisitedAssumeEdge(edge);
+                                    }
+                                    // Else?
+                                }
+                                return Pair.of(graph, copiedGraph);
                             case CONTINUE:
                                 throw new UnsupportedOperationException("Nesting locks " +
                                         "is not allowed when current node is null: " + edge);
@@ -246,7 +246,13 @@ public class OGTransfer {
                                 graphWrapper.clear();
 
                                 if (debug) debugActions(graph, parState, chState, edge);
-                                return graph;
+                                if (isAssumeEdge) {
+                                    if (isSimpleTransfer) {
+                                        copiedGraph = handleNonDet(graph, parState,
+                                                chOgState, edge, hasNonDet);
+                                    }
+                                }
+                                return Pair.of(graph, copiedGraph);
                             default:
                                 throw new UnsupportedOperationException(
                                         "Missing action: " + edge);
@@ -254,9 +260,8 @@ public class OGTransfer {
                     }
                 }
             }
-
         } else {
-            // node != null.
+            // Node != null.
             // Indicate whether we will enter, have been inside or still haven't reached
             // the start of the node.
             Triple<Integer, CFAEdge, Boolean> checkPosition = isInsideNode(node, edge,
@@ -271,7 +276,7 @@ public class OGTransfer {
                 // conflict before entering.
                 if (isConflict(graph, curThread, node)) {
                     // Conflict means we should visit nodes of other threads first.
-                    return null;
+                    return Pair.of(null, null);
                 } else {
                     if (node.isSimpleNode()) {
                         // For the simple node, we have also reached its end.
@@ -290,7 +295,7 @@ public class OGTransfer {
                     graphWrapper.clear();
 
                     if (debug) debugActions(graph, parState, chState, edge);
-                    return graph;
+                    return Pair.of(graph, null);
                 }
             } else if (position > 0) {
                 // We have entered the node (complex).
@@ -305,20 +310,35 @@ public class OGTransfer {
                         visitNode(graph, node, chOgState, true);
                     }
 
-                    // TODO
                     node.setLastVisitedEdge(null);
                     // Update the current nodes for threads.
                     graph.updateCurrentNodeTable(curThread, node);
                     updatePreSucState(edge, node, parState, chState);
                 } else {
+                    // CONTINUE
                     if (edgeHasBeenVisited) node.setLastVisitedEdge(edge);
                     graph.setNeedToRevisit(false);
+                    if (isAssumeEdge) {
+                        if (isSimpleTransfer) {
+                            copiedGraph = handleNonDet(graph, parState, chOgState, edge,
+                                    hasNonDet);
+                            if (!hasSharedVars) {
+                                graph.addVisitedAssumeEdge(curThread, edge, chOgState);
+                            }
+                        } else {
+                            // Shared-vars edge?
+                            if (!hasSharedVars &&
+                                    !graph.matchCachedEdge(curThread, edge, chOgState)) {
+                                graph = null;
+                            }
+                        }
+                    }
                 }
 
                 graphWrapper.clear();
 
                 if (debug) debugActions(graph, parState, chState, edge);
-                return graph;
+                return Pair.of(graph, copiedGraph);
             } else {
                 // We haven't entered the node yet, i.e., we still haven't met the
                 // start edge of the node. This also means the edge should be normal.
@@ -331,7 +351,7 @@ public class OGTransfer {
                 graphWrapper.clear();
 
                 if (debug) debugActions(graph, parState, chState, edge);
-                return graph;
+                return Pair.of(graph, null);
             }
         }
     }

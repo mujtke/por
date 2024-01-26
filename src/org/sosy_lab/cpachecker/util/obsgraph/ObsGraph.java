@@ -8,6 +8,7 @@ import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 
@@ -31,6 +32,13 @@ public class ObsGraph implements Copier<ObsGraph> {
     private final List<SharedEvent> RE;
 
     private final Map<String, OGNode> nodeTable = new HashMap<>();
+
+    // thread -> <assumeEdge, loopDepthHash, pathLengthHash>
+    private final Map<String, List<Triple<CFAEdge, Integer, Integer>>>
+            cachedAssumeEdges = new HashMap<>();
+
+    // Recording the next assumption edge we should visit.
+    private final Map<String, Integer> assumeEdgeTable = new HashMap<>();
 
     public ObsGraph() {
         traceLen = 0;
@@ -547,11 +555,106 @@ public class ObsGraph implements Copier<ObsGraph> {
         nodeTable.put(curThread, null);
         for (OGNode suc : node.getSuccessors()) {
             String sucThrd = suc.getInThread();
-            // If node has more than one successor, then except the curThread, all
-            // threads should appear first time.
-//            if (!Objects.equals(curThread, sucThrd))
-//                assert !nodeTable.containsKey(sucThrd);
             nodeTable.put(sucThrd, suc);
+        }
+    }
+
+    public void addVisitedAssumeEdge(String curThread,
+            CFAEdge edge,
+            OGPORState chOgState) {
+        // Add assume edges to the cache when we meet them at the first time.
+        if (!cachedAssumeEdges.containsKey(curThread)) {
+            cachedAssumeEdges.put(curThread, new ArrayList<>());
+        }
+
+        cachedAssumeEdges.get(curThread).add(
+                Triple.of(edge, chOgState.getLoopDepth(), chOgState.getNum()));
+    }
+
+    public boolean matchCachedEdge(String curThread, CFAEdge edge, OGPORState chOgState) {
+        // Check whether the edge is equals to the storing edge of current thread.
+        if (cachedAssumeEdges.containsKey(curThread)) {
+            List<Triple<CFAEdge, Integer, Integer>> curThreadAssumeEdgeList =
+                    cachedAssumeEdges.get(curThread);
+            if (curThreadAssumeEdgeList != null) {
+                assert assumeEdgeTable.containsKey(curThread);
+                int i = assumeEdgeTable.get(curThread);
+                CFAEdge assumeEdge =
+                        curThreadAssumeEdgeList.get(i).getFirst();
+                assert curThreadAssumeEdgeList.get(i).getSecond() != null
+                        && curThreadAssumeEdgeList.get(i).getThird() != null;
+                int loopDepth = curThreadAssumeEdgeList.get(i).getSecond().intValue();
+
+                if (Objects.equals(edge, assumeEdge)
+                        && loopDepth == chOgState.getLoopDepth()) {
+                    // Update the assumeEdgeTable.
+                    assumeEdgeTable.put(curThread, i + 1);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public void resetCachedAssumeEdge() {
+        // TODO.
+        // Adjust the cachedAssumeEdges after revisiting.
+        for (String t : assumeEdgeTable.keySet()) {
+            assumeEdgeTable.put(t, 0);
+        }
+    }
+
+    public void removeAssumeEdges(SharedEvent r, List<SharedEvent> delete) {
+        // Remove the corresponding cached assume edges after having removed the events in
+        // revisiting.
+        if (cachedAssumeEdges.isEmpty()) return;
+        Map<String, Integer> removeStartPoint = new HashMap<>();
+        // Handle r.
+        OGNode rNode = r.getInNode();
+        OGPORState rOgporState = AbstractStates.extractStateByType(rNode.getPreState(),
+                OGPORState.class);
+        assert rOgporState != null && rOgporState.getInThread() != null;
+        int rNodeStartNum = rOgporState.getNum();
+        assert rNode.getBlockEdges().contains(r.getInEdge());
+        removeStartPoint.put(rOgporState.getInThread(),
+                rNodeStartNum + rNode.getBlockEdges().indexOf(r.getInEdge()));
+
+        // Handle delete. FIXME: more effective way.
+        List<OGNode> handledNodes = new ArrayList<>();
+        for (SharedEvent e : delete) {
+            OGNode node = e.getInNode();
+            if (handledNodes.contains(node))
+                continue;
+            OGPORState ogporState =
+                    AbstractStates.extractStateByType(node.getPreState(), OGPORState.class);
+            assert ogporState != null && ogporState.getInThread() != null;
+            int num = ogporState.getNum();
+            String thrd = ogporState.getInThread();
+            if (!removeStartPoint.containsKey(thrd)) {
+                removeStartPoint.put(thrd, num);
+            } else {
+                if (num < removeStartPoint.get(thrd))
+                    removeStartPoint.put(thrd, num);
+            }
+            handledNodes.add(node);
+        }
+
+        // Remove assume edges.
+        for (String t : cachedAssumeEdges.keySet()) {
+            if (!removeStartPoint.containsKey(t))
+                continue;
+
+            int removeStartNum = removeStartPoint.get(t);
+            List<Triple<CFAEdge, Integer, Integer>> assumeEdgeList =
+                    cachedAssumeEdges.get(t), remove = new ArrayList<>();
+            for (Triple<CFAEdge, Integer, Integer> triple : assumeEdgeList) {
+                int num = triple.getThird().intValue();
+                if (num >= removeStartNum) {
+                    remove.add(triple);
+                }
+            }
+
+            assumeEdgeList.removeAll(remove);
         }
     }
 }

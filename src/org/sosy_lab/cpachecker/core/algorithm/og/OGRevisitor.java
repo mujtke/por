@@ -155,6 +155,8 @@ public class OGRevisitor {
                                         "delete is complete. Set the new read-from " +
                                         "relation" + ".");
                                 Gw.setReadFromAndFromRead(rp, ap);
+                                // Remove the corresponding cached assume edges.
+                                Gw.removeAssumeEdges(rp, delete);
                                 if (debug) System.out.println("\tSetting the new " +
                                         "read-from is finished. RG adds the new graph " +
                                         "Gw. Check the consistency of Gw.");
@@ -225,6 +227,8 @@ public class OGRevisitor {
         Preconditions.checkState(targetNode.getPreState() != null);
 
         G.setInitialCurrentNodeTable(targetNode.getPreState());
+        // Reset the cachedAssumeEdges.
+        G.resetCachedAssumeEdge();
 
         return targetNode.getPreState();
     }

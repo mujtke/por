@@ -216,51 +216,49 @@ public class OGAlgorithm implements Algorithm {
 //            List<ObsGraph> toRemove = new ArrayList<>();
             for (int i = 0; i < parGraphs.size(); i++) {
                 if (hasBeenRemoved[i]) continue;
-                // TODO: transferred graph should be deep copy one?
                 ObsGraph parGraph = parGraphs.get(i);
-                // Indicate that whether the transfer is designated.
-                boolean constrainedTransfer = false;
+                boolean shouldKeepGraph = false, constraintTransfer = false;
                 if (nonDetTable.containsKey(i)) {
                     CFANode wantedCFANode = nonDetTable.get(i);
                     if (!Objects.equals(edge.getPredecessor(), wantedCFANode)) {
+                        // When nonDetTable is not empty, we should transfer the graph
+                        // along the edge in it.
                         continue;
                     }
-                    constrainedTransfer = true;
+                    constraintTransfer = true;
                 }
 
                 // Single transfer.
-                ObsGraph chGraph =
+                Pair<ObsGraph, ObsGraph> transferResult =
                         transfer.singleStepTransfer(new ArrayList<>(List.of(parGraph)),
                                 edge,
                                 parState,
-                                chState);
+                                chState,
+                                true);
+                ObsGraph chGraph = transferResult.getFirst(),
+                        copiedGraph = transferResult.getSecond();
+                if (copiedGraph != null) {
+                    nonDetTable.put(i, edge.getPredecessor());
+                    // Replace the ith graph.
+                    parGraphs.set(i, copiedGraph);
+                    shouldKeepGraph = true;
+                }
+
                 if (chGraph != null) {
                     // If parGraph could be transferred to chState, we should relate chGraph
                     // with chState.
                     OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
                     List<ObsGraph> chGraphs = OGMap.get(chState.getStateId());
                     chGraphs.add(chGraph);
-                    // So if nonDetSucs contains suc, we should not add parGraph to the
-                    // toRemove, because we also need to transfer parGraph to the other
-                    // suc in the nonDetSucs.
-                    if (edge instanceof AssumeEdge) {
-                        if (constrainedTransfer) {
-                            hasBeenRemoved[i] = true;
-                        } else {
-                            CFANode constriantedCFANode =
-                                    transfer.handleNonDet();
-                        }
-                    } else {
-                        // Suc belongs to a determinate statement.
-//                        toRemove.add(parGraph);
+                    if (!shouldKeepGraph) {
                         hasBeenRemoved[i] = true;
+                    }
+                    if (constraintTransfer) {
+                        // Kept graph has been transferred.
+                        nonDetTable.remove(i);
                     }
                 }
             }
-            // Remove transferred graphs.
-            parGraphs.removeAll(toRemove);
-            // If no graphs in parState, set its graphs to be null?
-            if (parGraphs.isEmpty()) OGMap.put(parState.getStateId(), null);
 
             if (OGMap.get(chState.getStateId()) != null) {
                 // There are some graphs relate with 'suc'.
@@ -270,6 +268,11 @@ public class OGAlgorithm implements Algorithm {
                 noGraphs.add(Pair.of(suc, pre));
             }
         }
+
+        // Remove transferred graphs.
+        parGraphs.clear();
+        // FIXME: If no graphs in parState, set its graphs to be null?
+        OGMap.put(parState.getStateId(), null);
 
         // Add children without graphs to reachedSet first. (which will add states to
         // the waitlist too).
@@ -329,7 +332,7 @@ public class OGAlgorithm implements Algorithm {
     }
 
     /**
-     * We Assume a total order (<next) on all statements (edges), and this method
+     * We assume a total order (<next) on all statements (edges), and this method
      * reorders the successors according to the assumed order. If the order on some
      * successors hasn't been computed, this method will compute it first.
      */
