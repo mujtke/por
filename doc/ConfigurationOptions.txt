@@ -4562,6 +4562,12 @@ useCompositionAnalysis = false
 # build constrained dependency graph (only for partial-order reduction)
 utils.edgeinfo.buildDepGraph = false
 
+# extract shared variables for every cfa edge.
+utils.globalInfo.OGInfo.extractVarsForCFAEdge = true
+
+# this option is enabled when we use nodeMap.
+utils.globalInfo.OGInfo.useNodeMap = false
+
 # this option is enabled iff we use OGPORCPA.
 utils.globalInfo.OGInfo.useOG = false
 

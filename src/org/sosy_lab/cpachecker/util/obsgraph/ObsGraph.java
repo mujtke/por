@@ -136,13 +136,6 @@ public class ObsGraph implements Copier<ObsGraph> {
         return -1;
     }
 
-    /**
-     *
-     * @param node
-     * @param loopDepth
-     * @param cfaNode
-     * @return
-     */
     public int contain(OGNode node, int loopDepth, CFANode cfaNode) {
 
         int oldLoopDepth = node.getLoopDepth();
@@ -207,6 +200,16 @@ public class ObsGraph implements Copier<ObsGraph> {
         // Node table.
         this.nodeTable.forEach((k, v) ->
                 nGraph.nodeTable.put(k, v == null ? null : v.deepCopy(memo)));
+        // CachedAssumeEdges.
+        this.cachedAssumeEdges.forEach((k, v) -> {
+            List<Triple<CFAEdge, Integer, Integer>> nList = new ArrayList<>();
+            for (Triple<CFAEdge, Integer, Integer> triple : v)
+                nList.add(Triple.of(triple.getFirst(), triple.getSecond(),
+                        triple.getThird()));
+            nGraph.cachedAssumeEdges.put(k, nList);
+        });
+        // AssumeEdgeTable.
+        nGraph.assumeEdgeTable.putAll(this.assumeEdgeTable);
 
 //        assert this.lastNode != null;
         nGraph.lastNode = this.lastNode == null ? null : this.lastNode.deepCopy(memo);
@@ -569,6 +572,12 @@ public class ObsGraph implements Copier<ObsGraph> {
 
         cachedAssumeEdges.get(curThread).add(
                 Triple.of(edge, chOgState.getLoopDepth(), chOgState.getNum()));
+
+       if (assumeEdgeTable.containsKey(curThread)) {
+           assumeEdgeTable.computeIfPresent(curThread, (k, v) -> v + 1);
+       } else {
+           assumeEdgeTable.put(curThread, 0);
+       }
     }
 
     public boolean matchCachedEdge(String curThread, CFAEdge edge, OGPORState chOgState) {

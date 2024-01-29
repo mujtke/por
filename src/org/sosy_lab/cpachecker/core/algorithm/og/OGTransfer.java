@@ -129,7 +129,6 @@ public class OGTransfer {
         boolean debug = true;
 
         Preconditions.checkArgument(graphWrapper.size() == 1);
-        // TODO: copied graph?
         ObsGraph graph = graphWrapper.iterator().next(), copiedGraph = null;
         OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class),
                 parOgState = AbstractStates.extractStateByType(parState, OGPORState.class);
@@ -153,17 +152,13 @@ public class OGTransfer {
                 // should be visited by us first, we still can transfer the graph.
                 // If the edge is just normal, i.e., it neither accesses any shared
                 // vars nor begins any atomic block.
-                graph.setNeedToRevisit(false);
-                graphWrapper.clear();
-
-                if (debug) debugActions(graph, parState, chState, edge);
 
                 // Handle possible assume edge.
                 // FIXME: how to get rid of redundancy?
-                if (isAssumeEdge) {
+                if (isAssumeEdge && hasNonDet) {
                     if (isSimpleTransfer) {
                         copiedGraph = handleNonDet(graph, parState, chOgState, edge,
-                                hasNonDet);
+                                true);
                         graph.addVisitedAssumeEdge(curThread, edge, chOgState);
                     } else {
                         // Multiple-step transfer.
@@ -172,9 +167,17 @@ public class OGTransfer {
                         }
                     }
                 }
+
+                if (graph != null) {
+                    graph.setNeedToRevisit(false);
+                    graphWrapper.clear();
+                    if (debug) debugActions(graph, parState, chState, edge);
+                }
+
                 return Pair.of(graph, copiedGraph);
             } else {
-                // Else, transferring requires no unmet nodes.
+                // Else, abnormal edge (Accesses shared vars or begins a atomic block).
+                // Transferring requires no unmet nodes.
                 if (hasUnmetNode(graph)) {
                     return Pair.of(null, null);
                 } else {
@@ -215,15 +218,7 @@ public class OGTransfer {
                                 graphWrapper.clear();
 
                                 if (debug) debugActions(graph, parState, chState, edge);
-                                if (isAssumeEdge) {
-                                    if (isSimpleTransfer) {
-                                        copiedGraph = handleNonDet(graph, parState,
-                                                chOgState, edge, hasNonDet);
-                                        // graph.addVisitedAssumeEdge(edge);
-                                    }
-                                    // Else?
-                                }
-                                return Pair.of(graph, copiedGraph);
+                                return Pair.of(graph, null);
                             case CONTINUE:
                                 throw new UnsupportedOperationException("Nesting locks " +
                                         "is not allowed when current node is null: " + edge);
@@ -246,11 +241,12 @@ public class OGTransfer {
                                 graphWrapper.clear();
 
                                 if (debug) debugActions(graph, parState, chState, edge);
-                                if (isAssumeEdge) {
+                                if (isAssumeEdge && hasNonDet) {
                                     if (isSimpleTransfer) {
                                         copiedGraph = handleNonDet(graph, parState,
-                                                chOgState, edge, hasNonDet);
+                                                chOgState, edge, true);
                                     }
+                                    // Else?
                                 }
                                 return Pair.of(graph, copiedGraph);
                             default:
@@ -341,16 +337,30 @@ public class OGTransfer {
                 return Pair.of(graph, copiedGraph);
             } else {
                 // We haven't entered the node yet, i.e., we still haven't met the
-                // start edge of the node. This also means the edge should be normal.
+                // start edge of the node.
                 assert criticalAreaAction == NOT_IN : "Invalid critical area action " +
                         "before entering node: " + edge;
-                assert isNormalEdge :
-                        "Invalid edge before entering the current node: " + edge;
-                // Just transfer the graph without changing the nodeTable.
-                graph.setNeedToRevisit(false);
-                graphWrapper.clear();
 
-                if (debug) debugActions(graph, parState, chState, edge);
+                if (!isNormalEdge) {
+                    // TODO
+                    assert node.isSimpleNode() : "Single abnormal edge must be " +
+                            "corresponding to  a simple node: " + edge;
+                    // This means the node doesn't contain the edge.
+                    return Pair.of(null, null);
+                } else if (isAssumeEdge && hasNonDet){
+                    if (!graph.matchCachedEdge(curThread, edge, chOgState)) {
+                        graph = null;
+                    }
+                }
+
+                // Else, The edge should be normal.
+                // Just transfer the graph without changing the nodeTable.
+                if (graph != null) {
+                    graph.setNeedToRevisit(false);
+                    graphWrapper.clear();
+                    if (debug) debugActions(graph, parState, chState, edge);
+                }
+
                 return Pair.of(graph, null);
             }
         }
@@ -409,8 +419,8 @@ public class OGTransfer {
             ARGState parState, ARGState chState, CFAEdge edge) {
 
         addGraphToFull(graph, chState.getStateId());
-//        System.out.println("Transferring from s" + parState.getStateId()
-//                + " -> s" + chState.getStateId() + ": " + edge);
+        System.out.println("Transferring from s" + parState.getStateId()
+                + " -> s" + chState.getStateId() + ": " + edge);
     }
 
     private void updatePreSucState(CFAEdge edge, OGNode node, ARGState parState,
@@ -463,7 +473,10 @@ public class OGTransfer {
             CFAEdge etp = leadState.getEdgeToChild(chState);
             assert etp != null;
             // assert node != null: "Could not find OGNode for edge " + etp;//
-            ObsGraph chGraph = singleStepTransfer(graphWrapper, etp, leadState, chState);
+//            ObsGraph chGraph = singleStepTransfer(graphWrapper, etp, leadState, chState);
+            Pair<ObsGraph, ObsGraph> transferResult = singleStepTransfer(graphWrapper,
+                    etp, leadState, chState, false);
+            ObsGraph chGraph = transferResult.getFirst();
             if (chGraph != null) {
                 // Transfer stop, we have found the target state.
                 OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
@@ -481,7 +494,10 @@ public class OGTransfer {
             CFAEdge etp = leadState.getEdgeToChild(chState);
             assert etp != null;
             // assert node != null: "Could not find OGNode for edge " + etp;
-            ObsGraph chGraph = singleStepTransfer(graphWrapper, etp, leadState, chState);
+//            ObsGraph chGraph = singleStepTransfer(graphWrapper, etp, leadState, chState);
+            Pair<ObsGraph, ObsGraph> transferResult = singleStepTransfer(graphWrapper,
+                    etp, leadState, chState, false);
+            ObsGraph chGraph = transferResult.getFirst();
             if (chGraph != null) {
                 if (chState.getChildren().isEmpty()) {
                     // FIXME: chState may be neither in the waitlist nor have any child.

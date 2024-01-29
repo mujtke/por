@@ -174,7 +174,7 @@ public class OGAlgorithm implements Algorithm {
 //            }
 //        }
         // Initializing all to false?
-        boolean[] hasBeenRemoved = new boolean[parGraphs.size()];
+        boolean[] hasBeenRemoved = new boolean[parGraphs == null ? 0 : parGraphs.size()];
         // Map from index of graph to CFANode, e.g., i -> N0.
         Map<Integer, CFANode> nonDetTable = new HashMap<>();
 
@@ -270,7 +270,7 @@ public class OGAlgorithm implements Algorithm {
         }
 
         // Remove transferred graphs.
-        parGraphs.clear();
+        if (parGraphs != null) parGraphs.clear();
         // FIXME: If no graphs in parState, set its graphs to be null?
         OGMap.put(parState.getStateId(), null);
 
