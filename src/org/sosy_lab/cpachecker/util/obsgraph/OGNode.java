@@ -2,6 +2,7 @@ package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
@@ -597,9 +598,13 @@ public class OGNode implements Copier<OGNode> {
 
         Preconditions.checkState(nd != null,
                 "Cannot find coEdge for: " + d);
-        // this node should contain nd.
-        Preconditions.checkState(blockEdges.contains(nd),
-                "Cannot replace edge not in blockEdges: " + nd);
+        // FIXME: this node should contain nd?
+//        Preconditions.checkState(blockEdges.contains(nd),
+//                "Cannot replace edge not in blockEdges: " + nd);
+        if (!blockEdges.contains(nd)) {
+            // FIXME
+            return null;
+        }
 
         // Replace.
         // Remove assumeEdge and all edges after it.
@@ -718,5 +723,12 @@ public class OGNode implements Copier<OGNode> {
         return pParent != null
                 && threadLoc.containsKey(pParent)
                 && !threadLoc.containsKey(pNode.getInThread());
+    }
+
+    public void getNewRs(@NonNull Set<SharedEvent> rFlag) {
+        for (int i = lheIndex + 1; i < events.size(); i++) {
+            if (events.get(i).getAType() == READ)
+                rFlag.add(events.get(i));
+        }
     }
 }

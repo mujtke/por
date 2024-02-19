@@ -382,16 +382,27 @@ public class OGTransfer {
             } else {
                 // The node (complex) doesn't contain the edge.
                 if (node.getLastVisitedEdge() != null) {
-                    boolean edgeHasBeenVisited = true;
+//                    boolean edgeHasBeenVisited = true;
+                    boolean edgeHasBeenVisited = false;
+                    CFAEdge newEdge = null;
                     // We are inside a node that has been added to the graph.
                     if (edge instanceof AssumeEdge) {
                         // The node doesn't contain the edge. Because the edge is an
-                        // assumption and inside the node, we need to replace it with its
-                        // coEdge.The process of replacing the coEdge will also add the
-                        // coEdge and all possible shared events to blockEdges and events
-                        // of the node, separately.
-                        edge = node.replaceCoEdge(edgeVarMap, edge);
-                        edgeHasBeenVisited = false;
+                        // assumption and not inside the node, we need to replace its
+                        // coEdge with it (this requires its coEdge is inside the node).
+                        // The process of replacing the coEdge will
+                        // also add the edge and all possible shared events to
+                        // blockEdges and events of the node, separately.
+                        newEdge = node.replaceCoEdge(edgeVarMap, edge);
+                    }
+
+                    if (newEdge != null) {
+                        // Replacement happened.
+                        edge = newEdge;
+                    } else {
+                        // The edge hasn't been met.
+                        node.getBlockEdges().add(edge);
+                        node.addEvents(sharedEvents);
                     }
 
                     return Triple.of(node.getBlockEdges().indexOf(node.getLastVisitedEdge()) + 1,
@@ -575,12 +586,14 @@ public class OGTransfer {
 
     private void visitNode(ObsGraph graph, OGNode node,
             OGPORState chOgState,
-            boolean hasVisited) {
+            boolean hasBeenVisited) {
         // 1.1 Add rf, mo, fr relations if the node is visited the first time.
         // For the visited nodes, just updating mo.
         Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>(node.getWs());
-        if (!hasVisited) {
-            rFlag.addAll(node.getRs());
+        if (!hasBeenVisited) {
+            // FIXME: Not all but only Rs after the lastHandledEvent should be added?
+            // rFlag.addAll(node.getRs());
+            node.getNewRs(rFlag);
         }
         // Whether we have found the predecessor of the node.
         boolean preFlag = node.getPredecessor() != null;
@@ -608,15 +621,16 @@ public class OGTransfer {
             n = n.getTrAfter();
         }
 
-        // 1.2 Add the node to the graph if we visit it the first time.
-        if (!hasVisited) {
-            assert !graph.getNodes().contains(node)
-                    : "Try to add a node that has been added before";
-            graph.getNodes().add(node);
+        if (!hasBeenVisited) {
+            if (!graph.getNodes().contains(node)) {
+                // 1.2 Add the node to the graph if we visit it the first time.
+                graph.getNodes().add(node);
+            }
         }
 
         // 2. Update the info for the node and graph.
         node.setInGraph(true);
+        // FIXME: loopDepth?
         node.setLoopDepth(chOgState.getLoopDepth());
         if (graph.getLastNode() != null) {
             graph.getLastNode().setTrBefore(node);
