@@ -8,6 +8,9 @@ if [ $? -eq 0 ]; then
 	done
 fi
 
+git status -s
+
 if [ $? -eq 0 ]; then
 	read -p 'Enter the comment:'
+	git commit -m "$REPLY"
 fi
