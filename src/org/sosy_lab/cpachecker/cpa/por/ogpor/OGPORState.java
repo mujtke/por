@@ -51,9 +51,25 @@ public class OGPORState implements AbstractState, Graphable {
 
     private final Map<String, Stack<String>> locks = new HashMap<>();
 
+    // Map from thread to its parent thread.
+    private final Map<String, String> parentThread = new HashMap<>();
+
     public CriticalAreaAction getInCaa() {
         assert inThread != null;
         return caas.get(inThread);
+    }
+
+    public String getParentThread(String inThread) {
+        assert inThread != null;
+        return parentThread.get(inThread);
+    }
+
+    public Map<String, String> getParentThread() {
+        return parentThread;
+    }
+
+    public void setParentThread(Map<String, String> pParentThread) {
+        parentThread.putAll(pParentThread);
     }
 
     public enum LockStatus {
@@ -69,7 +85,6 @@ public class OGPORState implements AbstractState, Graphable {
         NOT_IN, /* not any one above, lock-free */
     }
 
-    // private CriticalAreaAction caa = NOT_IN;
     private final Map<String, CriticalAreaAction> caas = new HashMap<>();
 
     // Record the entering edge.
@@ -91,6 +106,18 @@ public class OGPORState implements AbstractState, Graphable {
             newLocks.addAll(v);
             locks.put(k, newLocks);
         });
+    }
+
+    // Remove the parent thread for thread t.
+    public void removeParentThread(String t) {
+        parentThread.remove(t);
+    }
+
+    // Set the parent thread for thread t.
+    public void setParentThread(String t, String parent) {
+        if (Objects.equals(parent, parentThread.get(t)))
+            assert false : "Try to set a different parent thread for the same thread.";
+        parentThread.put(t, parent);
     }
 
     public Map<String, Stack<String>> getLocks() {
@@ -228,6 +255,9 @@ public class OGPORState implements AbstractState, Graphable {
         return threads;
     }
 
+    public void setThreads(Map<String, String> pThreads) {
+        threads.putAll(pThreads);
+    }
     public int getNum() {
         return num;
     }

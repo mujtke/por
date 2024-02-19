@@ -307,7 +307,7 @@ public class ConditionalStatementHandler {
                             null);
 //                    assignFormula = nrmgr.makeExists(nrmgr.makeTrue(), var);
 
-                    // initializer on RIGHT SIDE available, make region for it.
+                    // initializer on the RIGHT SIDE available, make a region for it.
                     if (init != null) {
                         final Region[] rhs = bvComputer.evaluateVectorExpression(
                                 partition,

@@ -3,6 +3,7 @@ package org.sosy_lab.cpachecker.cpa.por.ogpor;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.sosy_lab.common.ShutdownNotifier;
 import org.sosy_lab.common.annotations.ReturnValuesAreNonnullByDefault;
@@ -94,6 +95,8 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         chOGState.setLoopDepthTable(parOGState.getLoopDepthTable());
         chOGState.setLocks(parOGState.getLocks());
         chOGState.setCaas(parOGState.getCaas());
+        chOGState.setThreads(parOGState.getThreads());
+        chOGState.setParentThread(parOGState.getParentThread());
 
         return Set.of(chOGState);
     }
@@ -108,23 +111,42 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
                Precision precision)
             throws CPATransferException, InterruptedException {
         OGPORState ogState = (OGPORState) state;
-        // Update threads.
-        String activeThread = null;
+        ThreadingState threadingState = null;
         for (AbstractState s : otherStates) {
             if (s instanceof ThreadingState) {
-                ThreadingState threadingState = (ThreadingState) s;
-                // Set 'threads' for ogState.
-                threadingState.getThreadIds().forEach(tid -> ogState.getThreads()
-                        .put(tid, threadingState.getThreadLocation(tid)
-                                .getLocationNode()
-                                .toString()));
-                // Set 'inThread'.
-                activeThread = getActiveThread(cfaEdge, threadingState);
-                ogState.setInThread(activeThread);
+                threadingState = (ThreadingState) s;
+                break;
             }
         }
-        Preconditions.checkState(activeThread != null,
-                "Failed to get active thread: " + cfaEdge);
+
+        assert threadingState != null : "Failed to get threadingState and set the " +
+                "thread relatives.";
+
+        Set<String> createdThreads = new HashSet<>(Sets.difference(threadingState.getThreadIds(),
+                ogState.getThreads().keySet())),
+                exitedThreads = new HashSet<>(Sets.difference(ogState.getThreads().keySet(),
+                        threadingState.getThreadIds()));
+
+        // Set 'threads' for ogState.
+        ThreadingState finalThreadingState = threadingState;
+        threadingState.getThreadIds().forEach(tid -> ogState.getThreads().put(tid,
+                finalThreadingState.getThreadLocation(tid).getLocationNode().toString()));
+
+        // Set 'inThread'.
+        String activeThread = getActiveThread(cfaEdge, threadingState);
+        assert activeThread != null : "Failed to get active thread: " + cfaEdge;
+        ogState.setInThread(activeThread);
+
+
+        // Remove exited threads.
+        exitedThreads.forEach(t -> {
+            // If a thread exited, remove it from the parent thread map.
+            ogState.removeParentThread(t);
+            ogState.getThreads().remove(t);
+        });
+
+        // FIXME: Set the parent threads for newly created threads.
+        createdThreads.forEach(t -> ogState.setParentThread(t, activeThread));
 
         assert cfaEdge != null;
         // Update loop depth table.

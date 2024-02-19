@@ -700,24 +700,23 @@ public class OGNode implements Copier<OGNode> {
 
     public boolean isPredecessorOf(OGNode pNode) {
         // There two cases where this node is the predecessor of pNode.
-        // Case1: pNode is not the first one of its thread and this node is located in
-        // the same thread.
+        // Case1: the node locates in the same thread as pNode.
         if (inThread.equals(pNode.inThread)) {
             return true;
         }
 
-        // Case2: pNode is the first one of its thread, and this node is
-        // located in its parent thread.
+        // Case2: pNode is the first node of its thread, and the node locates in
+        // the parent thread of pNode.
         // Sets.difference(set1, set2): This method returns a set containing all elements
         // that are contained by set1 and not contained by set2.
-        Set<String> set1 = threadLoc.keySet(), set2 = pNode.threadLoc.keySet(),
-        subtract1 = Sets.difference(set1, set2), subtract2 = Sets.difference(set2, set1);
-        if (subtract1.isEmpty() /* this node doesn't contain any thread that pNode not contain */
-                && subtract2.contains(pNode.inThread)
-                && subtract2.size() == 1 /* pNode just contain one more thread than this node */) {
-            return true;
-        }
-
-        return false;
+        // TODO
+        OGPORState state = AbstractStates.extractStateByType(preState, OGPORState.class),
+                pState = AbstractStates.extractStateByType(pNode.getPreState(),
+                        OGPORState.class);
+        assert state != null && pState != null;
+        String pParent = pState.getParentThread(pNode.getInThread());
+        return pParent != null
+                && threadLoc.containsKey(pParent)
+                && !threadLoc.containsKey(pNode.getInThread());
     }
 }

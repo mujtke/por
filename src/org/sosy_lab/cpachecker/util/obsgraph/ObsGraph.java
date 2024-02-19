@@ -62,6 +62,10 @@ public class ObsGraph implements Copier<ObsGraph> {
                 }
             }
         }
+        // FIXME
+        else if (!RE.isEmpty()) {
+            RE.clear();
+        }
 
         return RE;
     }

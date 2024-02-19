@@ -161,18 +161,6 @@ public class OGAlgorithm implements Algorithm {
         ARGState parState = (ARGState) state, chState;
         List<ObsGraph> parGraphs = OGMap.get(parState.getStateId());
 
-//        Pair<Boolean, Map<String, Pair<Integer, Integer>>> nonDetInfo =
-//                transfer.hasNonDet(parState,
-//                successors);
-//        if (hasNonDet) {
-//            // Handle indeterminate successors.
-//            for (int i = 0; i < parGraphs.size(); i++) {
-//                ObsGraph parGraph = parGraphs.get(i);
-//                List<AbstractState> graphNonDetSuc = new ArrayList<>(nonDetSucs);
-//                handleNonDet(parGraph, parState, graphNonDetSuc);
-//                nonDetTable.put(i, Pair.of(graphNonDetSuc.size(), 1));
-//            }
-//        }
         // Initializing all to false?
         boolean[] hasBeenRemoved = new boolean[parGraphs == null ? 0 : parGraphs.size()];
         // Map from index of graph to CFANode, e.g., i -> N0.

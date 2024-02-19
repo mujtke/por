@@ -406,9 +406,7 @@ public class OGTransfer {
                         // Add the edge to the node.
                         node.getBlockEdges().add(edge);
                         node.addEvents(sharedEvents);
-                        return Triple.of(node.getBlockEdges().size() + 1,
-                                edge,
-                                false);
+                        return Triple.of(node.getBlockEdges().size(), edge, false);
                     }
                 }
             }
@@ -573,44 +571,6 @@ public class OGTransfer {
         }
 
         return false;
-    }
-    /**
-     * Update the last node and calculate trace order and modify order for it.
-     * This function is called only when the new last node has already been in the graph.
-     * @param idx gives the index of the new last node in the graph.
-     */
-    // FIXME
-    private void updateLastNode(ObsGraph graph, int idx, ARGState newPreState,
-                                ARGState newSucState) {
-        OGNode nLast = graph.getNodes().get(idx),
-                oLast = graph.getLastNode();
-        nLast.setPreState(newPreState);
-        nLast.setSucState(newSucState);
-        nLast.setInGraph(true);
-        graph.setLastNode(nLast);
-        // oLast -- trBefore ->  nLast
-        nLast.setTrAfter(oLast);
-        // oLast may be null.
-        if (oLast != null) oLast.setTrBefore(nLast);
-        graph.setTraceLen(graph.getTraceLen() + 1);
-
-        // Update mo for the new last node (nLast) by backtracking along the trace.
-        Set<SharedEvent> wSet = new HashSet<>(nLast.getWs()), toRemove = new HashSet<>();
-        OGNode tracePre = nLast.getTrAfter();
-        while (tracePre != null) {
-            for (SharedEvent wp : tracePre.getWs()) {
-                for (SharedEvent w : wSet) {
-                    if (w.accessSameVarWith(wp)) {
-                        // wp <_mo w.
-                        setRelation("mo", graph, wp, w);
-                        toRemove.add(w);
-                        break;
-                    }
-                }
-            }
-            wSet.removeAll(toRemove);
-            tracePre = tracePre.getPredecessor();
-        }
     }
 
     private void visitNode(ObsGraph graph, OGNode node,
