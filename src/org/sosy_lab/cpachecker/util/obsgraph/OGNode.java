@@ -714,7 +714,7 @@ public class OGNode implements Copier<OGNode> {
         // the parent thread of pNode.
         // Sets.difference(set1, set2): This method returns a set containing all elements
         // that are contained by set1 and not contained by set2.
-        // TODO
+        // FIXME: how to get correct parent thread?
         OGPORState state = AbstractStates.extractStateByType(preState, OGPORState.class),
                 pState = AbstractStates.extractStateByType(pNode.getPreState(),
                         OGPORState.class);
@@ -722,6 +722,7 @@ public class OGNode implements Copier<OGNode> {
         String pParent = pState.getParentThread(pNode.getInThread());
         return pParent != null
                 && threadLoc.containsKey(pParent)
+                && Objects.equals(inThread, pParent)
                 && !threadLoc.containsKey(pNode.getInThread());
     }
 

@@ -92,36 +92,27 @@ public class OGRevisitor {
                 if (debug) System.out.println("\tEntering for loop.");
                 switch (a.getAType()) {
                     case READ:
-                        if (debug) System.out.println("\t'a' is R(" + a.getVar().getName()
-                                + ").");
-                        if (debug) System.out.println("\tGet the events that have the " +
-                                "same location with 'a'");
+                        if (debug) System.out.println("\t'a' is R(" + a.getVar().getName() + ").");
+                        if (debug) System.out.println("\tGet the events that have the same location with 'a'");
                         List<SharedEvent> locA = G0.getSameLocationAs(a);
                         for (SharedEvent w : locA) {
                             ObsGraph Gr = G0.deepCopy(new HashMap<>());
-                            if (debug) System.out.println("\tCopying G0 is finished. Try to" +
-                                    " get the copy of 'a'.");
+                            if (debug) System.out.println("\tCopying G0 is finished. Try to get the copy of 'a'.");
                             // After deep copy, a not in Gr.
                             SharedEvent ap = getCopyEvent(Gr, G0, a),
                                     wp = getCopyEvent(Gr, G0, w);
-                            if (debug) System.out.println("\tSetting the new read-from " +
-                                    "relations.");
+                            if (debug) System.out.println("\tSetting the new read-from relations.");
                             Gr.setReadFromAndFromRead(ap, wp);
-                            if (debug) System.out.println("\tSetting the new read-from " +
-                                    "is finished. RG adds the new graph Gr.");
+                            if (debug) System.out.println("\tSetting the new read-from is finished. RG adds the new graph Gr.");
                             // Gr.RE = G0.RE \ {a}.
 //                            Gr.RESubtract(ap);
 //                            RG.add(Gr);
-                            if (debug) System.out.println("\tChecking the consistency " +
-                                    "of Gr.");
+                            if (debug) System.out.println("\tChecking the consistency of Gr.");
                             if (consistent(Gr)) {
-                                if (debug) System.out.println("\tGr is consistent. Try " +
-                                        "to get the pivot state.");
+                                if (debug) System.out.println("\tGr is consistent. Try to get the pivot state.");
                                 AbstractState pivotState = getPivotState(Gr);
                                 result.add(Pair.of(pivotState, Gr));
-                                if (debug) System.out.println("\tHaving gotten the " +
-                                        "pivot state s" + ((ARGState) pivotState).getStateId()
-                                        + ", add the Gr to the revisit result.");
+                                if (debug) System.out.println("\tHaving gotten the pivot state s" + ((ARGState) pivotState).getStateId() + ", add the Gr to the revisit result.");
                             } else {
                                 RG.add(Gr);
                             }
@@ -130,16 +121,13 @@ public class OGRevisitor {
                         break;
 
                     case WRITE:
-                        if (debug) System.out.println("\t'a' is W(" + a.getVar().getName()
-                                + "). Try to get the events that have the same location" +
-                                " with 'a'.");
+                        if (debug) System.out.println("\t'a' is W(" + a.getVar().getName() + "). Try to get the events that have the same location" + " with 'a'.");
                         locA = G0.getSameLocationAs(a);
                         if (debug) System.out.println("\tEntering for loop.");
                         for (SharedEvent r : locA) {
                             if (debug) System.out.println("\tStarting to copy G0.");
                             ObsGraph Gw = G0.deepCopy(new HashMap<>());
-                            if (debug) System.out.println("\tCopying G0 is complete. " +
-                                    "Get the copy event of 'a' and 'r'.");
+                            if (debug) System.out.println("\tCopying G0 is complete. Get the copy event of 'a' and 'r'.");
                             SharedEvent rp = getCopyEvent(Gw, G0, r),
                                     ap = getCopyEvent(Gw, G0, a);
                             if (debug) System.out.println("\tGet the delete.");
@@ -148,30 +136,22 @@ public class OGRevisitor {
                             List<SharedEvent> deletePlusR = getDeletePlusR(delete, rp);
                             if (debug) System.out.println("\tChecking maximality.");
                             if (allMaximallyAdded(Gw, deletePlusR, ap)) {
-                                if (debug) System.out.println("\tChecking the " +
-                                        "maximality is complete. Removing the delete.");
+                                if (debug) System.out.println("\tChecking the maximality is complete. Removing the delete.");
                                 Gw.removeDelete(delete);
-                                if (debug) System.out.println("\tRemoving the " +
-                                        "delete is complete. Set the new read-from " +
-                                        "relation" + ".");
+                                if (debug) System.out.println("\tRemoving the delete is complete. Set the new read-from relation.");
                                 Gw.setReadFromAndFromRead(rp, ap);
                                 // Remove the corresponding cached assume edges.
                                 Gw.removeAssumeEdges(rp, delete);
-                                if (debug) System.out.println("\tSetting the new " +
-                                        "read-from is finished. RG adds the new graph " +
-                                        "Gw. Check the consistency of Gw.");
+                                if (debug) System.out.println("\tSetting the new read-from is finished. RG adds the new graph Gw. Check the consistency of Gw.");
                                 // Gw.RE = G0.RE \ {ap}.
 //                                Gw.RESubtract(ap);
                                 RG.add(Gw);
                                 if (consistent(Gw)) {
-                                    if (debug) System.out.println("\tGw is consistent. " +
-                                            "Try to get the pivot State.");
+                                    if (debug) System.out.println("\tGw is consistent. Try to get the pivot State.");
                                     AbstractState pivotState = getPivotState(Gw);
                                     result.add(Pair.of(pivotState, Gw));
 //                                    result.add(Pair.of(getPivotState(Gw), Gw));
-                                    if (debug) System.out.println("\tHaving gotten the " +
-                                            "pivot state s" + ((ARGState) pivotState).getStateId()
-                                            + ", add the Gr to the revisit result.");
+                                    if (debug) System.out.println("\tHaving gotten the pivot state s" + ((ARGState) pivotState).getStateId() + ", add the Gr to the revisit result.");
                                 }
                             }
                         }
