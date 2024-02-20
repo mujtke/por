@@ -329,8 +329,8 @@ public class ConditionalStatementHandler {
             default:
         }
 
-        Preconditions.checkArgument(assignFormula != null, "Calculate formula for the " +
-                "write event failed.");
+        Preconditions.checkArgument(assignFormula != null,
+                "Calculate formula for the write event failed.");
         if (nrmgr.makeAnd(assumeEvaluated, assignFormula).isFalse()) {
             // Change the node.
             cor = G.changeAssumeNode(r);

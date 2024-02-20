@@ -69,7 +69,8 @@ public class OGRevisitor {
         List<OGNode> nodes = g.getNodes();
         OGNode node0 = g.getLastNode();
         int nodeNum = nodes.size();
-        assert node0 != null && node0.equals(nodes.get(nodeNum - 1));
+        // FIXME: The revisited node may be not the last node.
+        // assert node0 != null && node0.equals(nodes.get(nodeNum - 1));
 
         List<ObsGraph> RG = new ArrayList<>();
         RG.add(g);
@@ -102,11 +103,13 @@ public class OGRevisitor {
                             SharedEvent ap = getCopyEvent(Gr, G0, a),
                                     wp = getCopyEvent(Gr, G0, w);
                             if (debug) System.out.println("\tSetting the new read-from relations.");
+
+                            // TODO: remove cached assume edges?
+                            assert ap.getInNode() != null;
+                            ap.getInNode().removeEventAfter(ap);
+
                             Gr.setReadFromAndFromRead(ap, wp);
                             if (debug) System.out.println("\tSetting the new read-from is finished. RG adds the new graph Gr.");
-                            // Gr.RE = G0.RE \ {a}.
-//                            Gr.RESubtract(ap);
-//                            RG.add(Gr);
                             if (debug) System.out.println("\tChecking the consistency of Gr.");
                             if (consistent(Gr)) {
                                 if (debug) System.out.println("\tGr is consistent. Try to get the pivot state.");
@@ -114,6 +117,7 @@ public class OGRevisitor {
                                 result.add(Pair.of(pivotState, Gr));
                                 if (debug) System.out.println("\tHaving gotten the pivot state s" + ((ARGState) pivotState).getStateId() + ", add the Gr to the revisit result.");
                             } else {
+                                // FIXME: is it necessary to do this?
                                 RG.add(Gr);
                             }
                         }
@@ -138,13 +142,16 @@ public class OGRevisitor {
                             if (allMaximallyAdded(Gw, deletePlusR, ap)) {
                                 if (debug) System.out.println("\tChecking the maximality is complete. Removing the delete.");
                                 Gw.removeDelete(delete);
+
+                                // FIXME: Remove the events that is after and located in
+                                //  the same node with rp .
+                                rp.getInNode().removeEventAfter(rp);
+
                                 if (debug) System.out.println("\tRemoving the delete is complete. Set the new read-from relation.");
                                 Gw.setReadFromAndFromRead(rp, ap);
                                 // Remove the corresponding cached assume edges.
                                 Gw.removeAssumeEdges(rp, delete);
                                 if (debug) System.out.println("\tSetting the new read-from is finished. RG adds the new graph Gw. Check the consistency of Gw.");
-                                // Gw.RE = G0.RE \ {ap}.
-//                                Gw.RESubtract(ap);
                                 RG.add(Gw);
                                 if (consistent(Gw)) {
                                     if (debug) System.out.println("\tGw is consistent. Try to get the pivot State.");
@@ -363,9 +370,11 @@ public class OGRevisitor {
                         // Having changed e2 to its coEvent.
                         e2n = e2p.getInNode();
                         e2 = e2p;
+                        // FIXME: Remove the events and edges after e2?
+                        e2n.removeEventAfter(e2);
                     }
                 } catch (UnsupportedCodeException e) {
-                    e.printStackTrace();
+                    // e.printStackTrace();
                 }
 
                 // e1 <_rf e2, e2 reads from e1.

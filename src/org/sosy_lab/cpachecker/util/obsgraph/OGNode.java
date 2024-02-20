@@ -732,4 +732,34 @@ public class OGNode implements Copier<OGNode> {
                 rFlag.add(events.get(i));
         }
     }
+
+    // Remove the events after e0.
+    // Used in revisiting.
+    public void removeEventAfter(SharedEvent e0) {
+        assert events.contains(e0)  : "When removing events for revisiting of a read, " +
+                "the " +
+                "read(" + e0 +  ") not in the node: " + this;
+        // FIXME: set e0 as the lhe of this node?
+        lheIndex = events.indexOf(e0) != lheIndex ? events.indexOf(e0) : lheIndex;
+
+        // Remove events and relations.
+        List<SharedEvent> rmEvents = new ArrayList<>();
+        for (int i = lheIndex + 1; i < events.size(); i++) {
+            SharedEvent e = events.get(i);
+            rmEvents.add(e);
+            e.removeAllRelations();
+        }
+        events.removeAll(rmEvents);
+        rmEvents.forEach(Rs::remove);
+        rmEvents.forEach(Ws::remove);
+
+        // Remove edges.
+        assert blockEdges.contains(e0.getInEdge()) : "Revisited read's inEdge must " +
+                "locate in the block edges: " + e0.getInEdge();
+        List<CFAEdge> rmEdges = new ArrayList<>();
+        for (int i = blockEdges.indexOf(e0.getInEdge()) + 1; i < blockEdges.size(); i++) {
+            rmEdges.add(blockEdges.get(i));
+        }
+        blockEdges.removeAll(rmEdges);
+    }
 }
