@@ -1,7 +1,6 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Sets;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
@@ -11,6 +10,7 @@ import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
@@ -767,5 +767,13 @@ public class OGNode implements Copier<OGNode> {
             rmEdges.add(blockEdges.get(i));
         }
         blockEdges.removeAll(rmEdges);
+    }
+
+    // Remove events that come from the edge.
+    public void removeEvent(CFAEdge edge) {
+        Predicate<SharedEvent> filter = e -> Objects.equals(edge, e.getInEdge());
+        events.removeIf(filter);
+        Rs.removeIf(filter);
+        Ws.removeIf(filter);
     }
 }

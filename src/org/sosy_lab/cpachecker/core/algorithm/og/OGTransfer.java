@@ -56,7 +56,15 @@ public class OGTransfer {
                 assert tmpEdge != null;
                 if (Objects.equals(edge.getPredecessor(), tmpEdge.getPredecessor())) {
                     if (Objects.equals(edge, tmpEdge)) {
-                        return graph.deepCopy(new HashMap<>());
+                        // >>>>>
+                        ObsGraph copiedGraph = graph.deepCopy(new HashMap<>());
+                        OGNode currentNode =
+                                copiedGraph.getCurrentNode(chOgState.getInThread());
+                        // Copied graph is used for another conditional branch.
+                        currentNode.removeEvent(edge);
+                        currentNode.getBlockEdges().remove(edge);
+                        // <<<<<<
+                        return copiedGraph;
                     }
                     break;
                 }
@@ -382,6 +390,8 @@ public class OGTransfer {
             } else {
                 // The node (complex) doesn't contain the edge.
                 if (node.getLastVisitedEdge() != null) {
+                    int lastVisitEdgeIdx = node.getBlockEdges().indexOf(
+                            node.getLastVisitedEdge());
 //                    boolean edgeHasBeenVisited = true;
                     boolean edgeHasBeenVisited = false;
                     CFAEdge newEdge = null;
@@ -403,11 +413,11 @@ public class OGTransfer {
                         // The edge hasn't been met.
                         node.getBlockEdges().add(edge);
                         node.addEvents(sharedEvents);
+                        lastVisitEdgeIdx++;
                     }
+                    node.setLastVisitedEdge(edge);
 
-                    return Triple.of(node.getBlockEdges().indexOf(node.getLastVisitedEdge()) + 1,
-                            edge,
-                            edgeHasBeenVisited);
+                    return Triple.of(lastVisitEdgeIdx, edge, edgeHasBeenVisited);
                 } else {
                     if (caa == NOT_IN) {
                         // We haven't entered a critical area yet.

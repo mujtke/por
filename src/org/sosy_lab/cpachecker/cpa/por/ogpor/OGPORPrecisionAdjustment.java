@@ -47,15 +47,16 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         assert fullState instanceof ARGState;
         ARGState chState =  (ARGState) fullState;
         // Only one parent exists is required in OG-based algorithm.
-        assert chState.getParents().size() == 1;
-        ARGState parState = chState.getParents().iterator().next();
-
-        CFAEdge edge = parState.getEdgeToChild(chState);
-        assert edge != null;
-
-        OGPORState parOGState = AbstractStates.extractStateByType(parState,
-                OGPORState.class),
-                chOGState = (OGPORState) state;
+//        assert chState.getParents().size() == 1;
+//        ARGState parState = chState.getParents().iterator().next();
+//
+//        CFAEdge edge = parState.getEdgeToChild(chState);
+//        assert edge != null;
+//
+//        OGPORState parOGState = AbstractStates.extractStateByType(parState,
+//                OGPORState.class),
+//                chOGState = (OGPORState) state;
+        OGPORState chOGState = (OGPORState) state;
 
         // Here, set the num for chOGState.
         chOGState.setNum(chState.getStateId());

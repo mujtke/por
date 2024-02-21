@@ -118,7 +118,7 @@ public class OGRevisitor {
                                 if (debug) System.out.println("\tHaving gotten the pivot state s" + ((ARGState) pivotState).getStateId() + ", add the Gr to the revisit result.");
                             } else {
                                 // FIXME: is it necessary to do this?
-                                RG.add(Gr);
+                                // RG.add(Gr);
                             }
                         }
 
@@ -441,14 +441,21 @@ public class OGRevisitor {
     public static boolean porf(OGNode A, OGNode B) {
         // FIXME: avoid endless loop.
         if (A == null || B == null) return false;
+
         for (OGNode n : A.getSuccessors()) {
-            if (n == B) return true;
-            if (porf(n, B)) return true;
+            if (n == B || porf(n, B)) return true;
         }
+
         for (OGNode n : A.getReadBy()) {
-            if (n == B) return true;
-            if (porf(n, B)) return true;
+            if (n == B || porf(n, B)) return true;
         }
+
+        // >>>>>
+        // FIXME: from read?
+        for (OGNode n : A.getFromRead()) {
+            if (n == B || porf(n, B)) return true;
+        }
+        // <<<<<
 
         return false;
     }
