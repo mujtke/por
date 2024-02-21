@@ -607,10 +607,7 @@ public class OGNode implements Copier<OGNode> {
         }
 
         // Replace.
-        // Remove assumeEdge and all edges after it.
         int assumeEdgeIdx = blockEdges.indexOf(nd);
-        blockEdges.removeIf(e -> blockEdges.indexOf(e) >= assumeEdgeIdx);
-        blockEdges.add(d);
         // Remove all shared events in or after the nd.
         List<SharedEvent> toRemove = events.stream()
                 .filter(e -> blockEdges.indexOf(e.getInEdge()) >= assumeEdgeIdx)
@@ -620,16 +617,25 @@ public class OGNode implements Copier<OGNode> {
         events.removeAll(toRemove);
         toRemove.forEach(Rs::remove);
         toRemove.forEach(Ws::remove);
+        // Remove assumeEdge and all edges after it.
+        blockEdges.removeIf(e -> blockEdges.indexOf(e) >= assumeEdgeIdx);
+        blockEdges.add(d);
 
         // Update the last-visited edge.
 //        lastVisitedEdge = coEdge;
         // Update last-visited event if necessary.
         // FIXME: more than one sharedEvent in an assume edge?
-        Preconditions.checkArgument(lheIndex < events.size() && lheIndex >= 0);
-        SharedEvent lastHandledEvent = events.get(lheIndex);
-        if (lastHandledEvent.getInEdge() == nd) {
-            // Replacing assumeEdge with its coEdge doesn't change the number of events.
+//        Preconditions.checkArgument(lheIndex < events.size() && lheIndex >= 0);
+//        SharedEvent lastHandledEvent = events.get(lheIndex);
+//        if (lastHandledEvent.getInEdge() == nd) {
+//            // Replacing assumeEdge with its coEdge doesn't change the number of events.
+//            addEvents(edgeVarMap.get(d.hashCode()));
+//        }
+        if (edgeVarMap.get(d.hashCode()) != null && !edgeVarMap.get(d.hashCode()).isEmpty()) {
+            lheIndex = events.isEmpty() ? 0 : events.size();
             addEvents(edgeVarMap.get(d.hashCode()));
+        } else {
+            lheIndex = events.isEmpty() ? -1 : events.size() - 1;
         }
 
         return d;

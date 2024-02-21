@@ -69,7 +69,7 @@ public class OGRevisitor {
         List<OGNode> nodes = g.getNodes();
         OGNode node0 = g.getLastNode();
         int nodeNum = nodes.size();
-        // FIXME: The revisited node may be not the last node.
+        // FIXME: The revisited node may not be the last node.
         // assert node0 != null && node0.equals(nodes.get(nodeNum - 1));
 
         List<ObsGraph> RG = new ArrayList<>();

@@ -229,6 +229,10 @@ public class ObsGraph implements Copier<ObsGraph> {
 
         for (int i = nodes.indexOf(a.getInNode()) - 1; i >= 0; i--) {
             OGNode nodei = nodes.get(i);
+
+            // FIXME: how to handle the nodes not in the graph?
+            if (!nodei.isInGraph()) continue;
+
             if (a.getAType() == READ) {
                 SharedEvent arf = a.getReadFrom();
                 // fixme: could we skip some nodes.
