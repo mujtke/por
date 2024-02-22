@@ -77,15 +77,17 @@ a.out
 # /src/org/sosy_lab/cpachecker/util/ltl/generated/
 /src/org/sosy_lab/cpachecker/util/ltl/generated/
 
+# test
+/test/*
 # /test/programs/
-/test/programs/benchmarks
-/test/programs/ldv-benchmarks
+# /test/programs/benchmarks
+# /test/programs/ldv-benchmarks
 
 # /test/thread-test/
-/test/thread-test
+!/test/thread-test
 
 # /test/results/
-/test/results/*
+# /test/results/*
 
 # /.idea/
 .idea/workspace.xml

@@ -269,7 +269,7 @@ public class OGTransfer {
             // Indicate whether we will enter, have been inside or still haven't reached
             // the start of the node.
             Triple<Integer, CFAEdge, Boolean> checkPosition = isInsideNode(node, edge,
-                    hasSharedVars, sharedEvents, criticalAreaAction);
+                    hasSharedVars, hasNonDet, sharedEvents, criticalAreaAction);
             assert checkPosition.getFirst() != null && checkPosition.getThird() != null;
             int position = checkPosition.getFirst();
             edge = checkPosition.getSecond();
@@ -344,10 +344,17 @@ public class OGTransfer {
                 if (debug) debugActions(graph, parState, chState, edge);
                 return Pair.of(graph, copiedGraph);
             } else {
-                // We haven't entered the node yet, i.e., we still haven't met the
+                // >>>>>
+                if (criticalAreaAction == CONTINUE) {
+                    // We are inside some node, but the graph cannot transfer along the
+                    // edge because of the conflict.
+                    return Pair.of(null, null);
+                }
+                // <<<<<
+                // Else, we haven't entered the node yet, i.e., we still haven't met the
                 // start edge of the node.
-                assert criticalAreaAction == NOT_IN : "Invalid critical area action " +
-                        "before entering node: " + edge;
+                assert criticalAreaAction == NOT_IN : "Requiring NOT_IN, but "
+                        + criticalAreaAction + " provided when handling the edge: " + edge;
 
                 if (!isNormalEdge) {
                     // TODO
@@ -377,6 +384,7 @@ public class OGTransfer {
     private @NonNull Triple<Integer, CFAEdge, Boolean> isInsideNode(OGNode node,
             CFAEdge edge,
             boolean hasSharedVars,
+            boolean hasNonDet,
             List<SharedEvent> sharedEvents,
             CriticalAreaAction caa) {
         if (node.isSimpleNode()) {
@@ -390,12 +398,11 @@ public class OGTransfer {
             } else {
                 // The node (complex) doesn't contain the edge.
                 if (node.getLastVisitedEdge() != null) {
-                    int lastVisitEdgeIdx = node.getBlockEdges().indexOf(
-                            node.getLastVisitedEdge());
-//                    boolean edgeHasBeenVisited = true;
-                    boolean edgeHasBeenVisited = false;
-                    CFAEdge newEdge = null;
                     // We are inside a node that has been added to the graph.
+//                    int lastVisitEdgeIdx = node.getBlockEdges().indexOf(
+//                            node.getLastVisitedEdge());
+                    int lastVisitEdgeIdx = -1;
+                    boolean edgeHasBeenVisited = false;
                     if (edge instanceof AssumeEdge) {
                         // The node doesn't contain the edge. Because the edge is an
                         // assumption and not inside the node, we need to replace its
@@ -403,19 +410,29 @@ public class OGTransfer {
                         // The process of replacing the coEdge will
                         // also add the edge and all possible shared events to
                         // blockEdges and events of the node, separately.
-                        newEdge = node.replaceCoEdge(edgeVarMap, edge);
-                    }
+                        CFAEdge newEdge = node.replaceCoEdge(edgeVarMap, edge, hasSharedVars);
 
-                    if (newEdge != null) {
-                        // Replacement happened.
-                        edge = newEdge;
+                        if (newEdge != null) {
+                            // Replacement happened.
+                            edge = newEdge;
+                            node.setLastVisitedEdge(edge);
+                            assert node.getBlockEdges().contains(edge) : "The edge " +
+                                    "is not in the node after replacing:" + edge;
+                            lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
+                        } else {
+                            // FIXME: Else, just returning position = -1?
+                            if (!hasNonDet) {
+                                node.getBlockEdges().add(edge);
+                                node.addEvents(sharedEvents);
+                                lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
+                            }
+                        }
                     } else {
-                        // The edge hasn't been met.
+                        // Not an assumption edge.
                         node.getBlockEdges().add(edge);
                         node.addEvents(sharedEvents);
-                        lastVisitEdgeIdx++;
+                        lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
                     }
-                    node.setLastVisitedEdge(edge);
 
                     return Triple.of(lastVisitEdgeIdx, edge, edgeHasBeenVisited);
                 } else {
@@ -437,6 +454,7 @@ public class OGTransfer {
     private void debugActions(ObsGraph graph,
             ARGState parState, ARGState chState, CFAEdge edge) {
 
+        if (graph == null) return;
         addGraphToFull(graph, chState.getStateId());
         System.out.println("Transferring from s" + parState.getStateId()
                 + " -> s" + chState.getStateId() + ": " + edge);

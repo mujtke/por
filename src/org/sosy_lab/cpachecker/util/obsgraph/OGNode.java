@@ -582,7 +582,7 @@ public class OGNode implements Copier<OGNode> {
 
     // Replace conflicted assumeEdge d with its coEdge !d.
     public CFAEdge replaceCoEdge(final Map<Integer, List<SharedEvent>> edgeVarMap,
-            CFAEdge d) {
+            CFAEdge d, boolean hasSharedVars) {
         Preconditions.checkArgument(
                 d.getPredecessor().getNumLeavingEdges() > 1,
                 "Predecessor of assume edge has less then two outgoing " +
@@ -601,7 +601,7 @@ public class OGNode implements Copier<OGNode> {
         // FIXME: this node should contain nd?
 //        Preconditions.checkState(blockEdges.contains(nd),
 //                "Cannot replace edge not in blockEdges: " + nd);
-        if (!blockEdges.contains(nd)) {
+        if (!blockEdges.contains(nd) || hasSharedVars) {
             // FIXME
             return null;
         }

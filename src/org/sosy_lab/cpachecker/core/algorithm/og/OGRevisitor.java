@@ -104,14 +104,17 @@ public class OGRevisitor {
                                     wp = getCopyEvent(Gr, G0, w);
                             if (debug) System.out.println("\tSetting the new read-from relations.");
 
-                            // TODO: remove cached assume edges?
-                            assert ap.getInNode() != null;
-                            ap.getInNode().removeEventAfter(ap);
-
                             Gr.setReadFromAndFromRead(ap, wp);
                             if (debug) System.out.println("\tSetting the new read-from is finished. RG adds the new graph Gr.");
                             if (debug) System.out.println("\tChecking the consistency of Gr.");
                             if (consistent(Gr)) {
+
+                                // >>>>>
+                                // TODO: remove cached assume edges?
+                                assert ap.getInNode() != null;
+                                ap.getInNode().removeEventAfter(ap);
+                                // <<<<<<
+
                                 if (debug) System.out.println("\tGr is consistent. Try to get the pivot state.");
                                 AbstractState pivotState = getPivotState(Gr);
                                 result.add(Pair.of(pivotState, Gr));
@@ -143,17 +146,20 @@ public class OGRevisitor {
                                 if (debug) System.out.println("\tChecking the maximality is complete. Removing the delete.");
                                 Gw.removeDelete(delete);
 
-                                // FIXME: Remove the events that is after and located in
-                                //  the same node with rp .
-                                rp.getInNode().removeEventAfter(rp);
-
                                 if (debug) System.out.println("\tRemoving the delete is complete. Set the new read-from relation.");
                                 Gw.setReadFromAndFromRead(rp, ap);
-                                // Remove the corresponding cached assume edges.
-                                Gw.removeAssumeEdges(rp, delete);
                                 if (debug) System.out.println("\tSetting the new read-from is finished. RG adds the new graph Gw. Check the consistency of Gw.");
                                 RG.add(Gw);
                                 if (consistent(Gw)) {
+
+                                    // >>>>>
+                                    // Remove the corresponding cached assume edges.
+                                    Gw.removeAssumeEdges(rp, delete);
+                                    // FIXME: Remove the events that is after and located in
+                                    //  the same node with rp .
+                                    rp.getInNode().removeEventAfter(rp);
+                                    // <<<<<
+
                                     if (debug) System.out.println("\tGw is consistent. Try to get the pivot State.");
                                     AbstractState pivotState = getPivotState(Gw);
                                     result.add(Pair.of(pivotState, Gw));
