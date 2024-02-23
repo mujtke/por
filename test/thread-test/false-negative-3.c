@@ -118,10 +118,10 @@ void * P0(void *arg)
 
   __VERIFIER_atomic_begin();
   x = __VERIFIER_nondet_bool();
-  x$w_buff0_used = __VERIFIER_nondet_bool();
+//   x$w_buff0_used = __VERIFIER_nondet_bool();
   x$w_buff1_used = __VERIFIER_nondet_bool();
-  x$r_buff0_thd1 = __VERIFIER_nondet_bool();
-  x$r_buff1_thd1 = __VERIFIER_nondet_bool();
+//   x$r_buff0_thd1 = __VERIFIER_nondet_bool();
+//   x$r_buff1_thd1 = __VERIFIER_nondet_bool();
   __VERIFIER_atomic_end();
 
   __VERIFIER_atomic_begin();
@@ -152,6 +152,10 @@ void * P1(void *arg)
 
 int main()
 {
+	// >>>>>
+// 	x$w_buff1 = __VERIFIER_nondet_bool();
+// 	x$w_buff0 = __VERIFIER_nondet_bool();
+	// <<<<<
   pthread_t t2475;
   pthread_create(&t2475, NULL, P0, NULL);
   pthread_t t2476;
@@ -162,14 +166,21 @@ int main()
   __VERIFIER_atomic_end();
 
   __VERIFIER_atomic_begin();
-  x$w_buff0_used = __VERIFIER_nondet_bool();
+//   x$w_buff0_used = __VERIFIER_nondet_bool();
   x$w_buff1_used = __VERIFIER_nondet_bool();
   x$r_buff0_thd0 = __VERIFIER_nondet_bool();
-  x$r_buff1_thd0 = __VERIFIER_nondet_bool();
+//   x$r_buff1_thd0 = __VERIFIER_nondet_bool();
   __VERIFIER_atomic_end();
 
   __VERIFIER_atomic_begin();
-  x = !x$w_buff0_used || !x$r_buff0_thd0 && !x$w_buff1_used || !x$r_buff0_thd0 && !x$r_buff1_thd0 ? x : (x$w_buff0_used && x$r_buff0_thd0 ? x$w_buff0 : x$w_buff1);
+//   x = !x$w_buff0_used || !x$r_buff0_thd0 && !x$w_buff1_used || !x$r_buff0_thd0 && !x$r_buff1_thd0 ? x : (x$w_buff0_used && x$r_buff0_thd0 ? x$w_buff0 : x$w_buff1);
+	
+  // >>>>>
+//   x = !x$w_buff0_used || !x$r_buff0_thd0 && !x$w_buff1_used || !x$r_buff0_thd0 && !x$r_buff1_thd0 ? x : x$w_buff1;
+//   x = !x$w_buff0_used || !x$r_buff0_thd0 && !x$w_buff1_used || !x$r_buff0_thd0 ? x : x$w_buff1;
+  x = !x$r_buff0_thd0 && !x$w_buff1_used || !x$r_buff0_thd0 ? x : x$w_buff1;
+  // <<<<<
+
   main$tmp_guard1 = !(x == 2 && y == 2);
   __VERIFIER_atomic_end();
 

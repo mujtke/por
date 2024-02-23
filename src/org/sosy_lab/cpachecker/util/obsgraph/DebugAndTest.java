@@ -14,6 +14,30 @@ public class DebugAndTest {
     private final static String dotFile = "output/ogs.dot";
     private final static String fullDotFile = "output/fullDot.json";
     private final static String argFile = "output/arg.json";
+    private final static String instantOG = "output/instantOG.dot";
+
+    public static int print(ObsGraph g) {
+        String dotStr = getDotStr(g);
+        try {
+            // Write dotStr to the file 'output/instantOG.dot'.
+            FileWriter fout = new FileWriter(instantOG);
+            fout.write(dotStr);
+            fout.close();
+
+            Process p = Runtime.getRuntime().exec(new String[] {
+                    "/bin/bash",
+                    "-c",
+                    "/usr/bin/dot -Tpdf " + instantOG + " -o output/instantOG.pdf"
+            });
+
+            p.waitFor();
+            return p.exitValue();
+        } catch (IOException | InterruptedException e) {
+            //
+        }
+
+        return 1;
+    }
 
     private static void addNewNode(FileWriter fout, OGNode n,
                                    Map<OGNode, String> visited) throws IOException {

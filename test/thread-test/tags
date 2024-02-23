@@ -8,6 +8,7 @@
 !_TAG_FIELD_DESCRIPTION	name	/tag name/
 !_TAG_FIELD_DESCRIPTION	pattern	/pattern/
 !_TAG_FIELD_DESCRIPTION	typeref	/Type and name of a variable or typedef/
+!_TAG_FIELD_DESCRIPTION!C++	name	/aliased names/
 !_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
 !_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
 !_TAG_KIND_DESCRIPTION!C	d,macro	/macro definitions/
@@ -20,6 +21,18 @@
 !_TAG_KIND_DESCRIPTION!C	t,typedef	/typedefs/
 !_TAG_KIND_DESCRIPTION!C	u,union	/union names/
 !_TAG_KIND_DESCRIPTION!C	v,variable	/variable definitions/
+!_TAG_KIND_DESCRIPTION!C++	c,class	/classes/
+!_TAG_KIND_DESCRIPTION!C++	d,macro	/macro definitions/
+!_TAG_KIND_DESCRIPTION!C++	e,enumerator	/enumerators (values inside an enumeration)/
+!_TAG_KIND_DESCRIPTION!C++	f,function	/function definitions/
+!_TAG_KIND_DESCRIPTION!C++	g,enum	/enumeration names/
+!_TAG_KIND_DESCRIPTION!C++	h,header	/included header files/
+!_TAG_KIND_DESCRIPTION!C++	m,member	/class, struct, and union members/
+!_TAG_KIND_DESCRIPTION!C++	n,namespace	/namespaces/
+!_TAG_KIND_DESCRIPTION!C++	s,struct	/structure names/
+!_TAG_KIND_DESCRIPTION!C++	t,typedef	/typedefs/
+!_TAG_KIND_DESCRIPTION!C++	u,union	/union names/
+!_TAG_KIND_DESCRIPTION!C++	v,variable	/variable definitions/
 !_TAG_KIND_DESCRIPTION!Sh	a,alias	/aliases/
 !_TAG_KIND_DESCRIPTION!Sh	f,function	/functions/
 !_TAG_KIND_DESCRIPTION!Sh	h,heredoc	/label for here document/
@@ -29,6 +42,7 @@
 !_TAG_OUTPUT_MODE	u-ctags	/u-ctags or e-ctags/
 !_TAG_OUTPUT_VERSION	0.0	/current.age/
 !_TAG_PARSER_VERSION!C	1.1	/current.age/
+!_TAG_PARSER_VERSION!C++	1.1	/current.age/
 !_TAG_PARSER_VERSION!Sh	0.0	/current.age/
 !_TAG_PATTERN_LENGTH_LIMIT	96	/0 for no limit/
 !_TAG_PROC_CWD	/home/mujueke/Code/Java/por/test/thread-test/	//
@@ -41,15 +55,38 @@
 !_TAG_ROLE_DESCRIPTION!C!header	system	/system header/
 !_TAG_ROLE_DESCRIPTION!C!macro	undef	/undefined/
 !_TAG_ROLE_DESCRIPTION!C!struct	foreigndecl	/declared in foreign languages/
+!_TAG_ROLE_DESCRIPTION!C++!header	local	/local header/
+!_TAG_ROLE_DESCRIPTION!C++!header	system	/system header/
+!_TAG_ROLE_DESCRIPTION!C++!macro	undef	/undefined/
 !_TAG_ROLE_DESCRIPTION!Sh!heredoc	endmarker	/end marker/
 !_TAG_ROLE_DESCRIPTION!Sh!script	loaded	/loaded/
+FALSE	false-negative-1.c	/^#define FALSE /;"	d	file:
+FALSE	false-negative-2.c	/^#define FALSE /;"	d	file:
+FALSE	false-negative-3.c	/^#define FALSE /;"	d	file:
+FALSE	false-negative.c	/^#define FALSE /;"	d	file:
 FALSE	mix001.oepc.c	/^#define FALSE /;"	d	file:
+FALSE	safe029_power.opt_pso.opt_rmo.opt.c	/^#define FALSE /;"	d	file:
 FALSE	safe031_power.opt_pso.opt_rmo.opt.c	/^#define FALSE /;"	d	file:
+FENCE	false-negative-1.c	/^#define FENCE(/;"	d	file:
+FENCE	false-negative-2.c	/^#define FENCE(/;"	d	file:
+FENCE	false-negative-3.c	/^#define FENCE(/;"	d	file:
+FENCE	false-negative.c	/^#define FENCE(/;"	d	file:
 FENCE	mix001.oepc.c	/^#define FENCE(/;"	d	file:
+FENCE	safe029_power.opt_pso.opt_rmo.opt.c	/^#define FENCE(/;"	d	file:
 FENCE	safe031_power.opt_pso.opt_rmo.opt.c	/^#define FENCE(/;"	d	file:
+IEEE_FLOAT_EQUAL	false-negative-1.c	/^#define IEEE_FLOAT_EQUAL(/;"	d	file:
+IEEE_FLOAT_EQUAL	false-negative-2.c	/^#define IEEE_FLOAT_EQUAL(/;"	d	file:
+IEEE_FLOAT_EQUAL	false-negative-3.c	/^#define IEEE_FLOAT_EQUAL(/;"	d	file:
+IEEE_FLOAT_EQUAL	false-negative.c	/^#define IEEE_FLOAT_EQUAL(/;"	d	file:
 IEEE_FLOAT_EQUAL	mix001.oepc.c	/^#define IEEE_FLOAT_EQUAL(/;"	d	file:
+IEEE_FLOAT_EQUAL	safe029_power.opt_pso.opt_rmo.opt.c	/^#define IEEE_FLOAT_EQUAL(/;"	d	file:
 IEEE_FLOAT_EQUAL	safe031_power.opt_pso.opt_rmo.opt.c	/^#define IEEE_FLOAT_EQUAL(/;"	d	file:
+IEEE_FLOAT_NOTEQUAL	false-negative-1.c	/^#define IEEE_FLOAT_NOTEQUAL(/;"	d	file:
+IEEE_FLOAT_NOTEQUAL	false-negative-2.c	/^#define IEEE_FLOAT_NOTEQUAL(/;"	d	file:
+IEEE_FLOAT_NOTEQUAL	false-negative-3.c	/^#define IEEE_FLOAT_NOTEQUAL(/;"	d	file:
+IEEE_FLOAT_NOTEQUAL	false-negative.c	/^#define IEEE_FLOAT_NOTEQUAL(/;"	d	file:
 IEEE_FLOAT_NOTEQUAL	mix001.oepc.c	/^#define IEEE_FLOAT_NOTEQUAL(/;"	d	file:
+IEEE_FLOAT_NOTEQUAL	safe029_power.opt_pso.opt_rmo.opt.c	/^#define IEEE_FLOAT_NOTEQUAL(/;"	d	file:
 IEEE_FLOAT_NOTEQUAL	safe031_power.opt_pso.opt_rmo.opt.c	/^#define IEEE_FLOAT_NOTEQUAL(/;"	d	file:
 LIMIT	triangular-2.c	/^#define LIMIT /;"	d	file:
 N	fib_unsafe-1.c	/^#define N /;"	d	file:
@@ -62,6 +99,10 @@ NULL	branch-3.c	/^#define NULL /;"	d	file:
 NULL	branch-4.c	/^#define NULL /;"	d	file:
 NULL	c2.c	/^#define NULL /;"	d	file:
 NULL	c4.c	/^#define NULL /;"	d	file:
+NULL	false-negative-1.c	/^#define NULL /;"	d	file:
+NULL	false-negative-2.c	/^#define NULL /;"	d	file:
+NULL	false-negative-3.c	/^#define NULL /;"	d	file:
+NULL	false-negative.c	/^#define NULL /;"	d	file:
 NULL	fib_unsafe-1.c	/^#define NULL /;"	d	file:
 NULL	fib_unsafe-2.c	/^#define NULL /;"	d	file:
 NULL	fib_unsafe-6.c	/^#define NULL /;"	d	file:
@@ -74,24 +115,42 @@ NULL	loop-5.c	/^#define NULL /;"	d	file:
 NULL	mix001.oepc.c	/^#define NULL /;"	d	file:
 NULL	race-1_3-join.c	/^#define NULL /;"	d	file:
 NULL	revisit-1.c	/^#define NULL /;"	d	file:
+NULL	safe029_power.opt_pso.opt_rmo.opt.c	/^#define NULL /;"	d	file:
 NULL	safe031_power.opt_pso.opt_rmo.opt.c	/^#define NULL /;"	d	file:
+NULL	template_pthread.h	/^#define NULL /;"	d
 NULL	test-3-simple.c	/^#define NULL /;"	d	file:
+NULL	time_var_mutex.c	/^#define NULL /;"	d	file:
 NULL	triangular-2.c	/^#define NULL /;"	d	file:
 NULL	unwind-6-qrcu-1-m.c	/^#define NULL /;"	d	file:
 NULL	unwind-6-qrcu-1.c	/^#define NULL /;"	d	file:
 NULL	xxx.c	/^#define NULL /;"	d	file:
 NUM	triangular-2.c	/^#define NUM /;"	d	file:
 P0	atomic-func.c	/^void *P0(void *arg) {$/;"	f	typeref:typename:void *
+P0	false-negative-1.c	/^void * P0(void *arg)$/;"	f	typeref:typename:void *
+P0	false-negative-2.c	/^void * P0(void *arg)$/;"	f	typeref:typename:void *
+P0	false-negative-3.c	/^void * P0(void *arg)$/;"	f	typeref:typename:void *
+P0	false-negative.c	/^void * P0(void *arg)$/;"	f	typeref:typename:void *
 P0	mix001.oepc.c	/^void * P0(void *arg)$/;"	f	typeref:typename:void *
+P0	safe029_power.opt_pso.opt_rmo.opt.c	/^void * P0(void *arg)$/;"	f	typeref:typename:void *
 P0	safe031_power.opt_pso.opt_rmo.opt.c	/^void * P0(void *arg)$/;"	f	typeref:typename:void *
+P1	false-negative-1.c	/^void * P1(void *arg)$/;"	f	typeref:typename:void *
+P1	false-negative-2.c	/^void * P1(void *arg)$/;"	f	typeref:typename:void *
+P1	false-negative-3.c	/^void * P1(void *arg)$/;"	f	typeref:typename:void *
+P1	false-negative.c	/^void * P1(void *arg)$/;"	f	typeref:typename:void *
 P1	mix001.oepc.c	/^void * P1(void *arg)$/;"	f	typeref:typename:void *
+P1	safe029_power.opt_pso.opt_rmo.opt.c	/^void * P1(void *arg)$/;"	f	typeref:typename:void *
 P1	safe031_power.opt_pso.opt_rmo.opt.c	/^void * P1(void *arg)$/;"	f	typeref:typename:void *
 P2	mix001.oepc.c	/^void * P2(void *arg)$/;"	f	typeref:typename:void *
 P2	safe031_power.opt_pso.opt_rmo.opt.c	/^void * P2(void *arg)$/;"	f	typeref:typename:void *
 TIMES	fib_unsafe-1.c	/^#define TIMES /;"	d	file:
 TIMES	fib_unsafe-2.c	/^#define TIMES /;"	d	file:
 TIMES	fib_unsafe-6.c	/^#define TIMES /;"	d	file:
+TRUE	false-negative-1.c	/^#define TRUE /;"	d	file:
+TRUE	false-negative-2.c	/^#define TRUE /;"	d	file:
+TRUE	false-negative-3.c	/^#define TRUE /;"	d	file:
+TRUE	false-negative.c	/^#define TRUE /;"	d	file:
 TRUE	mix001.oepc.c	/^#define TRUE /;"	d	file:
+TRUE	safe029_power.opt_pso.opt_rmo.opt.c	/^#define TRUE /;"	d	file:
 TRUE	safe031_power.opt_pso.opt_rmo.opt.c	/^#define TRUE /;"	d	file:
 X	atomic-func.c	/^int X = 0, Y = 0;$/;"	v	typeref:typename:int
 X	branch-1.c	/^int X = 1, Y = -1;$/;"	v	typeref:typename:int
@@ -125,7 +184,12 @@ Y	revisit-1.c	/^int X = -1, Y = -1;$/;"	v	typeref:typename:int
 Z	c2.c	/^int X = 0, Y = 0, Z = 0;$/;"	v	typeref:typename:int
 Z	c4.c	/^int X = 0, Y = 0, Z = 0;$/;"	v	typeref:typename:int
 __VERIFIER_assert	atomic-func.c	/^void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; r/;"	f	typeref:typename:void
+__VERIFIER_assert	false-negative-1.c	/^void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; r/;"	f	typeref:typename:void
+__VERIFIER_assert	false-negative-2.c	/^void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; r/;"	f	typeref:typename:void
+__VERIFIER_assert	false-negative-3.c	/^void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; r/;"	f	typeref:typename:void
+__VERIFIER_assert	false-negative.c	/^void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; r/;"	f	typeref:typename:void
 __VERIFIER_assert	mix001.oepc.c	/^void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; r/;"	f	typeref:typename:void
+__VERIFIER_assert	safe029_power.opt_pso.opt_rmo.opt.c	/^void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; r/;"	f	typeref:typename:void
 __VERIFIER_assert	safe031_power.opt_pso.opt_rmo.opt.c	/^void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; r/;"	f	typeref:typename:void
 __VERIFIER_atomic_check_progress1	qrcu-1.c	/^void __VERIFIER_atomic_check_progress1(int readerstart1) {$/;"	f	typeref:typename:void
 __VERIFIER_atomic_check_progress2	qrcu-1.c	/^void __VERIFIER_atomic_check_progress2(int readerstart2) {$/;"	f	typeref:typename:void
@@ -135,6 +199,7 @@ __VERIFIER_atomic_use2	qrcu-1.c	/^void __VERIFIER_atomic_use2(int myidx) {$/;"	f
 __VERIFIER_atomic_use_done	qrcu-1.c	/^void __VERIFIER_atomic_use_done(int myidx) {$/;"	f	typeref:typename:void
 __align	bench-exp1x3.wvr.c	/^  long int __align;$/;"	m	union:pthread_attr_t	typeref:typename:long int	file:
 __align	bench-exp1x3.wvr.unloop-3.c	/^  long int __align;$/;"	m	union:pthread_attr_t	typeref:typename:long int	file:
+__align	chl-time-subst.wvr.c	/^  long int __align;$/;"	m	union:pthread_attr_t	typeref:typename:long int	file:
 __align	unwind-6-qrcu-1-m.c	/^  signed int __align;$/;"	m	union:anonymous$0	typeref:typename:signed int	file:
 __align	unwind-6-qrcu-1-m.c	/^  signed long int __align;$/;"	m	union:anonymous	typeref:typename:signed long int	file:
 __align	unwind-6-qrcu-1-m.c	/^  signed long int __align;$/;"	m	union:pthread_attr_t	typeref:typename:signed long int	file:
@@ -185,6 +250,7 @@ __pthread_mutex_s	unwind-6-qrcu-1.c	/^struct __pthread_mutex_s$/;"	s	file:
 __pthread_mutex_s	xxx.c	/^struct __pthread_mutex_s$/;"	s	file:
 __size	bench-exp1x3.wvr.c	/^  char __size[36];$/;"	m	union:pthread_attr_t	typeref:typename:char[36]	file:
 __size	bench-exp1x3.wvr.unloop-3.c	/^  char __size[36];$/;"	m	union:pthread_attr_t	typeref:typename:char[36]	file:
+__size	chl-time-subst.wvr.c	/^  char __size[36];$/;"	m	union:pthread_attr_t	typeref:typename:char[36]	file:
 __size	unwind-6-qrcu-1-m.c	/^  char __size[40l];$/;"	m	union:anonymous	typeref:typename:char[40l]	file:
 __size	unwind-6-qrcu-1-m.c	/^  char __size[4l];$/;"	m	union:anonymous$0	typeref:typename:char[4l]	file:
 __size	unwind-6-qrcu-1-m.c	/^  char __size[56l];$/;"	m	union:pthread_attr_t	typeref:typename:char[56l]	file:
@@ -197,8 +263,18 @@ __size	xxx.c	/^  char __size[56l];$/;"	m	union:pthread_attr_t	typeref:typename:c
 __spins	unwind-6-qrcu-1-m.c	/^  signed short int __spins;$/;"	m	struct:__pthread_mutex_s	typeref:typename:signed short int	file:
 __spins	unwind-6-qrcu-1.c	/^  signed short int __spins;$/;"	m	struct:__pthread_mutex_s	typeref:typename:signed short int	file:
 __spins	xxx.c	/^  signed short int __spins;$/;"	m	struct:__pthread_mutex_s	typeref:typename:signed short int	file:
+__unbuffered_cnt	false-negative-1.c	/^int __unbuffered_cnt = 0;$/;"	v	typeref:typename:int
+__unbuffered_cnt	false-negative-1.c	/^int __unbuffered_cnt;$/;"	v	typeref:typename:int
+__unbuffered_cnt	false-negative-2.c	/^int __unbuffered_cnt = 0;$/;"	v	typeref:typename:int
+__unbuffered_cnt	false-negative-2.c	/^int __unbuffered_cnt;$/;"	v	typeref:typename:int
+__unbuffered_cnt	false-negative-3.c	/^int __unbuffered_cnt = 0;$/;"	v	typeref:typename:int
+__unbuffered_cnt	false-negative-3.c	/^int __unbuffered_cnt;$/;"	v	typeref:typename:int
+__unbuffered_cnt	false-negative.c	/^int __unbuffered_cnt = 0;$/;"	v	typeref:typename:int
+__unbuffered_cnt	false-negative.c	/^int __unbuffered_cnt;$/;"	v	typeref:typename:int
 __unbuffered_cnt	mix001.oepc.c	/^int __unbuffered_cnt = 0;$/;"	v	typeref:typename:int
 __unbuffered_cnt	mix001.oepc.c	/^int __unbuffered_cnt;$/;"	v	typeref:typename:int
+__unbuffered_cnt	safe029_power.opt_pso.opt_rmo.opt.c	/^int __unbuffered_cnt = 0;$/;"	v	typeref:typename:int
+__unbuffered_cnt	safe029_power.opt_pso.opt_rmo.opt.c	/^int __unbuffered_cnt;$/;"	v	typeref:typename:int
 __unbuffered_cnt	safe031_power.opt_pso.opt_rmo.opt.c	/^int __unbuffered_cnt = 0;$/;"	v	typeref:typename:int
 __unbuffered_cnt	safe031_power.opt_pso.opt_rmo.opt.c	/^int __unbuffered_cnt;$/;"	v	typeref:typename:int
 __unbuffered_p0_EAX	mix001.oepc.c	/^int __unbuffered_p0_EAX = 0;$/;"	v	typeref:typename:int
@@ -215,6 +291,7 @@ __unbuffered_p2_EAX	mix001.oepc.c	/^int __unbuffered_p2_EAX = 0;$/;"	v	typeref:t
 __unbuffered_p2_EAX	mix001.oepc.c	/^int __unbuffered_p2_EAX;$/;"	v	typeref:typename:int
 __unbuffered_p2_EBX	mix001.oepc.c	/^int __unbuffered_p2_EBX = 0;$/;"	v	typeref:typename:int
 __unbuffered_p2_EBX	mix001.oepc.c	/^int __unbuffered_p2_EBX;$/;"	v	typeref:typename:int
+allocator	time_var_mutex.c	/^void *allocator(void *_){$/;"	f	typeref:typename:void *
 anonymous	unwind-6-qrcu-1-m.c	/^union anonymous$/;"	u	file:
 anonymous	unwind-6-qrcu-1.c	/^union anonymous$/;"	u	file:
 anonymous	xxx.c	/^union anonymous$/;"	u	file:
@@ -222,15 +299,28 @@ anonymous$0	unwind-6-qrcu-1-m.c	/^union anonymous$0$/;"	u	file:
 anonymous$0	unwind-6-qrcu-1.c	/^union anonymous$0$/;"	u	file:
 anonymous$0	xxx.c	/^union anonymous$0$/;"	u	file:
 assert	qrcu-1.c	/^#define assert(/;"	d	file:
+assert	time_var_mutex.c	/^#define assert(/;"	d	file:
 assume_abort_if_not	atomic-func.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
 assume_abort_if_not	bench-exp1x3.wvr.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
 assume_abort_if_not	bench-exp1x3.wvr.unloop-3.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
+assume_abort_if_not	chl-time-subst.wvr.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
+assume_abort_if_not	false-negative-1.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
+assume_abort_if_not	false-negative-2.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
+assume_abort_if_not	false-negative-3.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
+assume_abort_if_not	false-negative.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
 assume_abort_if_not	mix001.oepc.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
 assume_abort_if_not	qrcu-1.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
+assume_abort_if_not	safe029_power.opt_pso.opt_rmo.opt.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
 assume_abort_if_not	safe031_power.opt_pso.opt_rmo.opt.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
+assume_abort_if_not	time_var_mutex.c	/^void assume_abort_if_not(int cond) {$/;"	f	typeref:typename:void
 assume_abort_if_not	unwind-6-qrcu-1-m.c	/^void assume_abort_if_not(signed int cond)$/;"	f	typeref:typename:void
 assume_abort_if_not	unwind-6-qrcu-1.c	/^void assume_abort_if_not(signed int cond)$/;"	f	typeref:typename:void
 assume_abort_if_not	xxx.c	/^void assume_abort_if_not(signed int cond)$/;"	f	typeref:typename:void
+block	time_var_mutex.c	/^int block;$/;"	v	typeref:typename:int
+busy	time_var_mutex.c	/^int busy; \/\/ boolean flag indicating whether the block has been allocated to an inode$/;"	v	typeref:typename:int
+cmp_6	chl-time-subst.wvr.c	/^int cmp_6, cmp_7, cmp_8;$/;"	v	typeref:typename:int
+cmp_7	chl-time-subst.wvr.c	/^int cmp_6, cmp_7, cmp_8;$/;"	v	typeref:typename:int
+cmp_8	chl-time-subst.wvr.c	/^int cmp_6, cmp_7, cmp_8;$/;"	v	typeref:typename:int
 ctr1	qrcu-1.c	/^int ctr1=1, ctr2=0; $/;"	v	typeref:typename:int
 ctr1	unwind-6-qrcu-1-m.c	/^signed int ctr1=1;$/;"	v	typeref:typename:signed int
 ctr1	unwind-6-qrcu-1.c	/^signed int ctr1=1;$/;"	v	typeref:typename:signed int
@@ -242,9 +332,13 @@ ctr2	xxx.c	/^signed int ctr2=0;$/;"	v	typeref:typename:signed int
 cur	fib_unsafe-1.c	/^int cur = 1, prev = 0, next = 0;$/;"	v	typeref:typename:int
 cur	fib_unsafe-2.c	/^int cur = 1, prev = 0, next = 0;$/;"	v	typeref:typename:int
 cur	fib_unsafe-6.c	/^int cur = 1, prev = 0, next = 0;$/;"	v	typeref:typename:int
+de_allocator	time_var_mutex.c	/^void *de_allocator(void *_){$/;"	f	typeref:typename:void *
 f	funcall-1.c	/^int f() {$/;"	f	typeref:typename:int
 f	recursion-1.c	/^int f(int a) {$/;"	f	typeref:typename:int
+fence	false-negative-1.c	/^void fence()$/;"	f	typeref:typename:void
+fence	false-negative.c	/^void fence()$/;"	f	typeref:typename:void
 fence	mix001.oepc.c	/^void fence()$/;"	f	typeref:typename:void
+fence	safe029_power.opt_pso.opt_rmo.opt.c	/^void fence()$/;"	f	typeref:typename:void
 fence	safe031_power.opt_pso.opt_rmo.opt.c	/^void fence()$/;"	f	typeref:typename:void
 fib	fib_unsafe-1.c	/^int fib() {$/;"	f	typeref:typename:int
 fib	fib_unsafe-2.c	/^int fib() {$/;"	f	typeref:typename:int
@@ -257,17 +351,26 @@ idx	qrcu-1.c	/^int idx=0; \/\/ boolean to control which of the two elements will
 idx	unwind-6-qrcu-1-m.c	/^signed int idx=0;$/;"	v	typeref:typename:signed int
 idx	unwind-6-qrcu-1.c	/^signed int idx=0;$/;"	v	typeref:typename:signed int
 idx	xxx.c	/^signed int idx=0;$/;"	v	typeref:typename:signed int
+inode	time_var_mutex.c	/^int inode;$/;"	v	typeref:typename:int
+isync	false-negative-1.c	/^void isync()$/;"	f	typeref:typename:void
+isync	false-negative.c	/^void isync()$/;"	f	typeref:typename:void
 isync	mix001.oepc.c	/^void isync()$/;"	f	typeref:typename:void
+isync	safe029_power.opt_pso.opt_rmo.opt.c	/^void isync()$/;"	f	typeref:typename:void
 isync	safe031_power.opt_pso.opt_rmo.opt.c	/^void isync()$/;"	f	typeref:typename:void
 j	fib_unsafe-1.c	/^int i, j;$/;"	v	typeref:typename:int
 j	fib_unsafe-2.c	/^int i, j;$/;"	v	typeref:typename:int
 j	fib_unsafe-6.c	/^int i, j;$/;"	v	typeref:typename:int
 j	triangular-2.c	/^int i = 3, j = 6;$/;"	v	typeref:typename:int
 ldv_assert	race-1_3-join.c	/^void ldv_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();}}; return; }$/;"	f	typeref:typename:void
+lwfence	false-negative-1.c	/^void lwfence()$/;"	f	typeref:typename:void
+lwfence	false-negative.c	/^void lwfence()$/;"	f	typeref:typename:void
 lwfence	mix001.oepc.c	/^void lwfence()$/;"	f	typeref:typename:void
+lwfence	safe029_power.opt_pso.opt_rmo.opt.c	/^void lwfence()$/;"	f	typeref:typename:void
 lwfence	safe031_power.opt_pso.opt_rmo.opt.c	/^void lwfence()$/;"	f	typeref:typename:void
 m	branch-3.c	/^int z, m = 1, n, p, q, r, s = 1;$/;"	v	typeref:typename:int
 m	branch-4.c	/^int z, m = 1, n, p, q, r, s = 1;$/;"	v	typeref:typename:int
+m_busy	time_var_mutex.c	/^pthread_mutex_t m_busy; \/\/ protects the busy flag$/;"	v	typeref:typename:pthread_mutex_t
+m_inode	time_var_mutex.c	/^pthread_mutex_t m_inode; \/\/ protects the inode$/;"	v	typeref:typename:pthread_mutex_t
 main	atomic-func.c	/^int main() {$/;"	f	typeref:typename:int
 main	bench-exp1x3.wvr.c	/^int main() {$/;"	f	typeref:typename:int
 main	bench-exp1x3.wvr.unloop-3.c	/^int main() {$/;"	f	typeref:typename:int
@@ -277,6 +380,11 @@ main	branch-3.c	/^int main() {$/;"	f	typeref:typename:int
 main	branch-4.c	/^int main() {$/;"	f	typeref:typename:int
 main	c2.c	/^int main() {$/;"	f	typeref:typename:int
 main	c4.c	/^int main() {$/;"	f	typeref:typename:int
+main	chl-time-subst.wvr.c	/^int main() {$/;"	f	typeref:typename:int
+main	false-negative-1.c	/^int main()$/;"	f	typeref:typename:int
+main	false-negative-2.c	/^int main()$/;"	f	typeref:typename:int
+main	false-negative-3.c	/^int main()$/;"	f	typeref:typename:int
+main	false-negative.c	/^int main()$/;"	f	typeref:typename:int
 main	fib_unsafe-1.c	/^int main(int argc, char **argv) {$/;"	f	typeref:typename:int
 main	fib_unsafe-2.c	/^int main(int argc, char **argv) {$/;"	f	typeref:typename:int
 main	fib_unsafe-6.c	/^int main(int argc, char **argv) {$/;"	f	typeref:typename:int
@@ -295,19 +403,32 @@ main	qrcu-1.c	/^int main() {$/;"	f	typeref:typename:int
 main	race-1_3-join.c	/^int main(void) {$/;"	f	typeref:typename:int
 main	recursion-1.c	/^int main() {$/;"	f	typeref:typename:int
 main	revisit-1.c	/^int main() {$/;"	f	typeref:typename:int
+main	safe029_power.opt_pso.opt_rmo.opt.c	/^int main()$/;"	f	typeref:typename:int
 main	safe031_power.opt_pso.opt_rmo.opt.c	/^int main()$/;"	f	typeref:typename:int
 main	test-3-simple.c	/^int main() {$/;"	f	typeref:typename:int
 main	test-3.c	/^int main() {$/;"	f	typeref:typename:int
 main	test-4.c	/^int main() {$/;"	f	typeref:typename:int
+main	time_var_mutex.c	/^int main() {$/;"	f	typeref:typename:int
 main	triangular-2.c	/^int main(int argc, char **argv) {$/;"	f	typeref:typename:int
 main	unwind-6-qrcu-1-m.c	/^signed int main(void)$/;"	f	typeref:typename:signed int
 main	unwind-6-qrcu-1.c	/^signed int main(void)$/;"	f	typeref:typename:signed int
 main	unwind-loop-8.c	/^signed int main()$/;"	f	typeref:typename:signed int
 main	xxx.c	/^signed int main(void)$/;"	f	typeref:typename:signed int
+main$tmp_guard0	false-negative-1.c	/^_Bool main$tmp_guard0;$/;"	v	typeref:typename:_Bool
+main$tmp_guard0	false-negative-2.c	/^_Bool main$tmp_guard0;$/;"	v	typeref:typename:_Bool
+main$tmp_guard0	false-negative-3.c	/^_Bool main$tmp_guard0;$/;"	v	typeref:typename:_Bool
+main$tmp_guard0	false-negative.c	/^_Bool main$tmp_guard0;$/;"	v	typeref:typename:_Bool
 main$tmp_guard0	mix001.oepc.c	/^_Bool main$tmp_guard0;$/;"	v	typeref:typename:_Bool
+main$tmp_guard0	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool main$tmp_guard0;$/;"	v	typeref:typename:_Bool
 main$tmp_guard0	safe031_power.opt_pso.opt_rmo.opt.c	/^_Bool main$tmp_guard0;$/;"	v	typeref:typename:_Bool
+main$tmp_guard1	false-negative-1.c	/^_Bool main$tmp_guard1;$/;"	v	typeref:typename:_Bool
+main$tmp_guard1	false-negative-2.c	/^_Bool main$tmp_guard1;$/;"	v	typeref:typename:_Bool
+main$tmp_guard1	false-negative-3.c	/^_Bool main$tmp_guard1;$/;"	v	typeref:typename:_Bool
+main$tmp_guard1	false-negative.c	/^_Bool main$tmp_guard1;$/;"	v	typeref:typename:_Bool
 main$tmp_guard1	mix001.oepc.c	/^_Bool main$tmp_guard1;$/;"	v	typeref:typename:_Bool
+main$tmp_guard1	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool main$tmp_guard1;$/;"	v	typeref:typename:_Bool
 main$tmp_guard1	safe031_power.opt_pso.opt_rmo.opt.c	/^_Bool main$tmp_guard1;$/;"	v	typeref:typename:_Bool
+minus	chl-time-subst.wvr.c	/^int minus(int a, int b) {$/;"	f	typeref:typename:int
 module_exit	race-1_3-join.c	/^void module_exit() {$/;"	f	typeref:typename:void
 module_init	race-1_3-join.c	/^int module_init() {$/;"	f	typeref:typename:int
 mutex	lock-1.c	/^pthread_mutex_t mutex;$/;"	v	typeref:typename:pthread_mutex_t
@@ -323,6 +444,9 @@ n	branch-4.c	/^int z, m = 1, n, p, q, r, s = 1;$/;"	v	typeref:typename:int
 next	fib_unsafe-1.c	/^int cur = 1, prev = 0, next = 0;$/;"	v	typeref:typename:int
 next	fib_unsafe-2.c	/^int cur = 1, prev = 0, next = 0;$/;"	v	typeref:typename:int
 next	fib_unsafe-6.c	/^int cur = 1, prev = 0, next = 0;$/;"	v	typeref:typename:int
+ora_0	chl-time-subst.wvr.c	/^int ora_0, ora_2, ora_4;$/;"	v	typeref:typename:int
+ora_2	chl-time-subst.wvr.c	/^int ora_0, ora_2, ora_4;$/;"	v	typeref:typename:int
+ora_4	chl-time-subst.wvr.c	/^int ora_0, ora_2, ora_4;$/;"	v	typeref:typename:int
 p	branch-3.c	/^int z, m = 1, n, p, q, r, s = 1;$/;"	v	typeref:typename:int
 p	branch-4.c	/^int z, m = 1, n, p, q, r, s = 1;$/;"	v	typeref:typename:int
 p	fib_unsafe-1.c	/^int p, q;$/;"	v	typeref:typename:int
@@ -336,6 +460,8 @@ pthread_attr_t	bench-exp1x3.wvr.c	/^typedef union pthread_attr_t pthread_attr_t;
 pthread_attr_t	bench-exp1x3.wvr.c	/^union pthread_attr_t$/;"	u	file:
 pthread_attr_t	bench-exp1x3.wvr.unloop-3.c	/^typedef union pthread_attr_t pthread_attr_t;$/;"	t	typeref:union:pthread_attr_t	file:
 pthread_attr_t	bench-exp1x3.wvr.unloop-3.c	/^union pthread_attr_t$/;"	u	file:
+pthread_attr_t	chl-time-subst.wvr.c	/^typedef union pthread_attr_t pthread_attr_t;$/;"	t	typeref:union:pthread_attr_t	file:
+pthread_attr_t	chl-time-subst.wvr.c	/^union pthread_attr_t$/;"	u	file:
 pthread_attr_t	unwind-6-qrcu-1-m.c	/^typedef union pthread_attr_t pthread_attr_t;$/;"	t	typeref:union:pthread_attr_t	file:
 pthread_attr_t	unwind-6-qrcu-1-m.c	/^union pthread_attr_t$/;"	u	file:
 pthread_attr_t	unwind-6-qrcu-1.c	/^typedef union pthread_attr_t pthread_attr_t;$/;"	t	typeref:union:pthread_attr_t	file:
@@ -344,6 +470,8 @@ pthread_attr_t	xxx.c	/^typedef union pthread_attr_t pthread_attr_t;$/;"	t	typere
 pthread_attr_t	xxx.c	/^union pthread_attr_t$/;"	u	file:
 pthread_mutex_t	lock-1.c	/^typedef unsigned pthread_mutex_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_mutex_t	race-1_3-join.c	/^typedef unsigned pthread_mutex_t;$/;"	t	typeref:typename:unsigned	file:
+pthread_mutex_t	template_pthread.h	/^typedef unsigned pthread_mutex_t;$/;"	t	typeref:typename:unsigned
+pthread_mutex_t	time_var_mutex.c	/^typedef unsigned pthread_mutex_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_mutex_t	unwind-6-qrcu-1-m.c	/^typedef union anonymous pthread_mutex_t;$/;"	t	typeref:union:anonymous	file:
 pthread_mutex_t	unwind-6-qrcu-1.c	/^typedef union anonymous pthread_mutex_t;$/;"	t	typeref:union:anonymous	file:
 pthread_mutex_t	xxx.c	/^typedef union anonymous pthread_mutex_t;$/;"	t	typeref:union:anonymous	file:
@@ -359,6 +487,11 @@ pthread_t	branch-3.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsign
 pthread_t	branch-4.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_t	c2.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_t	c4.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
+pthread_t	chl-time-subst.wvr.c	/^typedef unsigned long int pthread_t;$/;"	t	typeref:typename:unsigned long int	file:
+pthread_t	false-negative-1.c	/^typedef unsigned int pthread_t;$/;"	t	typeref:typename:unsigned int	file:
+pthread_t	false-negative-2.c	/^typedef unsigned int pthread_t;$/;"	t	typeref:typename:unsigned int	file:
+pthread_t	false-negative-3.c	/^typedef unsigned int pthread_t;$/;"	t	typeref:typename:unsigned int	file:
+pthread_t	false-negative.c	/^typedef unsigned int pthread_t;$/;"	t	typeref:typename:unsigned int	file:
 pthread_t	fib_unsafe-1.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_t	fib_unsafe-2.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_t	fib_unsafe-6.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
@@ -371,7 +504,9 @@ pthread_t	loop-5.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned
 pthread_t	race-1_3-join.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_t	revisit-1.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_t	safe031_power.opt_pso.opt_rmo.opt.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
+pthread_t	template_pthread.h	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned
 pthread_t	test-3-simple.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
+pthread_t	time_var_mutex.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_t	triangular-2.c	/^typedef unsigned pthread_t;$/;"	t	typeref:typename:unsigned	file:
 pthread_t	unwind-6-qrcu-1-m.c	/^typedef unsigned long int pthread_t;$/;"	t	typeref:typename:unsigned long int	file:
 pthread_t	unwind-6-qrcu-1.c	/^typedef unsigned long int pthread_t;$/;"	t	typeref:typename:unsigned long int	file:
@@ -401,10 +536,17 @@ reach_error	bench-exp1x3.wvr.unloop-3.c	/^void reach_error() { __assert_fail("0"
 reach_error	branch-2.c	/^void reach_error() {$/;"	f	typeref:typename:void
 reach_error	branch-3.c	/^void reach_error() {$/;"	f	typeref:typename:void
 reach_error	branch-4.c	/^void reach_error() {$/;"	f	typeref:typename:void
+reach_error	chl-time-subst.wvr.c	/^void reach_error() { __assert_fail("0", "chl-time-subst.wvr.c", 21, __extension__ __PRETTY_FUNCT/;"	f	typeref:typename:void
+reach_error	false-negative-1.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
+reach_error	false-negative-2.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
+reach_error	false-negative-3.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
+reach_error	false-negative.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
 reach_error	mix001.oepc.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
 reach_error	qrcu-1.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
 reach_error	race-1_3-join.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
+reach_error	safe029_power.opt_pso.opt_rmo.opt.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
 reach_error	safe031_power.opt_pso.opt_rmo.opt.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
+reach_error	time_var_mutex.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
 reach_error	triangular-2.c	/^void reach_error() { assert(0); }$/;"	f	typeref:typename:void
 reach_error	unwind-6-qrcu-1-m.c	/^void reach_error(void)$/;"	f	typeref:typename:void
 reach_error	unwind-6-qrcu-1.c	/^void reach_error(void)$/;"	f	typeref:typename:void
@@ -443,6 +585,7 @@ thread1	branch-3.c	/^void *thread1(void *arg) {$/;"	f	typeref:typename:void *
 thread1	branch-4.c	/^void *thread1(void *arg) {$/;"	f	typeref:typename:void *
 thread1	c2.c	/^void *thread1(void *arg) {$/;"	f	typeref:typename:void *
 thread1	c4.c	/^void *thread1(void *arg) {$/;"	f	typeref:typename:void *
+thread1	chl-time-subst.wvr.c	/^void* thread1() {$/;"	f	typeref:typename:void *
 thread1	lock-1.c	/^void *thread1(void *arg) {$/;"	f	typeref:typename:void *
 thread1	loop-1.c	/^void *thread1(void *arg) {$/;"	f	typeref:typename:void *
 thread1	loop-2.c	/^void *thread1(void *arg) {$/;"	f	typeref:typename:void *
@@ -456,32 +599,133 @@ thread2	bench-exp1x3.wvr.c	/^void* thread2() {$/;"	f	typeref:typename:void *
 thread2	bench-exp1x3.wvr.unloop-3.c	/^void* thread2() {$/;"	f	typeref:typename:void *
 thread2	c2.c	/^void *thread2(void *arg) {$/;"	f	typeref:typename:void *
 thread2	c4.c	/^void *thread2(void *arg) {$/;"	f	typeref:typename:void *
+thread2	chl-time-subst.wvr.c	/^void* thread2() {$/;"	f	typeref:typename:void *
 thread2	test-3-simple.c	/^void *thread2(void *arg) {$/;"	f	typeref:typename:void *
 thread2	test-3.c	/^void *thread2(void *arg) {$/;"	f	typeref:typename:void *
 thread2	test-4.c	/^void *thread2(void *arg) {$/;"	f	typeref:typename:void *
+thread3	chl-time-subst.wvr.c	/^void* thread3() {$/;"	f	typeref:typename:void *
+volume_totale_1	chl-time-subst.wvr.c	/^int volume_totale_1, volume_totale_3, volume_totale_5;$/;"	v	typeref:typename:int
+volume_totale_3	chl-time-subst.wvr.c	/^int volume_totale_1, volume_totale_3, volume_totale_5;$/;"	v	typeref:typename:int
+volume_totale_5	chl-time-subst.wvr.c	/^int volume_totale_1, volume_totale_3, volume_totale_5;$/;"	v	typeref:typename:int
+weak$$choice0	false-negative-1.c	/^_Bool weak$$choice0;$/;"	v	typeref:typename:_Bool
+weak$$choice0	false-negative.c	/^_Bool weak$$choice0;$/;"	v	typeref:typename:_Bool
 weak$$choice0	mix001.oepc.c	/^_Bool weak$$choice0;$/;"	v	typeref:typename:_Bool
+weak$$choice0	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool weak$$choice0;$/;"	v	typeref:typename:_Bool
 weak$$choice0	safe031_power.opt_pso.opt_rmo.opt.c	/^_Bool weak$$choice0;$/;"	v	typeref:typename:_Bool
+weak$$choice2	false-negative-1.c	/^_Bool weak$$choice2;$/;"	v	typeref:typename:_Bool
+weak$$choice2	false-negative.c	/^_Bool weak$$choice2;$/;"	v	typeref:typename:_Bool
 weak$$choice2	mix001.oepc.c	/^_Bool weak$$choice2;$/;"	v	typeref:typename:_Bool
+weak$$choice2	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool weak$$choice2;$/;"	v	typeref:typename:_Bool
 weak$$choice2	safe031_power.opt_pso.opt_rmo.opt.c	/^_Bool weak$$choice2;$/;"	v	typeref:typename:_Bool
+x	false-negative-1.c	/^int x = 0;$/;"	v	typeref:typename:int
+x	false-negative-1.c	/^int x;$/;"	v	typeref:typename:int
+x	false-negative-2.c	/^int x = 0;$/;"	v	typeref:typename:int
+x	false-negative-2.c	/^int x;$/;"	v	typeref:typename:int
+x	false-negative-3.c	/^int x = 0;$/;"	v	typeref:typename:int
+x	false-negative-3.c	/^int x;$/;"	v	typeref:typename:int
+x	false-negative.c	/^int x = 0;$/;"	v	typeref:typename:int
+x	false-negative.c	/^int x;$/;"	v	typeref:typename:int
 x	fib_unsafe-1.c	/^int x;$/;"	v	typeref:typename:int
 x	fib_unsafe-2.c	/^int x;$/;"	v	typeref:typename:int
 x	fib_unsafe-6.c	/^int x;$/;"	v	typeref:typename:int
 x	loop-8.c	/^int x = 1, y = 0;$/;"	v	typeref:typename:int
 x	mix001.oepc.c	/^int x = 0;$/;"	v	typeref:typename:int
 x	mix001.oepc.c	/^int x;$/;"	v	typeref:typename:int
+x	safe029_power.opt_pso.opt_rmo.opt.c	/^int x = 0;$/;"	v	typeref:typename:int
+x	safe029_power.opt_pso.opt_rmo.opt.c	/^int x;$/;"	v	typeref:typename:int
 x	safe031_power.opt_pso.opt_rmo.opt.c	/^int x = 0;$/;"	v	typeref:typename:int
 x	safe031_power.opt_pso.opt_rmo.opt.c	/^int x;$/;"	v	typeref:typename:int
 x	test-3-simple.c	/^int x = 0, y = 0;$/;"	v	typeref:typename:int
 x	test-3.c	/^int x = 0, y = 0;$/;"	v	typeref:typename:int
 x	test-4.c	/^int x = 0, y = 0;$/;"	v	typeref:typename:int
 x	unwind-loop-8.c	/^signed int x=1;$/;"	v	typeref:typename:signed int
+x$flush_delayed	false-negative-1.c	/^_Bool x$flush_delayed;$/;"	v	typeref:typename:_Bool
+x$flush_delayed	false-negative-2.c	/^_Bool x$flush_delayed;$/;"	v	typeref:typename:_Bool
+x$flush_delayed	false-negative-3.c	/^_Bool x$flush_delayed;$/;"	v	typeref:typename:_Bool
+x$flush_delayed	false-negative.c	/^_Bool x$flush_delayed;$/;"	v	typeref:typename:_Bool
+x$flush_delayed	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$flush_delayed;$/;"	v	typeref:typename:_Bool
+x$mem_tmp	false-negative-1.c	/^int x$mem_tmp;$/;"	v	typeref:typename:int
+x$mem_tmp	false-negative-2.c	/^int x$mem_tmp;$/;"	v	typeref:typename:int
+x$mem_tmp	false-negative-3.c	/^int x$mem_tmp;$/;"	v	typeref:typename:int
+x$mem_tmp	false-negative.c	/^int x$mem_tmp;$/;"	v	typeref:typename:int
+x$mem_tmp	safe029_power.opt_pso.opt_rmo.opt.c	/^int x$mem_tmp;$/;"	v	typeref:typename:int
+x$r_buff0_thd0	false-negative-1.c	/^_Bool x$r_buff0_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd0	false-negative-2.c	/^_Bool x$r_buff0_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd0	false-negative-3.c	/^_Bool x$r_buff0_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd0	false-negative.c	/^_Bool x$r_buff0_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd0	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$r_buff0_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd1	false-negative-1.c	/^_Bool x$r_buff0_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd1	false-negative-2.c	/^_Bool x$r_buff0_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd1	false-negative-3.c	/^_Bool x$r_buff0_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd1	false-negative.c	/^_Bool x$r_buff0_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd1	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$r_buff0_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd2	false-negative-1.c	/^_Bool x$r_buff0_thd2;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd2	false-negative-2.c	/^_Bool x$r_buff0_thd2;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd2	false-negative-3.c	/^_Bool x$r_buff0_thd2;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd2	false-negative.c	/^_Bool x$r_buff0_thd2;$/;"	v	typeref:typename:_Bool
+x$r_buff0_thd2	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$r_buff0_thd2;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd0	false-negative-1.c	/^_Bool x$r_buff1_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd0	false-negative-2.c	/^_Bool x$r_buff1_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd0	false-negative-3.c	/^_Bool x$r_buff1_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd0	false-negative.c	/^_Bool x$r_buff1_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd0	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$r_buff1_thd0;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd1	false-negative-1.c	/^_Bool x$r_buff1_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd1	false-negative-2.c	/^_Bool x$r_buff1_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd1	false-negative-3.c	/^_Bool x$r_buff1_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd1	false-negative.c	/^_Bool x$r_buff1_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd1	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$r_buff1_thd1;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd2	false-negative-1.c	/^_Bool x$r_buff1_thd2;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd2	false-negative-2.c	/^_Bool x$r_buff1_thd2;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd2	false-negative-3.c	/^_Bool x$r_buff1_thd2;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd2	false-negative.c	/^_Bool x$r_buff1_thd2;$/;"	v	typeref:typename:_Bool
+x$r_buff1_thd2	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$r_buff1_thd2;$/;"	v	typeref:typename:_Bool
+x$read_delayed	false-negative-1.c	/^_Bool x$read_delayed;$/;"	v	typeref:typename:_Bool
+x$read_delayed	false-negative-2.c	/^_Bool x$read_delayed;$/;"	v	typeref:typename:_Bool
+x$read_delayed	false-negative-3.c	/^_Bool x$read_delayed;$/;"	v	typeref:typename:_Bool
+x$read_delayed	false-negative.c	/^_Bool x$read_delayed;$/;"	v	typeref:typename:_Bool
+x$read_delayed	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$read_delayed;$/;"	v	typeref:typename:_Bool
+x$read_delayed_var	false-negative-1.c	/^int *x$read_delayed_var;$/;"	v	typeref:typename:int *
+x$read_delayed_var	false-negative-2.c	/^int *x$read_delayed_var;$/;"	v	typeref:typename:int *
+x$read_delayed_var	false-negative-3.c	/^int *x$read_delayed_var;$/;"	v	typeref:typename:int *
+x$read_delayed_var	false-negative.c	/^int *x$read_delayed_var;$/;"	v	typeref:typename:int *
+x$read_delayed_var	safe029_power.opt_pso.opt_rmo.opt.c	/^int *x$read_delayed_var;$/;"	v	typeref:typename:int *
+x$w_buff0	false-negative-1.c	/^int x$w_buff0;$/;"	v	typeref:typename:int
+x$w_buff0	false-negative-2.c	/^int x$w_buff0;$/;"	v	typeref:typename:int
+x$w_buff0	false-negative-3.c	/^int x$w_buff0;$/;"	v	typeref:typename:int
+x$w_buff0	false-negative.c	/^int x$w_buff0;$/;"	v	typeref:typename:int
+x$w_buff0	safe029_power.opt_pso.opt_rmo.opt.c	/^int x$w_buff0;$/;"	v	typeref:typename:int
+x$w_buff0_used	false-negative-1.c	/^_Bool x$w_buff0_used;$/;"	v	typeref:typename:_Bool
+x$w_buff0_used	false-negative-2.c	/^_Bool x$w_buff0_used;$/;"	v	typeref:typename:_Bool
+x$w_buff0_used	false-negative-3.c	/^_Bool x$w_buff0_used;$/;"	v	typeref:typename:_Bool
+x$w_buff0_used	false-negative.c	/^_Bool x$w_buff0_used;$/;"	v	typeref:typename:_Bool
+x$w_buff0_used	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$w_buff0_used;$/;"	v	typeref:typename:_Bool
+x$w_buff1	false-negative-1.c	/^int x$w_buff1;$/;"	v	typeref:typename:int
+x$w_buff1	false-negative-2.c	/^int x$w_buff1;$/;"	v	typeref:typename:int
+x$w_buff1	false-negative-3.c	/^int x$w_buff1;$/;"	v	typeref:typename:int
+x$w_buff1	false-negative.c	/^int x$w_buff1;$/;"	v	typeref:typename:int
+x$w_buff1	safe029_power.opt_pso.opt_rmo.opt.c	/^int x$w_buff1;$/;"	v	typeref:typename:int
+x$w_buff1_used	false-negative-1.c	/^_Bool x$w_buff1_used;$/;"	v	typeref:typename:_Bool
+x$w_buff1_used	false-negative-2.c	/^_Bool x$w_buff1_used;$/;"	v	typeref:typename:_Bool
+x$w_buff1_used	false-negative-3.c	/^_Bool x$w_buff1_used;$/;"	v	typeref:typename:_Bool
+x$w_buff1_used	false-negative.c	/^_Bool x$w_buff1_used;$/;"	v	typeref:typename:_Bool
+x$w_buff1_used	safe029_power.opt_pso.opt_rmo.opt.c	/^_Bool x$w_buff1_used;$/;"	v	typeref:typename:_Bool
 x1	bench-exp1x3.wvr.c	/^unsigned int x1, x2, n;$/;"	v	typeref:typename:unsigned int
 x1	bench-exp1x3.wvr.unloop-3.c	/^unsigned int x1, x2, n;$/;"	v	typeref:typename:unsigned int
 x2	bench-exp1x3.wvr.c	/^unsigned int x1, x2, n;$/;"	v	typeref:typename:unsigned int
 x2	bench-exp1x3.wvr.unloop-3.c	/^unsigned int x1, x2, n;$/;"	v	typeref:typename:unsigned int
+y	false-negative-1.c	/^int y = 0;$/;"	v	typeref:typename:int
+y	false-negative-1.c	/^int y;$/;"	v	typeref:typename:int
+y	false-negative-2.c	/^int y = 0;$/;"	v	typeref:typename:int
+y	false-negative-2.c	/^int y;$/;"	v	typeref:typename:int
+y	false-negative-3.c	/^int y = 0;$/;"	v	typeref:typename:int
+y	false-negative-3.c	/^int y;$/;"	v	typeref:typename:int
+y	false-negative.c	/^int y = 0;$/;"	v	typeref:typename:int
+y	false-negative.c	/^int y;$/;"	v	typeref:typename:int
 y	loop-8.c	/^int x = 1, y = 0;$/;"	v	typeref:typename:int
 y	mix001.oepc.c	/^int y = 0;$/;"	v	typeref:typename:int
 y	mix001.oepc.c	/^int y;$/;"	v	typeref:typename:int
+y	safe029_power.opt_pso.opt_rmo.opt.c	/^int y = 0;$/;"	v	typeref:typename:int
+y	safe029_power.opt_pso.opt_rmo.opt.c	/^int y;$/;"	v	typeref:typename:int
 y	safe031_power.opt_pso.opt_rmo.opt.c	/^int y = 0;$/;"	v	typeref:typename:int
 y	safe031_power.opt_pso.opt_rmo.opt.c	/^int y;$/;"	v	typeref:typename:int
 y	test-3-simple.c	/^int x = 0, y = 0;$/;"	v	typeref:typename:int

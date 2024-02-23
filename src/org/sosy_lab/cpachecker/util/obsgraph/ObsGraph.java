@@ -387,8 +387,6 @@ public class ObsGraph implements Copier<ObsGraph> {
                  SharedEvent r = it.next(), w = r.getReadFrom();
                  // Debug.
                  if (w == null) continue;
-                 Preconditions.checkArgument(w != null,
-                         "Event r should read from some write.");
                  // Deduce fr caused by r and w.
                  OGNode wNode = w.getInNode();
                  Preconditions.checkState(wNode.getReadBy().contains(node)

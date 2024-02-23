@@ -135,6 +135,7 @@ public class OGTransfer {
             boolean isSimpleTransfer) {
         // Debug.
         boolean debug = true;
+        int parId = parState.getStateId(), chId = chState.getStateId();
 
         Preconditions.checkArgument(graphWrapper.size() == 1);
         ObsGraph graph = graphWrapper.iterator().next(), copiedGraph = null;

@@ -157,7 +157,7 @@ public class OGRevisitor {
                                     Gw.removeAssumeEdges(rp, delete);
                                     // FIXME: Remove the events that is after and located in
                                     //  the same node with rp .
-                                    rp.getInNode().removeEventAfter(rp);
+//                                    rp.getInNode().removeEventAfter(rp);
                                     // <<<<<
 
                                     if (debug) System.out.println("\tGw is consistent. Try to get the pivot State.");
@@ -333,6 +333,21 @@ public class OGRevisitor {
     private List<SharedEvent> getDelete(ObsGraph G, SharedEvent r,
                                         SharedEvent w) {
         List<SharedEvent> delete = new ArrayList<>();
+
+        // >>>>>
+        // FIXME: Add the events that are in the same node with and after r to delete?
+        assert r.getInNode().getBlockEdges().contains(r.getInEdge()) :
+                "Edge: " + r.getInEdge() + " not in node: \n" + r.getInNode();
+        for (SharedEvent e : r.getInNode().getEvents()) {
+            assert r.getInNode().getBlockEdges().contains(e.getInEdge()) :
+                    "Edge: " + r.getInEdge() + " not in node: \n" + r.getInNode();
+            if (r.getInNode().getBlockEdges().indexOf(e.getInEdge()) >
+                    r.getInNode().getBlockEdges().indexOf(r.getInEdge())) {
+                delete.add(e);
+            }
+        }
+        // <<<<<
+
         int ridx = G.getNodes().indexOf(r.getInNode()),
                 widx = G.getNodes().indexOf(w.getInNode());
         for (int i = ridx + 1; i < widx; i++) {
@@ -350,7 +365,7 @@ public class OGRevisitor {
         // Assume:
         //      | r1 |
         //      | r2 |
-        // in the same node, we think r1 > r2 if r = r2 and r2 > r1 if r = r1 as they are
+        // in the same node, we think r1 > r2 if r = r2, and r2 > r1 if r = r1 as they are
         // unordered.
         // => Next step maybe we should store them in an array rather than a set.
         List<SharedEvent> deletePlusR = new ArrayList<>(delete);
