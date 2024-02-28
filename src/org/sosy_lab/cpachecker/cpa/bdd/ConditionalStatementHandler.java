@@ -13,6 +13,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
@@ -23,6 +24,7 @@ import org.sosy_lab.cpachecker.util.predicates.regions.RegionManager;
 import org.sosy_lab.cpachecker.util.variableclassification.Partition;
 import org.sosy_lab.cpachecker.util.variableclassification.VariableClassification;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Options(prefix = "cpa.bdd.csh")
@@ -39,6 +41,14 @@ public class ConditionalStatementHandler {
             description = "use a smaller bitsize for all vars, that have only intEqual values"
     )
     private boolean compressIntEqual = true;
+
+    @Option(
+            description = "list of indeterminate assignment function."
+    )
+    private String[] randomFunctions = {
+            "__VERIFIER_nondet_bool",
+            "__VERIFIER_nondet_int",
+    };
 
     public ConditionalStatementHandler(Configuration pConfig, CFA pCfa, LogManager pLogger)
             throws InvalidConfigurationException {
@@ -61,29 +71,33 @@ public class ConditionalStatementHandler {
      * FIXME
      * Before setting read-from relation, we should handle the case that r locates in
      * an assume statement (e.g., x > 1). When setting r to read from w that makes
-     * the condition not hold, i.e., (x > 1) not hold, we replace r with the event
-     * co-r ('co' means conjugate) that comes from the assume statement [!(x > 1)].
-     * @return r if r is not in an assume edge or making r read from w doesn't affect
-     * the truth of the assume statement, or co-r else.
+     * the condition not hold, i.e., (x > 1) not hold, set hasConflict as true. If w is
+     * an indeterminate assignment, we set hasIndeterminacy as true.
+     * @return <A, B>
+     * A = true if letting r read from w leads to conflict.
+     * B = true if the w is an indeterminate assignment.
      */
-    public SharedEvent handleAssumeStatement(
+    public Pair<Boolean, Boolean> handleAssumeStatement(
             ObsGraph G,
             SharedEvent r,
             SharedEvent w) throws UnsupportedCodeException {
 
+        boolean hasConflict = false, hasIndeterminacy = false;
         OGNode rNode = r.getInNode(), wNode = w.getInNode();
         if (G.contain(rNode, rNode.getLoopDepth()) < 0) {
             // We are going to set read-from relation for the newly added node, so we
             // don't have to change the node.
-            return r;
+//            return r;
+            return Pair.of(false, false);
         }
         CFAEdge rEdge = r.getInEdge(), wEdge = w.getInEdge();
 
         if (!(rEdge instanceof AssumeEdge)) {
-            return r;
+//            return r;
+            return Pair.of(false, false);
         }
 
-        SharedEvent cor = r;
+//        SharedEvent cor = r;
         CFANode rLocation = rEdge.getSuccessor(), wLocation = wEdge.getSuccessor();
         // r locates in an assumption edge.
         final AssumeEdge assumption = (AssumeEdge) rEdge;
@@ -230,6 +244,11 @@ public class ConditionalStatementHandler {
                         Preconditions.checkState(findAssignment,
                                 "Doesn't find the write event to"
                                         + r.getVar().getName() + " in edge" + wEdge);
+                        // handle x = __VERIFIER_nondet_int();
+                        if (Arrays.stream(randomFunctions).anyMatch(f -> funCallExpr
+                                .getFunctionNameExpression().toString().contains(f))) {
+                            hasIndeterminacy = true;
+                        }
                     } else {
                         throw new UnsupportedCodeException("Not handled edge", wEdge);
                     }
@@ -331,11 +350,20 @@ public class ConditionalStatementHandler {
 
         Preconditions.checkArgument(assignFormula != null,
                 "Calculate formula for the write event failed.");
+
         if (nrmgr.makeAnd(assumeEvaluated, assignFormula).isFalse()) {
-            // Change the node.
-            cor = G.changeAssumeNode(r);
+//            // Change the node.
+//            cor = G.changeAssumeNode(r);
+            hasConflict = true;
         }
-        return cor;
+
+        if(hasIndeterminacy) {
+            assert assignFormula.isTrue()
+                    : "With indeterminacy, assignFormula must be true";
+        }
+
+//        return cor;
+        return Pair.of(hasConflict, hasIndeterminacy);
     }
 
     /** This function returns true if the variable is used in the Expression. */

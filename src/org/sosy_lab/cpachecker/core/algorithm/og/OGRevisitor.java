@@ -100,27 +100,30 @@ public class OGRevisitor {
                     case READ:
                         List<SharedEvent> locA = G0.getSameLocationAs(a);
                         for (SharedEvent w : locA) {
-                            ObsGraph Gr = G0.deepCopy(new HashMap<>());
+                            ObsGraph Gr = G0.deepCopy(new HashMap<>()), coGr = null;
                             // After deep copy, a not in Gr.
                             SharedEvent ap = getCopyEvent(Gr, G0, a),
                                     wp = getCopyEvent(Gr, G0, w);
-                            Gr.setReadFromAndFromRead(ap, wp);
+//                            Gr.setReadFromAndFromRead(ap, wp);
+                            Pair<ObsGraph, ObsGraph> GrAndCoGr =
+                                    setReadFromAndFromRead(Gr, ap, wp);
+
+                            // Gr must be not null.
+                            Gr = GrAndCoGr.getFirstNotNull();
+
+                            // coGr may be null.
+                            coGr = GrAndCoGr.getSecond();
+                            if (coGr != null && consistent(Gr)) {
+                                assert Gr.getLastNode() != null;
+                                SharedEvent coAp = Gr.getLastNode().getLastHandledEvent();
+                                assert coAp != null && coAp.accessSameVarWith(ap);
+                                handleResultForReadRevisit(result, coGr, coAp, parState, debug);
+                            } else {
+                                //
+                            }
+
                             if (consistent(Gr)) {
-
-                                // >>>>>
-                                // TODO: remove cached assume edges?
-                                assert ap.getInNode() != null;
-                                ap.getInNode().removeEventAfter(ap);
-                                // <<<<<<
-
-                                if (debug) {
-                                    if (!DebugAndTest.testPO(Gr))
-                                        System.out.println("Incorrect po relation.");
-                                }
-
-                                AbstractState pivotState = getPivotState(Gr);
-                                result.add(Pair.of(pivotState, Gr));
-                                Gr.setCreationState(parState);
+                                handleResultForReadRevisit(result, Gr, ap, parState, debug);
                             } else {
                                 // FIXME: is it necessary to do this?
                                 // RG.add(Gr);
@@ -132,7 +135,7 @@ public class OGRevisitor {
                     case WRITE:
                         locA = G0.getSameLocationAs(a);
                         for (SharedEvent r : locA) {
-                            ObsGraph Gw = G0.deepCopy(new HashMap<>());
+                            ObsGraph Gw = G0.deepCopy(new HashMap<>()), coGw = null;
 
                             SharedEvent rp = getCopyEvent(Gw, G0, r),
                                     ap = getCopyEvent(Gw, G0, a);
@@ -140,27 +143,27 @@ public class OGRevisitor {
                             List<SharedEvent> deletePlusR = getDeletePlusR(delete, rp);
                             if (allMaximallyAdded(Gw, deletePlusR, ap)) {
                                 Gw.removeDelete(delete, rp);
-                                Gw.setReadFromAndFromRead(rp, ap);
+//                                Gw.setReadFromAndFromRead(rp, ap);
+                                Pair<ObsGraph, ObsGraph> GwAndCoGw =
+                                        setReadFromAndFromRead(Gw, rp, ap);
+
+                                // Gw must be not null.
+                                Gw = GwAndCoGw.getFirstNotNull();
                                 RG.add(Gw);
-                                if (consistent(Gw)) {
 
-                                    // >>>>>
-                                    // Remove the corresponding cached assume edges.
-                                    Gw.removeAssumeEdges(rp, delete);
-                                    // FIXME: Remove the events that is after and located in
-                                    //  the same node with rp .
-//                                    rp.getInNode().removeEventAfter(rp);
-                                    // <<<<<
-
-                                    if (debug) {
-                                        if (!DebugAndTest.testPO(Gw))
-                                            System.out.println("Incorrect po relation.");
+                                // coGw may be null.
+                                coGw = GwAndCoGw.getSecond();
+                                if (coGw != null) {
+                                    RG.add(Gw);
+                                    if (consistent(Gw)) {
+                                        handleResultForWriteRevisit(result, coGw, rp,
+                                                delete, parState, debug);
                                     }
+                                }
 
-                                    AbstractState pivotState = getPivotState(Gw);
-                                    result.add(Pair.of(pivotState, Gw));
-//                                    result.add(Pair.of(getPivotState(Gw), Gw));
-                                    Gw.setCreationState(parState);
+                                if (consistent(Gw)) {
+                                    handleResultForWriteRevisit(result, Gw, rp, delete,
+                                            parState, debug);
                                 }
                             }
                         }
@@ -171,6 +174,102 @@ public class OGRevisitor {
         }
 
         return result;
+    }
+
+    // Return: <G, coG>
+    private Pair<ObsGraph, ObsGraph> setReadFromAndFromRead(ObsGraph G, SharedEvent r,
+            SharedEvent w) {
+        // When setting read-from relation, we may get a new graph because of the
+        // indeterminacy.
+        ObsGraph coGraph = null;
+        Pair<Boolean, Boolean> evaluation = null;
+        try {
+            // evaluation = <A, B>
+            // A = true if it leads to conflict that r reads from w.
+            // B = true if the w is an indeterminate assignment.
+            evaluation = CSHandler.handleAssumeStatement(G, r, w);
+        } catch (UnsupportedCodeException e) {
+            //
+        }
+
+        assert evaluation != null;
+        boolean hasConflict = evaluation.getFirstNotNull(),
+                hasIndeterminacy = evaluation.getSecondNotNull();
+        // hasIndeterminacy => !hasConflict
+        if (hasIndeterminacy) {
+            // We get a new graph because r reads from a indeterminate value.
+            Map<Object, Object> memo = new HashMap<>();
+            coGraph = G.deepCopy(memo);
+            assert memo.containsKey(r) && memo.containsKey(w) : "Wrong copy result.";
+            SharedEvent rp = (SharedEvent) memo.get(r),
+                    wp = (SharedEvent) memo.get(w);
+            SharedEvent corp = G.changeAssumeNode(rp);
+//            coGraph.setReadFrom(corp, wp);
+            setRelation("rf", coGraph, wp, corp);
+            coGraph.deduceFromRead();
+        } else if (hasConflict) {
+            // We don't need to create a new graph despite the conflict.
+            // Instead, we replace r with the event co-r ('co' means conjugate) that
+            // comes from the assume statement [!(x > 1)].
+            SharedEvent cor = G.changeAssumeNode(r);
+            // FIXME: Remove the events and edges after r?
+//            G.setReadFrom(cor, w);
+            setRelation("rf", G, w, cor);
+            G.deduceFromRead();
+        } else {
+            // No conflict.
+//            G.setReadFrom(r, w);
+            setRelation("rf", G, w, r);
+            G.deduceFromRead();
+        }
+
+        return Pair.of(G, coGraph);
+    }
+
+    private void handleResultForWriteRevisit(List<Pair<AbstractState, ObsGraph>> result,
+            ObsGraph Gw,
+            SharedEvent rp,
+            List<SharedEvent> delete,
+            ARGState parState,
+            boolean debug) {
+        // >>>>>
+        // Remove the corresponding cached assume edges.
+        Gw.removeAssumeEdges(rp, delete);
+        // FIXME: Remove the events that is after and located in
+        //  the same node with rp .
+//        rp.getInNode().removeEventAfter(rp);
+        // <<<<<
+
+        if (debug) {
+            if (!DebugAndTest.testPO(Gw))
+                System.out.println("Incorrect po relation.");
+        }
+
+        AbstractState pivotState = getPivotState(Gw);
+        result.add(Pair.of(pivotState, Gw));
+//        result.add(Pair.of(getPivotState(Gw), Gw));
+        Gw.setCreationState(parState);
+    }
+
+    private void handleResultForReadRevisit(List<Pair<AbstractState, ObsGraph>> result,
+            ObsGraph Gr,
+            SharedEvent ap,
+            ARGState parState,
+            boolean debug) {
+        // >>>>>
+        // TODO: remove cached assume edges?
+        assert ap.getInNode() != null;
+        ap.getInNode().removeEventAfter(ap);
+        // <<<<<<
+
+        if (debug) {
+            if (!DebugAndTest.testPO(Gr))
+                System.out.println("Incorrect po relation.");
+        }
+
+        AbstractState pivotState = getPivotState(Gr);
+        result.add(Pair.of(pivotState, Gr));
+        Gr.setCreationState(parState);
     }
 
     private AbstractState getPivotState(ObsGraph G) {
@@ -381,19 +480,6 @@ public class OGRevisitor {
         OGNode e1n = e1.getInNode(), e2n = e2.getInNode();
         switch (type) {
             case "rf":
-                try {
-                    SharedEvent e2p = CSHandler.handleAssumeStatement(G, e2, e1);
-                    if (!Objects.equals(e2p, e2)) {
-                        // Having changed e2 to its coEvent.
-                        e2n = e2p.getInNode();
-                        e2 = e2p;
-                        // FIXME: Remove the events and edges after e2?
-                        e2n.removeEventAfter(e2);
-                    }
-                } catch (UnsupportedCodeException e) {
-                    // e.printStackTrace();
-                }
-
                 // e1 <_rf e2, e2 reads from e1.
                 Preconditions.checkArgument(e2.getReadFrom() != e1);
                 SharedEvent e2rf = e2.getReadFrom();
@@ -417,6 +503,7 @@ public class OGRevisitor {
                 if (!e2n.getReadFrom().contains(e1n)) e2n.getReadFrom().add(e1n);
                 if (!e1n.getReadBy().contains(e2n)) e1n.getReadBy().add(e2n);
                 break;
+
             case "fr":
                 // from read.
                 Preconditions.checkArgument(!e1.getFromRead().contains(e2));
@@ -425,6 +512,7 @@ public class OGRevisitor {
                 if (!e1n.getFromRead().contains(e2n)) e1n.getFromRead().add(e2n);
                 if (!e2n.getFromReadBy().contains(e1n)) e2n.getFromReadBy().add(e1n);
                 break;
+
             case "mo":
                 Preconditions.checkArgument(e1.getMoBefore() != e2);
                 e1.setMoBefore(e2);

@@ -361,15 +361,6 @@ public class ObsGraph implements Copier<ObsGraph> {
         }
      }
 
-    /**
-     * @implNote This method is only used in the revisiting process.
-     */
-     public void setReadFromAndFromRead(SharedEvent r, SharedEvent w) {
-         setRelation("rf", this, w, r);
-         // After setting the rf, we should also deduce the fr.
-         deduceFromRead();
-     }
-
     public void deduceFromRead() {
          // Deduce the fr according the po and rf in the graph.
          // Use adjacency matrix and Floyd Warshall Algorithm to compute the transitive
