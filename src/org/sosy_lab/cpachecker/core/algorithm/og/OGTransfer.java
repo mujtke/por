@@ -265,7 +265,9 @@ public class OGTransfer {
                     }
                 }
             }
-        } else {
+        }
+
+        else {
             // Node != null.
             // Indicate whether we will enter, have been inside or still haven't reached
             // the start of the node.
@@ -399,9 +401,8 @@ public class OGTransfer {
             } else {
                 // The node (complex) doesn't contain the edge.
                 if (node.getLastVisitedEdge() != null) {
+                    // Use "if(node.getLastHandledEvent() != null)"?
                     // We are inside a node that has been added to the graph.
-//                    int lastVisitEdgeIdx = node.getBlockEdges().indexOf(
-//                            node.getLastVisitedEdge());
                     int lastVisitEdgeIdx = -1;
                     boolean edgeHasBeenVisited = false;
                     if (edge instanceof AssumeEdge) {
@@ -437,7 +438,10 @@ public class OGTransfer {
 
                     return Triple.of(lastVisitEdgeIdx, edge, edgeHasBeenVisited);
                 } else {
-                    if (caa == NOT_IN) {
+                    if (caa == NOT_IN ||
+                            /* FIXME: When we are inside a node but the node doesn't
+                                contain the edge? */
+                            (caa == CONTINUE && node.getLastHandledEvent() != null)) {
                         // We haven't entered a critical area yet.
                         return Triple.of(-1, edge, false);
                     } else {

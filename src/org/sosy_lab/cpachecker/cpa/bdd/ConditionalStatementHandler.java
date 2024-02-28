@@ -85,7 +85,7 @@ public class ConditionalStatementHandler {
 
         SharedEvent cor = r;
         CFANode rLocation = rEdge.getSuccessor(), wLocation = wEdge.getSuccessor();
-        // r locates in an assume edge.
+        // r locates in an assumption edge.
         final AssumeEdge assumption = (AssumeEdge) rEdge;
         Partition rPartition = varClass.getPartitionForEdge(rEdge);
         CExpression rExpression = (CExpression) assumption.getExpression();

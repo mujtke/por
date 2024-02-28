@@ -148,6 +148,29 @@ public class DebugAndTest {
 
         return false;
     }
+
+    // Test po relation.
+    public static boolean testPO(ObsGraph g) {
+        boolean hasPredecessor, hasSuccessor;
+        for (OGNode n : g.getNodes()) {
+            hasPredecessor = n.getPredecessor() != null;
+            if (hasPredecessor && !n.getPredecessor().getSuccessors().contains(n))
+                return false;
+
+            hasSuccessor = !n.getSuccessors().isEmpty();
+            if (hasSuccessor) {
+                for (OGNode suc : n.getSuccessors()) {
+                    if (!Objects.equals(suc.getPredecessor(), n))
+                        return false;
+                }
+            } else if (!hasPredecessor)
+                return g.getNodes().size() == 1;
+        }
+
+        return true;
+    }
+
+
     public static String getDotStr(ObsGraph g) {
         Map<OGNode, String> visited = new HashMap<>();
         StringBuilder strBuilder = new StringBuilder();

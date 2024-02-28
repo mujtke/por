@@ -230,6 +230,9 @@ public class OGAlgorithm implements Algorithm {
                     // Replace the ith graph.
                     parGraphs.set(i, copiedGraph);
                     shouldKeepGraph = true;
+
+                    // Debug.
+                    copiedGraph.setCreationState(parState);
                 }
 
                 if (chGraph != null) {
@@ -287,7 +290,7 @@ public class OGAlgorithm implements Algorithm {
                 ARGState ch = (ARGState) apPair.getFirstNotNull();
                 List<ObsGraph> chGraphs = OGMap.get(ch.getStateId());
                 assert chGraphs != null;
-                revisitor.apply(chGraphs, revisitResult);
+                revisitor.apply(parState, chGraphs, revisitResult);
             }
 
             // Perform transfer for all graphs in 'revisitResult'.

@@ -11,6 +11,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
@@ -18,8 +19,6 @@ import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getAllDot;
-import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
 
@@ -47,15 +46,16 @@ public class OGRevisitor {
      * @param graphs The list of graphs on which revisit will be performed if needed.
      * @param result All results produced by revisit process will be put into it.
      */
-    public void apply(List<ObsGraph> graphs, List<Pair<AbstractState, ObsGraph>> result) {
+    public void apply(ARGState parState, List<ObsGraph> graphs,
+            List<Pair<AbstractState, ObsGraph>> result) {
         if (graphs.isEmpty()) return;
 
         for (ObsGraph graph : graphs) {
             if (!needToRevisit(graph)) continue;
             try {
-                result.addAll(revisit(graph));
+                result.addAll(revisit(parState, graph));
             } catch (Exception e) {
-                e.printStackTrace();
+                //
             }
         }
     }
@@ -64,7 +64,9 @@ public class OGRevisitor {
         return graph.isNeedToRevisit();
     }
 
-    private List<Pair<AbstractState, ObsGraph>> revisit(ObsGraph g) {
+    // parState: indicating where the revisit takes place.
+    private List<Pair<AbstractState, ObsGraph>> revisit(ARGState parState,
+            ObsGraph g) {
         List<Pair<AbstractState, ObsGraph>> result = new ArrayList<>();
         List<OGNode> nodes = g.getNodes();
         OGNode node0 = g.getLastNode();
@@ -76,12 +78,17 @@ public class OGRevisitor {
         RG.add(g);
 
         // Debug.
-        boolean debug = false;
+        boolean debug = true;
         int depth = 0;
         while (!RG.isEmpty()) {
-            if (debug) System.out.println("Size of RG: " + RG.size() + ", loop depth: "
-                    + (++depth));
             ObsGraph G0 = RG.remove(0);
+
+            if (debug) {
+                // Debug: perform some tests on G0.
+                if (!DebugAndTest.testPO(G0))
+                    System.out.println("Incorrect po relation.");
+            }
+
             List<SharedEvent> RE = new ArrayList<>(G0.getRE());
             for (SharedEvent a; !RE.isEmpty();) {
                 // If we are handling event e, then in the resulting graphs, it will not be
@@ -89,24 +96,15 @@ public class OGRevisitor {
                 a = RE.remove(0);
                 // Update event 'a' to be the new lastHandledEvent.
                 a.getInNode().setLastHandledEvent(a);
-                if (debug) System.out.println("\tSize of G0.RE: " + G0.getRE().size());
-                if (debug) System.out.println("\tEntering for loop.");
                 switch (a.getAType()) {
                     case READ:
-                        if (debug) System.out.println("\t'a' is R(" + a.getVar().getName() + ").");
-                        if (debug) System.out.println("\tGet the events that have the same location with 'a'");
                         List<SharedEvent> locA = G0.getSameLocationAs(a);
                         for (SharedEvent w : locA) {
                             ObsGraph Gr = G0.deepCopy(new HashMap<>());
-                            if (debug) System.out.println("\tCopying G0 is finished. Try to get the copy of 'a'.");
                             // After deep copy, a not in Gr.
                             SharedEvent ap = getCopyEvent(Gr, G0, a),
                                     wp = getCopyEvent(Gr, G0, w);
-                            if (debug) System.out.println("\tSetting the new read-from relations.");
-
                             Gr.setReadFromAndFromRead(ap, wp);
-                            if (debug) System.out.println("\tSetting the new read-from is finished. RG adds the new graph Gr.");
-                            if (debug) System.out.println("\tChecking the consistency of Gr.");
                             if (consistent(Gr)) {
 
                                 // >>>>>
@@ -115,10 +113,14 @@ public class OGRevisitor {
                                 ap.getInNode().removeEventAfter(ap);
                                 // <<<<<<
 
-                                if (debug) System.out.println("\tGr is consistent. Try to get the pivot state.");
+                                if (debug) {
+                                    if (!DebugAndTest.testPO(Gr))
+                                        System.out.println("Incorrect po relation.");
+                                }
+
                                 AbstractState pivotState = getPivotState(Gr);
                                 result.add(Pair.of(pivotState, Gr));
-                                if (debug) System.out.println("\tHaving gotten the pivot state s" + ((ARGState) pivotState).getStateId() + ", add the Gr to the revisit result.");
+                                Gr.setCreationState(parState);
                             } else {
                                 // FIXME: is it necessary to do this?
                                 // RG.add(Gr);
@@ -128,27 +130,17 @@ public class OGRevisitor {
                         break;
 
                     case WRITE:
-                        if (debug) System.out.println("\t'a' is W(" + a.getVar().getName() + "). Try to get the events that have the same location" + " with 'a'.");
                         locA = G0.getSameLocationAs(a);
-                        if (debug) System.out.println("\tEntering for loop.");
                         for (SharedEvent r : locA) {
-                            if (debug) System.out.println("\tStarting to copy G0.");
                             ObsGraph Gw = G0.deepCopy(new HashMap<>());
-                            if (debug) System.out.println("\tCopying G0 is complete. Get the copy event of 'a' and 'r'.");
+
                             SharedEvent rp = getCopyEvent(Gw, G0, r),
                                     ap = getCopyEvent(Gw, G0, a);
-                            if (debug) System.out.println("\tGet the delete.");
                             List<SharedEvent> delete = getDelete(Gw, rp, ap);
-                            if (debug) System.out.println("\tGet the deletePlusR.");
                             List<SharedEvent> deletePlusR = getDeletePlusR(delete, rp);
-                            if (debug) System.out.println("\tChecking maximality.");
                             if (allMaximallyAdded(Gw, deletePlusR, ap)) {
-                                if (debug) System.out.println("\tChecking the maximality is complete. Removing the delete.");
-                                Gw.removeDelete(delete);
-
-                                if (debug) System.out.println("\tRemoving the delete is complete. Set the new read-from relation.");
+                                Gw.removeDelete(delete, rp);
                                 Gw.setReadFromAndFromRead(rp, ap);
-                                if (debug) System.out.println("\tSetting the new read-from is finished. RG adds the new graph Gw. Check the consistency of Gw.");
                                 RG.add(Gw);
                                 if (consistent(Gw)) {
 
@@ -160,11 +152,15 @@ public class OGRevisitor {
 //                                    rp.getInNode().removeEventAfter(rp);
                                     // <<<<<
 
-                                    if (debug) System.out.println("\tGw is consistent. Try to get the pivot State.");
+                                    if (debug) {
+                                        if (!DebugAndTest.testPO(Gw))
+                                            System.out.println("Incorrect po relation.");
+                                    }
+
                                     AbstractState pivotState = getPivotState(Gw);
                                     result.add(Pair.of(pivotState, Gw));
 //                                    result.add(Pair.of(getPivotState(Gw), Gw));
-                                    if (debug) System.out.println("\tHaving gotten the pivot state s" + ((ARGState) pivotState).getStateId() + ", add the Gr to the revisit result.");
+                                    Gw.setCreationState(parState);
                                 }
                             }
                         }

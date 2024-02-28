@@ -40,9 +40,20 @@ public class ObsGraph implements Copier<ObsGraph> {
     // Recording the next assumption edge we should visit.
     private final Map<String, Integer> assumeEdgeTable = new HashMap<>();
 
+    // Debug: indicating when the graph created.
+    ARGState creationState = null;
+
     public ObsGraph() {
         traceLen = 0;
         RE = new ArrayList<>();
+    }
+
+    public ARGState getCreationState() {
+        return creationState;
+    }
+
+    public void setCreationState(ARGState creationState) {
+        this.creationState = creationState;
     }
 
     public Map<String, OGNode> getNodeTable() {
@@ -278,17 +289,22 @@ public class ObsGraph implements Copier<ObsGraph> {
          RE.remove(a);
      }
 
-     public void removeDelete(List<SharedEvent> delete) {
-        // remove the relations before remove the nodes.
+     public void removeDelete(List<SharedEvent> delete, SharedEvent rp) {
+         // remove the relations before remove the nodes.
          delete.forEach(e -> {
              // For e.
-             removeAllRelations(e);
+             e.removeAllRelations();
+
              // For e.inNode.
              OGNode en = e.getInNode();
-             removeAllRelations(e.getInNode());
-             // Remove node en.
-             nodes.remove(en);
+             if (!Objects.equals(rp.getInNode(), en)) {
+                 removeAllRelations(e.getInNode());
+                 // Remove node en.
+                 nodes.remove(en);
+             }
          });
+         // FIXME: remove events after rp?
+         rp.getInNode().removeEventAfter(rp);
      }
 
      private void removeAllRelations(Object o) {
