@@ -10,7 +10,9 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.ast.c.*;
 import org.sosy_lab.cpachecker.cfa.model.*;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
+import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
+import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
@@ -45,9 +47,9 @@ public class ConditionalStatementHandler {
     @Option(
             description = "list of indeterminate assignment function."
     )
-    private String[] randomFunctions = {
+    private String randomFunctions[] = {
             "__VERIFIER_nondet_bool",
-            "__VERIFIER_nondet_int",
+            "__VERIFIER_nondet_int"
     };
 
     public ConditionalStatementHandler(Configuration pConfig, CFA pCfa, LogManager pLogger)
@@ -336,8 +338,62 @@ public class ConditionalStatementHandler {
                                 null);
                         assignFormula = assignment(var, rhs, false);
                     } else {
-                        throw new UnsupportedCodeException("Initializer on the right " +
-                                "side should not be null", wEdge);
+                        // C declaration without initialization, like: int y;
+                        // TODO
+                        CType declarationType = vDecl.getType();
+                        if (declarationType instanceof CSimpleType) {
+                            CBasicType basicType =
+                                    ((CSimpleType) declarationType).getType();
+                            switch (basicType) {
+                                // TODO
+                                case INT:
+                                    break;
+                                case BOOL:
+                                    break;
+                                case INT128:
+                                    break;
+                                case UNSPECIFIED:
+                                    break;
+                                case CHAR:
+                                    break;
+                                case FLOAT:
+                                    break;
+                                case DOUBLE:
+                                    break;
+                                case FLOAT128:
+                                    break;
+                                default:
+                                    throw new UnsupportedCodeException(
+                                            "Unsupported data type: " + basicType, wEdge);
+                            }
+
+                            CIntegerLiteralExpression integerLiteralExpression =
+                                    CIntegerLiteralExpression.createDummyLiteral(0,
+                                            new CSimpleType(false, false,
+                                                    CBasicType.INT,
+                                                    false,
+                                                    false,
+                                                    false,
+                                                    false,
+                                                    false,
+                                                    false,
+                                                    false));
+//                            CInitializerExpression dumyInitialization =
+//                                    new CInitializerExpression(
+//                                            vDecl.getFileLocation(),
+//                                            integerLiteralExpression);
+//                            init = dumyInitialization.getExpression();
+                            final Region[] rhs = bvComputer.evaluateVectorExpression(
+                                    partition,
+                                    integerLiteralExpression, /* init */
+                                    declarationType,
+                                    wEdge.getSuccessor(),
+                                    null);
+                            assignFormula = assignment(var, rhs, false);
+                        } else {
+                            throw new UnsupportedCodeException("Initializer on the right " +
+                                    "side should not be null", wEdge);
+                        }
                     }
                 } else {
                     throw new UnsupportedCodeException("W event in a " +

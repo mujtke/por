@@ -61,8 +61,10 @@ public class OGTransfer {
                         OGNode currentNode =
                                 copiedGraph.getCurrentNode(chOgState.getInThread());
                         // Copied graph is used for another conditional branch.
-                        currentNode.removeEvent(edge);
-                        currentNode.getBlockEdges().remove(edge);
+                        if (currentNode != null) {
+                            currentNode.removeEvent(edge);
+                            currentNode.getBlockEdges().remove(edge);
+                        }
                         // <<<<<<
                         return copiedGraph;
                     }
@@ -271,8 +273,8 @@ public class OGTransfer {
             // Node != null.
             // Indicate whether we will enter, have been inside or still haven't reached
             // the start of the node.
-            Triple<Integer, CFAEdge, Boolean> checkPosition = isInsideNode(node, edge,
-                    hasSharedVars, hasNonDet, sharedEvents, criticalAreaAction);
+            Triple<Integer, CFAEdge, Boolean> checkPosition = isInsideNode(parState,
+                    node, edge, hasNonDet, sharedEvents, criticalAreaAction);
             assert checkPosition.getFirst() != null && checkPosition.getThird() != null;
             int position = checkPosition.getFirst();
             edge = checkPosition.getSecond();
@@ -349,6 +351,7 @@ public class OGTransfer {
             } else {
                 // >>>>>
                 if (criticalAreaAction == CONTINUE) {
+                    // FIXME
                     // We are inside some node, but the graph cannot transfer along the
                     // edge because of the conflict.
                     return Pair.of(null, null);
@@ -384,9 +387,10 @@ public class OGTransfer {
         }
     }
 
-    private @NonNull Triple<Integer, CFAEdge, Boolean> isInsideNode(OGNode node,
+    private @NonNull Triple<Integer, CFAEdge, Boolean> isInsideNode(
+            ARGState parState,
+            OGNode node,
             CFAEdge edge,
-            boolean hasSharedVars,
             boolean hasNonDet,
             List<SharedEvent> sharedEvents,
             CriticalAreaAction caa) {
@@ -401,36 +405,41 @@ public class OGTransfer {
             } else {
                 // The node (complex) doesn't contain the edge.
                 if (node.getLastVisitedEdge() != null) {
-                    // Use "if(node.getLastHandledEvent() != null)"?
                     // We are inside a node that has been added to the graph.
+                    // FIXME: Use "if(node.getLastHandledEvent() != null)"?
                     int lastVisitEdgeIdx = -1;
                     boolean edgeHasBeenVisited = false;
-                    if (edge instanceof AssumeEdge) {
-                        // The node doesn't contain the edge. Because the edge is an
-                        // assumption and not inside the node, we need to replace its
-                        // coEdge with it (this requires its coEdge is inside the node).
-                        // The process of replacing the coEdge will
-                        // also add the edge and all possible shared events to
-                        // blockEdges and events of the node, separately.
-                        CFAEdge newEdge = node.replaceCoEdge(edgeVarMap, edge, hasSharedVars);
+                    if (edge instanceof AssumeEdge && sharedEvents.isEmpty()) {
+                        // The Replacing and adding of the edge won't happen when edge
+                        // access shared vars.
+                        // When edge's coEdge is inside the node but not in the ARG, we
+                        // may need to replace it with the edge.
+                        CFAEdge coCFAEdge = getCoEdgeFromCFA(edge),
+                                coARGEdge = getCoEdgeFromARG(parState, edge);
 
-                        if (newEdge != null) {
-                            // Replacement happened.
-                            edge = newEdge;
-                            node.setLastVisitedEdge(edge);
-                            assert node.getBlockEdges().contains(edge) : "The edge " +
-                                    "is not in the node after replacing:" + edge;
-                            lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
-                        } else {
-                            // FIXME: Else, just returning position = -1?
-                            if (!hasNonDet) {
-                                node.getBlockEdges().add(edge);
-                                node.addEvents(sharedEvents);
+                        if (node.getBlockEdges().contains(coCFAEdge)) {
+                            // coEdge is inside the node, replacement may happen.
+                            if (coARGEdge == null) {
+                                // Replacing.
+                                node.replaceCoEdge(edgeVarMap, edge, coCFAEdge);
+                                assert node.getBlockEdges().contains(edge) :
+                                        "The edge is not in the node after " +
+                                                "replacing:" + edge;
                                 lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
                             }
+                            // Else, there is no need to replace coEdge.
+                            // Also, don't add the edge.
+                            // TODO
+                        } else {
+                            // Replacement shouldn't happen.
+                            // Add the edge to the node.
+                            node.getBlockEdges().add(edge);
+                            node.addEvents(sharedEvents);
+                            lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
                         }
                     } else {
-                        // Not an assumption edge.
+                        // Not an assumption edge, or
+                        // Assumption edge with shared vars.
                         node.getBlockEdges().add(edge);
                         node.addEvents(sharedEvents);
                         lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
@@ -454,6 +463,40 @@ public class OGTransfer {
                 }
             }
         }
+    }
+
+    // Get edge's coEdge that comes from parState.
+    private CFAEdge getCoEdgeFromARG(ARGState parState, CFAEdge edge) {
+        for (ARGState chState : parState.getChildren()) {
+            CFAEdge tmp = parState.getEdgeToChild(chState);
+            if (tmp instanceof AssumeEdge
+                    && tmp != edge
+                    && Objects.equals(tmp.getPredecessor(), edge.getPredecessor())) {
+                return tmp;
+            }
+        }
+
+        return null;
+    }
+
+    // Get edge's coEdge that locates in the same CFA and has the same CFA predecessor
+    // with the edge.
+    private CFAEdge getCoEdgeFromCFA(CFAEdge edge) {
+        Preconditions.checkArgument(
+                edge.getPredecessor().getNumLeavingEdges() > 1,
+                "Predecessor of assume edge has less then two outgoing " +
+                        "edges is not allowed: " + edge);
+        CFAEdge tmp = null;
+        for (int i = 0; i < edge.getPredecessor().getNumLeavingEdges(); i++) {
+            tmp = edge.getPredecessor().getLeavingEdge(i);
+            if (tmp instanceof AssumeEdge && tmp != edge) {
+                tmp = edge;
+                break;
+            }
+        }
+
+        assert tmp != null : "Cannot find the coEdge of: " + edge;
+        return tmp;
     }
 
     private void debugActions(ObsGraph graph,

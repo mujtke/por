@@ -27,7 +27,10 @@ public class DebugAndTest {
             Process p = Runtime.getRuntime().exec(new String[] {
                     "/bin/bash",
                     "-c",
-                    "/usr/bin/dot -Tpdf " + instantOG + " -o output/instantOG.pdf"
+                    "[[ -e output/instantOG.pdf ]] " +
+                            "&& /usr/bin/mv output/instantOG.pdf " +
+                            "output/instantOG.prev.pdf; " +
+                            "/usr/bin/dot -Tpdf " + instantOG + " -o output/instantOG.pdf"
             });
 
             p.waitFor();

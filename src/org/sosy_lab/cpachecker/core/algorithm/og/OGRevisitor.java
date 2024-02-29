@@ -154,8 +154,8 @@ public class OGRevisitor {
                                 // coGw may be null.
                                 coGw = GwAndCoGw.getSecond();
                                 if (coGw != null) {
-                                    RG.add(Gw);
-                                    if (consistent(Gw)) {
+                                    RG.add(coGw);
+                                    if (consistent(coGw)) {
                                         handleResultForWriteRevisit(result, coGw, rp,
                                                 delete, parState, debug);
                                     }
@@ -189,7 +189,7 @@ public class OGRevisitor {
             // B = true if the w is an indeterminate assignment.
             evaluation = CSHandler.handleAssumeStatement(G, r, w);
         } catch (UnsupportedCodeException e) {
-            //
+            e.printStackTrace();
         }
 
         assert evaluation != null;
@@ -203,11 +203,13 @@ public class OGRevisitor {
             assert memo.containsKey(r) && memo.containsKey(w) : "Wrong copy result.";
             SharedEvent rp = (SharedEvent) memo.get(r),
                     wp = (SharedEvent) memo.get(w);
-            SharedEvent corp = G.changeAssumeNode(rp);
+            SharedEvent corp = coGraph.changeAssumeNode(rp);
 //            coGraph.setReadFrom(corp, wp);
             setRelation("rf", coGraph, wp, corp);
             coGraph.deduceFromRead();
-        } else if (hasConflict) {
+        }
+
+        if (hasConflict) {
             // We don't need to create a new graph despite the conflict.
             // Instead, we replace r with the event co-r ('co' means conjugate) that
             // comes from the assume statement [!(x > 1)].
@@ -273,7 +275,7 @@ public class OGRevisitor {
     }
 
     private AbstractState getPivotState(ObsGraph G) {
-        // FIXME: try not going back to the first state.
+        // TODO & FIXME: try not going back to the first state.
         OGNode targetNode;
         // Use the preState of the first node, for the simplicity.
         targetNode = G.getNodes().get(0);

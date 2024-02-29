@@ -580,38 +580,20 @@ public class OGNode implements Copier<OGNode> {
         });
     }
 
-    // Replace conflicted assumeEdge d with its coEdge !d.
-    public CFAEdge replaceCoEdge(final Map<Integer, List<SharedEvent>> edgeVarMap,
-            CFAEdge d, boolean hasSharedVars) {
-        Preconditions.checkArgument(
-                d.getPredecessor().getNumLeavingEdges() > 1,
-                "Predecessor of assume edge has less then two outgoing " +
-                        "edges is not allowed: " + d);
-        CFAEdge nd = null, tmp;
-        for (int i = 0; i < d.getLineNumber(); i++) {
-            tmp = d.getPredecessor().getLeavingEdge(i);
-            if (tmp instanceof AssumeEdge && tmp != d) {
-                nd = tmp;
-                break;
-            }
-        }
-
-        Preconditions.checkState(nd != null,
-                "Cannot find coEdge for: " + d);
-        // FIXME: this node should contain nd?
-//        Preconditions.checkState(blockEdges.contains(nd),
-//                "Cannot replace edge not in blockEdges: " + nd);
-        if (!blockEdges.contains(nd) || hasSharedVars) {
-            // FIXME
-            return null;
-        }
+    // Replace coEdge nd with d.
+    // d: the edge we meet in ARG.
+    // nd: the coEdge of d that inside the node.
+    public void replaceCoEdge(
+            final Map<Integer, List<SharedEvent>> edgeVarMap, CFAEdge d, CFAEdge nd) {
 
         // Replace.
         int assumeEdgeIdx = blockEdges.indexOf(nd);
+
         // Remove all shared events in or after the nd.
         List<SharedEvent> toRemove = events.stream()
                 .filter(e -> blockEdges.indexOf(e.getInEdge()) >= assumeEdgeIdx)
                 .collect(Collectors.toList());
+
         // Before removing these events, clear their relations firstly.
         toRemove.forEach(SharedEvent::removeAllRelations);
         events.removeAll(toRemove);
@@ -622,23 +604,11 @@ public class OGNode implements Copier<OGNode> {
         blockEdges.add(d);
 
         // Update the last-visited edge.
-//        lastVisitedEdge = coEdge;
-        // Update last-visited event if necessary.
-        // FIXME: more than one sharedEvent in an assume edge?
-//        Preconditions.checkArgument(lheIndex < events.size() && lheIndex >= 0);
-//        SharedEvent lastHandledEvent = events.get(lheIndex);
-//        if (lastHandledEvent.getInEdge() == nd) {
-//            // Replacing assumeEdge with its coEdge doesn't change the number of events.
-//            addEvents(edgeVarMap.get(d.hashCode()));
-//        }
-        if (edgeVarMap.get(d.hashCode()) != null && !edgeVarMap.get(d.hashCode()).isEmpty()) {
-            lheIndex = events.isEmpty() ? 0 : events.size();
-            addEvents(edgeVarMap.get(d.hashCode()));
-        } else {
-            lheIndex = events.isEmpty() ? -1 : events.size() - 1;
-        }
+        setLastVisitedEdge(d);
 
-        return d;
+        // FIXME: Does last-visited event get updated only when revisiting?
+        //  And what if nd contains more than one sharedEvent?
+        // TODO?
     }
 
     public boolean shouldRevisit() {
