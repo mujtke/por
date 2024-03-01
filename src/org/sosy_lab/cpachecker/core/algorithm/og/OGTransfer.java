@@ -274,7 +274,7 @@ public class OGTransfer {
             // Indicate whether we will enter, have been inside or still haven't reached
             // the start of the node.
             Triple<Integer, CFAEdge, Boolean> checkPosition = isInsideNode(parState,
-                    node, edge, hasNonDet, sharedEvents, criticalAreaAction);
+                    node, edge, sharedEvents, criticalAreaAction);
             assert checkPosition.getFirst() != null && checkPosition.getThird() != null;
             int position = checkPosition.getFirst();
             edge = checkPosition.getSecond();
@@ -328,21 +328,24 @@ public class OGTransfer {
                     // We are inside a complex node, and the node contains the edge.
                     if (edgeHasBeenVisited) node.setLastVisitedEdge(edge);
                     graph.setNeedToRevisit(false);
-                    if (isAssumeEdge) {
-                        if (isSimpleTransfer) {
-                            copiedGraph = handleNonDet(graph, parState, chOgState, edge,
-                                    hasNonDet);
-                            if (!hasSharedVars) {
-                                graph.addVisitedAssumeEdge(curThread, edge, chOgState);
-                            }
-                        } else {
-                            // Shared-vars edge?
-                            if (!hasSharedVars &&
-                                    !graph.matchCachedEdge(curThread, edge, chOgState)) {
-                                graph = null;
-                            }
-                        }
+                    if (isSimpleTransfer && isAssumeEdge && !hasSharedVars) {
+                        graph.addVisitedAssumeEdge(curThread, edge, chOgState);
                     }
+//                    if (isAssumeEdge) {
+//                        if (isSimpleTransfer) {
+//                            copiedGraph = handleNonDet(graph, parState, chOgState, edge,
+//                                    hasNonDet);
+//                            if (!hasSharedVars) {
+//                                graph.addVisitedAssumeEdge(curThread, edge, chOgState);
+//                            }
+//                        } else {
+//                            // Shared-vars edge?
+//                            if (!hasSharedVars &&
+//                                    !graph.matchCachedEdge(curThread, edge, chOgState)) {
+//                                graph = null;
+//                            }
+//                        }
+//                    }
                 }
 
                 graphWrapper.clear();
@@ -352,9 +355,9 @@ public class OGTransfer {
             } else {
                 // >>>>>
                 if (criticalAreaAction == CONTINUE) {
-                    // FIXME
                     // We are inside some node, but the graph cannot transfer along the
                     // edge because the latter is not inside the node.
+                    // FIXME
                     return Pair.of(null, null);
                 }
                 // <<<<<
@@ -392,7 +395,6 @@ public class OGTransfer {
             ARGState parState,
             OGNode node,
             CFAEdge edge,
-            boolean hasNonDet,
             List<SharedEvent> sharedEvents,
             CriticalAreaAction caa) {
         if (node.isSimpleNode()) {
