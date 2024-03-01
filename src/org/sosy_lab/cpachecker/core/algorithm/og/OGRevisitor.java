@@ -348,7 +348,8 @@ public class OGRevisitor {
             //
             boolean eIsWrite = e.getAType() == WRITE;
             SharedEvent ep = eIsWrite ? e : e.getReadFrom();
-            Preconditions.checkState(ep != null, "");
+//            Preconditions.checkState(ep != null, "");
+            assert ep != null : "Cannot find ep for event: " + e;
             for (int i = previous.size() - 1; i >= 0; i--) {
                 // Reverse search.
                 SharedEvent ee = previous.get(i);

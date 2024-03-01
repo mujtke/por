@@ -281,8 +281,8 @@ public class OGTransfer {
             boolean edgeHasBeenVisited = checkPosition.getThird();
 
             if (position == 0) {
-                // We will enter the node. In this case, we need to consider the possible
-                // conflict before entering.
+                // We will enter the node. In this case, we need to consider all possible
+                // conflicts before entering.
                 if (isConflict(graph, curThread, node)) {
                     // Conflict means we should visit nodes of other threads first.
                     return Pair.of(null, null);
@@ -307,7 +307,7 @@ public class OGTransfer {
                     return Pair.of(graph, null);
                 }
             } else if (position > 0) {
-                // We have entered the node (complex).
+                // We have entered a complex node.
                 assert criticalAreaAction == CONTINUE || criticalAreaAction == END :
                         "Only CONTINUE or END is allowed inside the current node: " + edge;
                 if (criticalAreaAction == END) {
@@ -325,6 +325,7 @@ public class OGTransfer {
                     updatePreSucState(edge, node, parState, chState);
                 } else {
                     // CONTINUE
+                    // We are inside a complex node, and the node contains the edge.
                     if (edgeHasBeenVisited) node.setLastVisitedEdge(edge);
                     graph.setNeedToRevisit(false);
                     if (isAssumeEdge) {
@@ -353,7 +354,7 @@ public class OGTransfer {
                 if (criticalAreaAction == CONTINUE) {
                     // FIXME
                     // We are inside some node, but the graph cannot transfer along the
-                    // edge because of the conflict.
+                    // edge because the latter is not inside the node.
                     return Pair.of(null, null);
                 }
                 // <<<<<
@@ -409,7 +410,8 @@ public class OGTransfer {
                     // FIXME: Use "if(node.getLastHandledEvent() != null)"?
                     int lastVisitEdgeIdx = -1;
                     boolean edgeHasBeenVisited = false;
-                    if (edge instanceof AssumeEdge && sharedEvents.isEmpty()) {
+                    if (edge instanceof AssumeEdge
+                            && (sharedEvents == null || sharedEvents.isEmpty())) {
                         // The Replacing and adding of the edge won't happen when edge
                         // access shared vars.
                         // When edge's coEdge is inside the node but not in the ARG, we
