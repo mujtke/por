@@ -39,6 +39,9 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     // Recording the next assumption edge we should visit.
     private final Map<String, Integer> assumeEdgeTable = new HashMap<>();
+    // Recording the deduced from-read relations during when revisiting temporarily.
+    // Do not copy this when copying deeply.
+    // private final Map<SharedEvent, SharedEvent> cachedTempFR = new HashMap<>();
 
     // Debug: indicating when the graph created.
     ARGState creationState = null;
@@ -401,7 +404,7 @@ public class ObsGraph implements Copier<ObsGraph> {
                  for (int m = 0; m < n; m++) {
                      if (porf[nodes.indexOf(wNode)][m] && m != nodes.indexOf(node)) {
                          // if wNode porf nodes[m] and nodes[m] != node (wNode must
-                         // porf node, but a node cannot fr itself.
+                         // porf node, and a node cannot fr itself.
                          OGNode frn = nodes.get(m);
                          if (!frn.containWriteToSameVar(w)) continue;
                          SharedEvent frnw = frn.getWriteToSameVar(r);
@@ -679,4 +682,25 @@ public class ObsGraph implements Copier<ObsGraph> {
             assumeEdgeList.removeAll(remove);
         }
     }
+
+    public void clearFR() {
+        // Remove all from-read relations.
+        // FIXME: more effective way to do this?
+        for (OGNode node : nodes) {
+            if (node.getRs().isEmpty()) continue;
+            for (SharedEvent r : node.getRs()) {
+                // Handle events first.
+                List<SharedEvent> frs = r.getFromRead();
+                frs.forEach(fr -> fr.getFromReadBy().remove(r));
+                r.getFromRead().clear();
+
+                // Handle nodes.
+                OGNode rNode = r.getInNode();
+                List<OGNode> frns = rNode.getFromRead();
+                frns.forEach(frn -> frn.getFromReadBy().remove(rNode));
+                rNode.getFromRead().clear();
+            }
+        }
+    }
+
 }

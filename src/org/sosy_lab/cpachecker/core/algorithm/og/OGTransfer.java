@@ -267,7 +267,7 @@ public class OGTransfer {
                     }
                 }
             }
-        }
+        } // Node == null.
 
         else {
             // Node != null.
@@ -331,21 +331,6 @@ public class OGTransfer {
                     if (isSimpleTransfer && isAssumeEdge && !hasSharedVars) {
                         graph.addVisitedAssumeEdge(curThread, edge, chOgState);
                     }
-//                    if (isAssumeEdge) {
-//                        if (isSimpleTransfer) {
-//                            copiedGraph = handleNonDet(graph, parState, chOgState, edge,
-//                                    hasNonDet);
-//                            if (!hasSharedVars) {
-//                                graph.addVisitedAssumeEdge(curThread, edge, chOgState);
-//                            }
-//                        } else {
-//                            // Shared-vars edge?
-//                            if (!hasSharedVars &&
-//                                    !graph.matchCachedEdge(curThread, edge, chOgState)) {
-//                                graph = null;
-//                            }
-//                        }
-//                    }
                 }
 
                 graphWrapper.clear();

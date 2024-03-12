@@ -16,6 +16,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -56,6 +57,7 @@ public class OGRevisitor {
                 result.addAll(revisit(parState, graph));
             } catch (Exception e) {
                 //
+                e.printStackTrace();
             }
         }
     }
@@ -118,15 +120,18 @@ public class OGRevisitor {
                                 SharedEvent coAp = Gr.getLastNode().getLastHandledEvent();
                                 assert coAp != null && coAp.accessSameVarWith(ap);
                                 handleResultForReadRevisit(result, coGr, coAp, parState, debug);
-                            } else {
-                                //
+                            } else if (coGr != null){
+                                // FIXME: is it necessary to do this?
+                                //  Remove fr relations?
+                                coGr.clearFR();
+                                RG.add(coGr);
                             }
 
                             if (consistent(Gr)) {
                                 handleResultForReadRevisit(result, Gr, ap, parState, debug);
                             } else {
-                                // FIXME: is it necessary to do this?
-                                // RG.add(Gr);
+                                Gr.clearFR();
+                                RG.add(Gr);
                             }
                         }
 
