@@ -2,7 +2,6 @@ package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
 import edu.umd.cs.findbugs.annotations.NonNull;
-import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
@@ -68,13 +67,15 @@ public class OGNode implements Copier<OGNode> {
     private OGNode trBefore;
     private OGNode trAfter;
 
-    // Indicate whether this node is in a graph.
-    // Here, in a graph means this node is in the trace of that graph.
+    // Indicate whether this node is in a graph. The true means this node is in the trace
+    // of the graph.
     private boolean inGraph;
     // FIXME: use index to indicate the last handled event.
 //    private SharedEvent lastHandledEvent;
     private int lheIndex = -1;
 
+    // FIXME: just used for the node that has been added to the graph. For a totally
+    //  new node, set as null.
     private CFAEdge lastVisitedEdge;
 
     public OGNode(final CFAEdge pBlockStartEdge,
@@ -745,5 +746,15 @@ public class OGNode implements Copier<OGNode> {
         events.removeIf(filter);
         Rs.removeIf(filter);
         Ws.removeIf(filter);
+    }
+
+    public boolean hasBeenAddedToGraph() {
+        // TODO
+    }
+
+    public void addEdge(CFAEdge edge, List<SharedEvent> sharedEvents) {
+        blockEdges.add(edge);
+        if (sharedEvents != null)
+            addEvents(sharedEvents);
     }
 }

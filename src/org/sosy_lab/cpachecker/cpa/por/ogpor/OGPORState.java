@@ -90,7 +90,7 @@ public class OGPORState implements AbstractState, Graphable {
     // Record the entering edge.
     CFAEdge enteringEdge;
     // Record whether the enteringEdge is the normal edge.
-    boolean isNormalEnteringEdge = true;
+    boolean isNormalEnteringEdge;
     private static HashMap<Integer, List<SharedEvent>> edgeVarMap;
     private static Set<String> atomicBegins = ImmutableSet.of("__VERIFIER_atomic_begin");
     private static Set<String> atomicEnds = ImmutableSet.of("__VERIFIER_atomic_end");
