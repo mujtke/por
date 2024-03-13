@@ -750,6 +750,7 @@ public class OGNode implements Copier<OGNode> {
 
     public boolean hasBeenAddedToGraph() {
         // TODO
+        
     }
 
     public void addEdge(CFAEdge edge, List<SharedEvent> sharedEvents) {
