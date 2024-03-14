@@ -249,6 +249,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
             if (a.getAType() == READ) {
                 SharedEvent arf = a.getReadFrom();
+                assert arf != null : ("Its readFrom must be not null When we " +
+                        "are revisiting a read event.");
                 // fixme: could we skip some nodes.
                 if (i == nodes.indexOf(arf.getInNode())) continue;
                 for (SharedEvent w : nodei.getWs()) {
@@ -465,21 +467,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
         Map<Integer, List<SharedEvent>> edgeVarMap = ogInfo.getEdgeVarMap();
         // Find the corEdge.
-        CFAEdge rEdge = r.getInEdge(), corEdge = null;
-        Preconditions.checkArgument(rEdge instanceof AssumeEdge);
-        CFANode pre = rEdge.getPredecessor();
-        Preconditions.checkArgument(pre.getNumLeavingEdges() == 2,
-                "AssumeEdge " + rEdge + " has " + pre.getNumLeavingEdges() + " != 2 " +
-                        "leaving edges.");
-        for (int i = 0; i < 2; i++) {
-            CFAEdge leavingEdge = pre.getLeavingEdge(i);
-            if (!rEdge.equals(leavingEdge)) {
-                corEdge = leavingEdge;
-                break;
-            }
-        }
-        Preconditions.checkArgument(corEdge != null,
-                "Finding corEdge failed: " + rEdge);
+        CFAEdge rEdge = r.getInEdge(), corEdge = getCoCFAEdge(rEdge);
 
         OGNode rNode = r.getInNode();
         Preconditions.checkArgument(nodes.contains(rNode),
@@ -496,11 +484,13 @@ public class ObsGraph implements Copier<ObsGraph> {
         rNode.getBlockEdges().add(corEdge);
 
         // We remove all events after the rEdge, and all relations they have.
-        // FIXME: Relations of the events before rEdge remain unchanged. After
-        //  replacing, events in rEdge and corEdge have the same relations.
+        // Relations of the events before rEdge remain unchanged. After
+        // replacing, events in rEdge and corEdge have the same relations.
+        // FIXME: how to handle the case like 'A < B' where both A and B are shared vars.
         int rIdx = rNode.getEvents().indexOf(r);
         SharedEvent cor = null;
-        List<SharedEvent> coEvents = edgeVarMap.get(corEdge.hashCode());
+        List<SharedEvent> coEvents = edgeVarMap.get(corEdge.hashCode()),
+                toRm = new ArrayList<>();
         assert coEvents != null && !coEvents.isEmpty();
         for (int i = rIdx; i < rNode.getEvents().size(); i++) {
             SharedEvent event = rNode.getEvents().get(i);
@@ -515,30 +505,35 @@ public class ObsGraph implements Copier<ObsGraph> {
                 event.copyRelations(coEvent);
             } else {
                 // Events after rEdge.
-                rNode.getEvents().remove(event);
-                event.removeAllRelations();
+                toRm.add(event);
             }
         }
+        toRm.forEach(SharedEvent::removeAllRelations);
+        rNode.getEvents().removeAll(toRm);
 
         assert cor != null;
         return cor;
     }
 
-    public void replaceCoNode(int idx,
-            OGNode node) {
-        Preconditions.checkArgument(idx < nodes.size(),
-                "Try to remove a node not in Graph.nodes.");
-        OGNode rmNode = nodes.get(idx);
-        Preconditions.checkArgument(rmNode.equals(this.lastNode),
-                "CoNode should be the last node when trying to remove it.");
-        // When remove the rmNode, update the last node to its tr-predecessor.
-        this.setLastNode(rmNode.getTrAfter());
-        this.traceLen -= 1;
-        rmNode.getEvents().forEach(this::removeAllRelations);
-        removeAllRelations(rmNode);
-        // Replace the rmNode with the node.
-        nodes.set(idx, node);
-    };
+    private CFAEdge getCoCFAEdge(CFAEdge edge) {
+        CFAEdge coEdge = null;
+        Preconditions.checkArgument(edge instanceof AssumeEdge);
+        CFANode pre = edge.getPredecessor();
+        Preconditions.checkArgument(pre.getNumLeavingEdges() == 2,
+                "AssumeEdge " + edge + " has " + pre.getNumLeavingEdges() + " != 2 " +
+                        "leaving edges.");
+        for (int i = 0; i < 2; i++) {
+            CFAEdge leavingEdge = pre.getLeavingEdge(i);
+            if (!edge.equals(leavingEdge)) {
+                coEdge = leavingEdge;
+                break;
+            }
+        }
+        Preconditions.checkArgument(coEdge != null,
+                "Finding corEdge failed: " + edge);
+
+        return coEdge;
+    }
 
     // Set initial current nodes for threads.
     public void setInitialCurrentNodeTable(ARGState initialState) {

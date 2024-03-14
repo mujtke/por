@@ -70,8 +70,9 @@ public class OGNode implements Copier<OGNode> {
     // Indicate whether this node is in a graph. The true means this node is in the trace
     // of the graph.
     private boolean inGraph;
-    // FIXME: use index to indicate the last handled event.
-//    private SharedEvent lastHandledEvent;
+    // Indicate whether the node has been added to the graph. It is also set as true when
+    // the field inGraph is set as true.
+    private boolean hasBeenAddedToGraph;
     private int lheIndex = -1;
 
     // FIXME: just used for the node that has been added to the graph. For a totally
@@ -90,6 +91,7 @@ public class OGNode implements Copier<OGNode> {
         containNonDetVar = pContainNonDetVar;
         Rs = pRs;
         Ws = pWs;
+        hasBeenAddedToGraph = false;
     }
 
     public OGNode(final CFAEdge pBlockStartEdge,
@@ -103,6 +105,7 @@ public class OGNode implements Copier<OGNode> {
         Rs = new HashSet<>();
         Ws = new HashSet<>();
 //        lastVisitedEdge = pBlockStartEdge;
+        hasBeenAddedToGraph = false;
     }
 
     /**
@@ -128,7 +131,7 @@ public class OGNode implements Copier<OGNode> {
         // Put the copy into memo.
         memo.put(this, nNode);
 
-        // The threadsLoc and inThread is used to distinguish different OGNodes that has
+        // The threadsLoc and inThread are used to distinguish different OGNodes that has
         // the same 'blockEdges', so they should be copied deeply.
         // Because String is immutable, so shallow copy has the same effect with a deep
         // one.
@@ -141,6 +144,7 @@ public class OGNode implements Copier<OGNode> {
         nNode.inGraph = this.inGraph;
         nNode.lheIndex = this.lheIndex;
         nNode.lastVisitedEdge = this.lastVisitedEdge;
+        nNode.hasBeenAddedToGraph = this.hasBeenAddedToGraph;
 
         /* preState & sucState */
         nNode.preState = this.preState; /* Shallow copy. */
@@ -355,6 +359,9 @@ public class OGNode implements Copier<OGNode> {
 
     public void setInGraph(boolean pInGraph) {
         this.inGraph = pInGraph;
+        // When set this value as true, it also means the node has been added to the graph.
+        if (pInGraph)
+            this.hasBeenAddedToGraph = true;
     }
 
     public CFAEdge getLastBlockEdge() {
@@ -663,16 +670,6 @@ public class OGNode implements Copier<OGNode> {
         return refCount;
     }
 
-    // FIXME
-//    public boolean needReplaceCoEdge(CFAEdge edge) {
-//        if (blockEdges.isEmpty()) return false;
-//        if (lastVisitedEdge == null) return false;
-//        if (blockEdges.indexOf(lastVisitedEdge) == blockEdges.size() - 1) return false;
-//        int coEdgeIdx = blockEdges.indexOf(lastVisitedEdge) + 1;
-//        return Objects.equals(blockEdges.get(coEdgeIdx).getPredecessor(),
-//                edge.getPredecessor());
-//    }
-
     // Set events[i] = coEvent, at the same time, we also update Rs or Ws.
     public void setEvent(int i, SharedEvent coEvent) {
         Rs.remove(events.get(i));
@@ -712,10 +709,10 @@ public class OGNode implements Copier<OGNode> {
 
     // Remove the events after e0.
     // Used in revisiting.
+    // FIXME: remove events that locates in the same node with e0?
     public void removeEventAfter(SharedEvent e0) {
         assert events.contains(e0)  : "When removing events for revisiting of a read, " +
-                "the " +
-                "read(" + e0 +  ") not in the node: " + this;
+                "the read(" + e0 +  ") not in the node: " + this;
         // FIXME: set e0 as the lhe of this node?
         lheIndex = events.indexOf(e0) != lheIndex ? events.indexOf(e0) : lheIndex;
 
@@ -749,8 +746,11 @@ public class OGNode implements Copier<OGNode> {
     }
 
     public boolean hasBeenAddedToGraph() {
-        // TODO
-        
+        return hasBeenAddedToGraph;
+    }
+
+    public void setAddedToGraph(boolean pHasBeenAddedToGraph) {
+        hasBeenAddedToGraph = pHasBeenAddedToGraph;
     }
 
     public void addEdge(CFAEdge edge, List<SharedEvent> sharedEvents) {

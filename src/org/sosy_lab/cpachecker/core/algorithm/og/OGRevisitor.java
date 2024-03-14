@@ -115,9 +115,9 @@ public class OGRevisitor {
 
                             // coGr may be null.
                             coGr = GrAndCoGr.getSecond();
-                            if (coGr != null && consistent(Gr)) {
-                                assert Gr.getLastNode() != null;
-                                SharedEvent coAp = Gr.getLastNode().getLastHandledEvent();
+                            if (coGr != null && consistent(coGr)) {
+                                assert coGr.getLastNode() != null;
+                                SharedEvent coAp = coGr.getLastNode().getLastHandledEvent();
                                 assert coAp != null && coAp.accessSameVarWith(ap);
                                 handleResultForReadRevisit(result, coGr, coAp, parState, debug);
                             } else if (coGr != null){
@@ -128,6 +128,8 @@ public class OGRevisitor {
                             }
 
                             if (consistent(Gr)) {
+                                // FIXME: ap may change to its coEvent after revisiting.
+                                ap = Gr.getLastNode().getLastHandledEvent();
                                 handleResultForReadRevisit(result, Gr, ap, parState, debug);
                             } else {
                                 Gr.clearFR();
@@ -212,6 +214,11 @@ public class OGRevisitor {
 //            coGraph.setReadFrom(corp, wp);
             setRelation("rf", coGraph, wp, corp);
             coGraph.deduceFromRead();
+            // FIXME: set corp as the last-handled event of its inNode? Because we have
+            //  changed rp as corp.
+            OGNode corpNode = corp.getInNode();
+            assert  corpNode != null;
+            corpNode.setLastHandledEvent(corp);
         }
 
         if (hasConflict) {
@@ -219,10 +226,13 @@ public class OGRevisitor {
             // Instead, we replace r with the event co-r ('co' means conjugate) that
             // comes from the assume statement [!(x > 1)].
             SharedEvent cor = G.changeAssumeNode(r);
-            // FIXME: Remove the events and edges after r?
-//            G.setReadFrom(cor, w);
             setRelation("rf", G, w, cor);
             G.deduceFromRead();
+            // FIXME: set cor as the last-handled event of its inNode? Because we have
+            //  changed r as cor.
+            OGNode corNode = cor.getInNode();
+            assert corNode != null;
+            corNode.setLastHandledEvent(cor);
         } else {
             // No conflict.
 //            G.setReadFrom(r, w);

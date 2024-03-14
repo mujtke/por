@@ -115,22 +115,24 @@ public class OGTransfer {
 
 
     /**
+     * FIXME: modify the description.
      * This method transfers a given graph from a parent state {@parState} to its child
-     * State {@chState}. If the node conflicts with the graph, then transfer stops
-     * and returns null. Else, return the transferred graph.
+     * State {@chState}.
+     * If the node conflicts with the graph, then transfer stops and returns null.
+     * Else, return the transferred graph.
      * When no conflict exists, there are still two possible cases need to be considered:
      * 1) The graph has contained the node. In this case, we update the new last node of
      * the graph (also update the necessary relations like mo, etc.).
      * 2) The graph meets the node first time. In this case, we add the node to the graph
      * and add all necessary relations, like rf, fr, wb and so on.
+     * @param graphWrapper indicates whether the given graph has been transferred.
+     * @param edge current CFA edge.
+     * @param parState Initial ARGState where the transferring begin.
+     * @param chState Final ARGState where the transferring stop.
+     * @return <graph, copiedGraph> copiedGraph is used for the case in which
+     * indeterminacy exists.
      * @implNode When add the node to the graph, we add its deep copy.
-     * @param graphWrapper
-     * @param edge
-     * @param parState Initial {@ARGState} where the transferring begin.
-     * @param chState Final {@ARGState} where the transferring stop.
-     * @return Transferred graph if no conflict found, else null.
      */
-    // FIXME
     public Pair<ObsGraph, ObsGraph> singleStepTransfer(
             List<ObsGraph> graphWrapper,
             CFAEdge edge,
@@ -140,6 +142,11 @@ public class OGTransfer {
         // Debug.
         boolean debug = true;
         int parId = parState.getStateId(), chId = chState.getStateId();
+        if (debug) {
+            // Debug the new frame.
+            return singleStepTransfer(graphWrapper, edge, parState, chState,
+                    isSimpleTransfer, debug);
+        }
 
         Preconditions.checkArgument(graphWrapper.size() == 1);
         ObsGraph graph = graphWrapper.iterator().next(), copiedGraph = null;
@@ -389,6 +396,9 @@ public class OGTransfer {
 			boolean isSimpleTransfer,
 			boolean __DEBUG__) {
 
+        // Debug.
+        int parId = parState.getStateId(), chId = chState.getStateId();
+
         Preconditions.checkArgument(graphWrapper.size() == 1);
         ObsGraph graph = graphWrapper.iterator().next(), copiedGraph = null;
         OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class),
@@ -428,7 +438,6 @@ public class OGTransfer {
         }
 
         assert result != null;
-
         return result;
 	}
 
@@ -476,7 +485,6 @@ public class OGTransfer {
             if (__DEBUG__) debugActions(graph, parState, chState, edge);
             result = Pair.of(graph, null);
         } else if (edgeType == 1) { // Local assumption edge.
-            // TODO
             CFAEdge coARGEdge = getCoEdgeFromARG(parState, edge);
             OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class);
             if (isSimpleTransfer && coARGEdge != null) { // Has indeterminacy.
@@ -523,7 +531,7 @@ public class OGTransfer {
                                 new ArrayList<>(Collections.singleton(edge)),
                                 true,
                                 false);
-                newNode.addEvents(edgeVarMap.get(hashCode()));
+                newNode.addEvents(edgeVarMap.get(edge.hashCode()));
                 newNode.setThreadInfo(chState);
                 updatePreSucState(edge, newNode, parState, chState);
                 OGPORState chOgState = AbstractStates.extractStateByType(chState,
@@ -539,7 +547,6 @@ public class OGTransfer {
             }
             // edgeType = 2
         } else { // Shared assumption edge.
-            // TODO
             if (node != null && isConflict(graph, curThd, node)) {
                 return Pair.of(null, null);
             } else if(node != null) { // Node != null and no conflict exists.
@@ -571,7 +578,7 @@ public class OGTransfer {
                         new ArrayList<>(Collections.singleton(edge)),
                         true,
                         false);
-                newNode.addEvents(edgeVarMap.get(hashCode()));
+                newNode.addEvents(edgeVarMap.get(edge.hashCode()));
                 newNode.setThreadInfo(chState);
                 updatePreSucState(edge, newNode, parState, chState);
                 OGPORState chOgState = AbstractStates.extractStateByType(chState,
@@ -613,7 +620,7 @@ public class OGTransfer {
             } else {
                 node.setLastVisitedEdge(edge);
             }
-            visitNode(graph, node, chOgState, !node.hasBeenAddedToGraph());
+            visitNode(graph, node, chOgState, node.hasBeenAddedToGraph());
             if (node.shouldRevisit())
                 graph.setNeedToRevisit(true);
             graph.updateCurrentNodeTable(curThd, node);
@@ -740,15 +747,21 @@ public class OGTransfer {
                             OGPORState.class);
                     // FIXME: do we need to distinguish simple or multi-step transfer?
                     if (isSimpleTransfer) { // A simple transfer only.
+                        // The node doesn't contain the edge, so add first.
+                        node.addEdge(edge, null);
                         copiedGraph = handleNonDet(graph, parState, curThd, edge, true);
                         graph.addVisitedAssumeEdge(curThd, edge, chOgState);
                         // FIXME: copiedGraph.addVisitedAssumeEdge()?
                         copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge,
                                 getCoOGSibling(parState, coARGEdge));
                     } else { // A multi-step transfer.
-                        if (!graph.matchCachedEdge(curThd, edge, chOgState)) {
-                            graph = null;
-                        }
+                        // TODO: will this case happen?
+                        throw new UnsupportedOperationException("Unhandled case: " +
+                                "indeterminacy exists inside node during a multi-step " +
+                                "transfer");
+//                        if (!graph.matchCachedEdge(curThd, edge, chOgState)) {
+//                            graph = null;
+//                        }
                     }
 
                     if (graph != null) {
@@ -756,6 +769,8 @@ public class OGTransfer {
                         graphWrapper.clear();
                         if (__DEBUG__) debugActions(graph, parState, chState, edge);
                     }
+                    if (copiedGraph != null) copiedGraph.setNeedToRevisit(false);
+
                     result = Pair.of(graph, copiedGraph);
                     // case (3)
                 } else { // case (4), coCFAEgeInNode && coARGEdge != null
@@ -813,7 +828,6 @@ public class OGTransfer {
             }
             // edgeType == 2
         } else { // Shared assumption edge.
-            // TODO
             if (node.hasBeenAddedToGraph() && edgeInNode) {
                 graph.setNeedToRevisit(false);
                 graphWrapper.clear();
