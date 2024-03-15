@@ -133,270 +133,16 @@ public class OGTransfer {
      * indeterminacy exists.
      * @implNode When add the node to the graph, we add its deep copy.
      */
-    public Pair<ObsGraph, ObsGraph> singleStepTransfer(
-            List<ObsGraph> graphWrapper,
-            CFAEdge edge,
-            ARGState parState, /* lead state */
-            ARGState chState,
-            boolean isSimpleTransfer) {
-        // Debug.
-        boolean debug = true;
-        int parId = parState.getStateId(), chId = chState.getStateId();
-        if (debug) {
-            // Debug the new frame.
-            return singleStepTransfer(graphWrapper, edge, parState, chState,
-                    isSimpleTransfer, debug);
-        }
-
-        Preconditions.checkArgument(graphWrapper.size() == 1);
-        ObsGraph graph = graphWrapper.iterator().next(), copiedGraph = null;
-        OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class),
-                parOgState = AbstractStates.extractStateByType(parState, OGPORState.class);
-        assert chOgState != null && parOgState != null;
-        String curThread = chOgState.getInThread();
-
-        // Get OGNode for the current thread.
-        OGNode node = graph.getCurrentNode(curThread);
-        List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
-        CriticalAreaAction criticalAreaAction = chOgState.getInCaa();
-        boolean isNormalEdge = chOgState.enteringEdgeIsNormal(),
-                hasSharedVars = !(sharedEvents == null || sharedEvents.isEmpty()),
-                isAssumeEdge = edge instanceof AssumeEdge,
-                hasNonDet = isAssumeEdge && hasNonDet(parState, edge);
-
-        if (node == null) {
-            // No node for the current thread.
-            if (isNormalEdge) {
-                // If the edge is normal, then we transfer the graph directly.
-                // Though there still exist some nodes that come from other threads and
-                // should be visited by us first, we still can transfer the graph.
-                // If the edge is just normal, i.e., it neither accesses any shared
-                // vars nor begins any atomic block.
-
-                // Handle possible assume edge.
-                // FIXME: how to get rid of redundancy?
-                if (isAssumeEdge && hasNonDet) {
-                    if (isSimpleTransfer) {
-//                        copiedGraph = handleNonDet(graph, parState, chOgState, edge, true);
-                        copiedGraph = handleNonDet(graph, parState, curThread, edge, true);
-                        graph.addVisitedAssumeEdge(curThread, edge, chOgState);
-                    } else {
-                        // Multiple-step transfer.
-                        if (!graph.matchCachedEdge(curThread, edge, chOgState)) {
-                            graph = null;
-                        }
-                    }
-                }
-
-                if (graph != null) {
-                    graph.setNeedToRevisit(false);
-                    graphWrapper.clear();
-                    if (debug) debugActions(graph, parState, chState, edge);
-                }
-
-                return Pair.of(graph, copiedGraph);
-            } else {
-                // Else, abnormal edge (Accesses shared vars or begins a atomic block).
-                // Transferring requires no unmet nodes.
-                if (hasUnmetNode(graph)) {
-                    return Pair.of(null, null);
-                } else {
-                    // No unmet nodes.
-                    if (!hasSharedVars) {
-                        // The edge has no shared events. In this case, the edge should
-                        // be a fun call since it is not normal.
-                        assert criticalAreaAction == START : "Invalid critical area: " +
-                                criticalAreaAction + " when current node is null, for " +
-                                "edge: " + edge;
-                        OGNode newNode = new OGNode(edge,
-                                new ArrayList<>(Collections.singleton(edge)),
-                                false,
-                                false);
-                        newNode.setThreadInfo(chState);
-                        updatePreSucState(edge, newNode, parState, chState);
-                        graph.setNeedToRevisit(false);
-                        graph.updateCurrentNode(curThread, newNode);
-                        graphWrapper.clear();
-
-                        if (debug) debugActions(graph, parState, chState, edge);
-                        return Pair.of(graph, null);
-                    } else {
-                        // The edge has some shared events. In this case, the edge is
-                        // not normal, which means the edge may be a fun call or just a
-                        // simple edge.
-                        OGNode newNode;
-                        switch (criticalAreaAction) {
-                            case START:
-                                newNode = new OGNode(edge,
-                                        new ArrayList<>(Collections.singleton(edge)),
-                                        false,
-                                        false);
-                                newNode.setThreadInfo(chState);
-                                updatePreSucState(edge, newNode, parState, chState);
-                                graph.updateCurrentNode(curThread, newNode);
-                                graph.setNeedToRevisit(false);
-                                graphWrapper.clear();
-
-                                if (debug) debugActions(graph, parState, chState, edge);
-                                return Pair.of(graph, null);
-                            case CONTINUE:
-                                throw new UnsupportedOperationException("Nesting locks " +
-                                        "is not allowed when current node is null: " + edge);
-                            case END:
-                                throw new UnsupportedOperationException("Unlocking is " +
-                                        "not allowed when current node is null: " + edge);
-                            case NOT_IN:
-                                // The edge contains some non-lock shared vars.
-                                newNode = new OGNode(edge,
-                                        new ArrayList<>(Collections.singleton(edge)),
-                                        true,
-                                        false);
-                                newNode.addEvents(sharedEvents);
-                                newNode.setThreadInfo(chState);
-                                updatePreSucState(edge, newNode, parState, chState);
-                                visitNode(graph, newNode, chOgState, false);
-
-                                graph.updateCurrentNode(curThread, null);
-                                graph.setNeedToRevisit(true);
-                                graphWrapper.clear();
-
-                                if (debug) debugActions(graph, parState, chState, edge);
-                                if (isAssumeEdge && hasNonDet) {
-                                    if (isSimpleTransfer) {
-//                                        copiedGraph = handleNonDet(graph, parState, chOgState, edge, true);
-                                        copiedGraph = handleNonDet(graph, parState,
-                                                curThread, edge, true);
-                                    }
-                                    // Else?
-                                }
-                                return Pair.of(graph, copiedGraph);
-                            default:
-                                throw new UnsupportedOperationException(
-                                        "Missing action: " + edge);
-                        }
-                    }
-                }
-            }
-        } // Node == null.
-
-        else {
-            // Node != null.
-            // Indicate whether we will enter, have been inside or still haven't reached
-            // the start of the node.
-            Triple<Integer, CFAEdge, Boolean> checkPosition = isInsideNode(parState,
-                    node, edge, sharedEvents, criticalAreaAction);
-            assert checkPosition.getFirst() != null && checkPosition.getThird() != null;
-            int position = checkPosition.getFirst();
-            edge = checkPosition.getSecond();
-            boolean edgeHasBeenVisited = checkPosition.getThird();
-
-            if (position == 0) {
-                // We will enter the node. In this case, we need to consider all possible
-                // conflicts before entering.
-                if (isConflict(graph, curThread, node)) {
-                    // Conflict means we should visit nodes of other threads first.
-                    return Pair.of(null, null);
-                } else {
-                    if (node.isSimpleNode()) {
-                        // For the simple node, we have also reached its end.
-                        assert criticalAreaAction == NOT_IN : "No critical area for a " +
-                                "simple node is required.";
-                        updatePreSucState(edge, node, parState, chState);
-                        visitNode(graph, node, chOgState, true);
-                        graph.updateCurrentNodeTable(curThread, node);
-                        // FIXME: should we revisit for the substituted assumption edge?
-                    } else {
-                        assert criticalAreaAction == START : "Require START critical " +
-                                "area action when entering a complex node.";
-                    }
-
-                    graph.setNeedToRevisit(false);
-                    graphWrapper.clear();
-
-                    if (debug) debugActions(graph, parState, chState, edge);
-                    return Pair.of(graph, null);
-                }
-            } else if (position > 0) {
-                // We have entered a complex node.
-                assert criticalAreaAction == CONTINUE || criticalAreaAction == END :
-                        "Only CONTINUE or END is allowed inside the current node: " + edge;
-                if (criticalAreaAction == END) {
-                    if (!edgeHasBeenVisited) {
-                        visitNode(graph, node, chOgState, false);
-                        if (node.shouldRevisit())
-                            graph.setNeedToRevisit(true);
-                    } else {
-                        visitNode(graph, node, chOgState, true);
-                    }
-
-                    node.setLastVisitedEdge(null);
-                    // Update the current nodes for threads.
-                    graph.updateCurrentNodeTable(curThread, node);
-                    updatePreSucState(edge, node, parState, chState);
-                } else {
-                    // CONTINUE
-                    // We are inside a complex node, and the node contains the edge.
-                    if (edgeHasBeenVisited) node.setLastVisitedEdge(edge);
-                    graph.setNeedToRevisit(false);
-                    if (isSimpleTransfer && isAssumeEdge && !hasSharedVars) {
-                        graph.addVisitedAssumeEdge(curThread, edge, chOgState);
-                    }
-                }
-
-                graphWrapper.clear();
-
-                if (debug) debugActions(graph, parState, chState, edge);
-                return Pair.of(graph, copiedGraph);
-            } else {
-                // Position < 0.
-                // >>>>>
-                if (criticalAreaAction == CONTINUE) {
-                    // We are inside some node, but the graph cannot transfer along the
-                    // edge because the latter is not inside the node.
-                    // FIXME
-                    return Pair.of(null, null);
-                }
-                // <<<<<
-                // Else, we haven't entered the node yet, i.e., we still haven't met the
-                // start edge of the node.
-                assert criticalAreaAction == NOT_IN : "Requiring NOT_IN, but "
-                        + criticalAreaAction + " provided when handling the edge: " + edge;
-
-                if (!isNormalEdge) {
-                    // TODO
-                    assert node.isSimpleNode() : "Single abnormal edge must be " +
-                            "corresponding to  a simple node: " + edge;
-                    // This means the node doesn't contain the edge.
-                    return Pair.of(null, null);
-                } else if (isAssumeEdge && hasNonDet){
-                    if (!graph.matchCachedEdge(curThread, edge, chOgState)) {
-                        graph = null;
-                    }
-                }
-
-                // Else, The edge should be normal.
-                // Just transfer the graph without changing the nodeTable.
-                if (graph != null) {
-                    graph.setNeedToRevisit(false);
-                    graphWrapper.clear();
-                    if (debug) debugActions(graph, parState, chState, edge);
-                }
-
-                return Pair.of(graph, null);
-            }
-        }
-    }
-
 	///// singleStepTransfer framework.
 	public Pair<ObsGraph, ObsGraph> singleStepTransfer(
 			List<ObsGraph> graphWrapper, 
 			CFAEdge edge,
 			ARGState parState,
 			ARGState chState,
-			boolean isSimpleTransfer,
-			boolean __DEBUG__) {
+			boolean isSimpleTransfer) {
 
         // Debug.
+        boolean __DEBUG__ = true;
         int parId = parState.getStateId(), chId = chState.getStateId();
 
         Preconditions.checkArgument(graphWrapper.size() == 1);
@@ -551,7 +297,19 @@ public class OGTransfer {
                 return Pair.of(null, null);
             } else if(node != null) { // Node != null and no conflict exists.
                 // Node should be simple.
-                assert node.getBlockEdges().contains(edge);
+                assert node.isSimpleNode();
+                boolean edgeInNode = node.getBlockEdges().contains(edge);
+                if (!edgeInNode) { // The node doesn't contain the edge.
+                    // In this case, we should transfer the graph along the coEdge,
+                    // which requires coEdge should exist.
+                    CFAEdge coARGEdge = getCoEdgeFromARG(parState, edge);
+                    if (coARGEdge == null)
+                        throw new UnsupportedOperationException("Cannot find the " +
+                                "coARGEdge of the edge " + edge);
+                    return Pair.of(null, null);
+                }
+
+                // Else, the node contains the edge.
                 OGPORState chOgState = AbstractStates.extractStateByType(chState,
                         OGPORState.class);
                 assert chOgState != null;
@@ -683,6 +441,7 @@ public class OGTransfer {
             } else if (node.hasBeenAddedToGraph() && !edgeInNode) {
                 // The node has been added to the graph, but some edges get deleted
                 // during the revisiting.
+                node.addEdge(edge, null);
                 // FIXME: set last visited edge?
                 graph.setNeedToRevisit(false);
                 graphWrapper.clear();
@@ -854,7 +613,7 @@ public class OGTransfer {
                     // Indeterminacy exists.
                     copiedGraph = handleNonDet(graph, parState, curThd, edge, true);
                     graph.setNeedToRevisit(false);
-                    copiedGraph.setNeedToRevisit(false);
+                    if (copiedGraph != null) copiedGraph.setNeedToRevisit(false);
                     graphWrapper.clear();
 
                     if (__DEBUG__) debugActions(graph, parState, chState, edge);
