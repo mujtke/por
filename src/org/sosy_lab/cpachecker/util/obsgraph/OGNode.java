@@ -758,4 +758,8 @@ public class OGNode implements Copier<OGNode> {
         if (sharedEvents != null)
             addEvents(sharedEvents);
     }
+
+    public void setLheIndex(int pLheIndex) {
+        lheIndex = pLheIndex;
+    }
 }

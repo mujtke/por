@@ -17,6 +17,9 @@ a.out
 *.pdf 
 *.txt
 
+# /build.xml
+build.xml
+
 /.checkstyle
 # /.classpath
 /.factorypath.template

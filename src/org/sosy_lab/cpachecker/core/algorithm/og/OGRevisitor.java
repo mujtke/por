@@ -16,7 +16,6 @@ import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -150,7 +149,13 @@ public class OGRevisitor {
                             List<SharedEvent> deletePlusR = getDeletePlusR(delete, rp);
                             if (allMaximallyAdded(Gw, deletePlusR, ap)) {
                                 Gw.removeDelete(delete, rp);
-//                                Gw.setReadFromAndFromRead(rp, ap);
+                                // >>>>>
+                                // Remove the corresponding cached assume edges.
+                                Gw.removeAssumeEdges(rp, delete);
+                                // FIXME: Remove the events that is after and located in
+                                //  the same node with rp .
+                                // rp.getInNode().removeEventAfter(rp);
+                                // <<<<<
                                 Pair<ObsGraph, ObsGraph> GwAndCoGw =
                                         setReadFromAndFromRead(Gw, rp, ap);
 
@@ -160,17 +165,24 @@ public class OGRevisitor {
 
                                 // coGw may be null.
                                 coGw = GwAndCoGw.getSecond();
+
+                                // FIXME
+                                assert Gw.getNodes().contains(ap.getInNode());
+                                int revisitNodeIndex = Gw.getNodes().indexOf(ap.getInNode());
+
                                 if (coGw != null) {
                                     RG.add(coGw);
                                     if (consistent(coGw)) {
-                                        handleResultForWriteRevisit(result, coGw, rp,
-                                                delete, parState, debug);
+//                                        handleResultForWriteRevisit(result, coGw, rp,
+//                                                delete, parState, debug);
+                                        handleResultForWriteRevisit(result, coGw, revisitNodeIndex, parState, debug);
                                     }
                                 }
 
                                 if (consistent(Gw)) {
-                                    handleResultForWriteRevisit(result, Gw, rp, delete,
-                                            parState, debug);
+//                                    handleResultForWriteRevisit(result, Gw, rp, delete,
+//                                            parState, debug);
+                                    handleResultForWriteRevisit(result, Gw, revisitNodeIndex, parState, debug);
                                 }
                             }
                         }
@@ -245,26 +257,24 @@ public class OGRevisitor {
 
     private void handleResultForWriteRevisit(List<Pair<AbstractState, ObsGraph>> result,
             ObsGraph Gw,
-            SharedEvent rp,
-            List<SharedEvent> delete,
+//            SharedEvent rp,
+//            List<SharedEvent> delete,
+            int revisitNodeIndex,
             ARGState parState,
             boolean debug) {
-        // >>>>>
-        // Remove the corresponding cached assume edges.
-        Gw.removeAssumeEdges(rp, delete);
-        // FIXME: Remove the events that is after and located in
-        //  the same node with rp .
-//        rp.getInNode().removeEventAfter(rp);
-        // <<<<<
 
         if (debug) {
             if (!DebugAndTest.testPO(Gw))
                 System.out.println("Incorrect po relation.");
         }
 
-        AbstractState pivotState = getPivotState(Gw);
-        result.add(Pair.of(pivotState, Gw));
-//        result.add(Pair.of(getPivotState(Gw), Gw));
+        // FIXME: for the Gw, its lastNode (w.inNode) should be visited?
+        //  I.e., let w.inNode.shouldRevisit = false, at the same time
+        //  set the last event in w.inNode as its last-visited event.
+        OGNode revisitNode = Gw.getNodes().get(revisitNodeIndex);
+        revisitNode.setLheIndex(revisitNode.getEvents().size());
+
+        result.add(Pair.of(getPivotState(Gw), Gw));
         Gw.setCreationState(parState);
     }
 

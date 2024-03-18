@@ -378,7 +378,10 @@ public class OGTransfer {
             } else {
                 node.setLastVisitedEdge(edge);
             }
-            visitNode(graph, node, chOgState, node.hasBeenAddedToGraph());
+            // Even if the node has been added to the graph, we may still need
+            // to set relations for the events after lhe.
+//            visitNode(graph, node, chOgState, node.hasBeenAddedToGraph());
+            visitNode(graph, node, chOgState, !node.shouldRevisit());
             if (node.shouldRevisit())
                 graph.setNeedToRevisit(true);
             graph.updateCurrentNodeTable(curThd, node);

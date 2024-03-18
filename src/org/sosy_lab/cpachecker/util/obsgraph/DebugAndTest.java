@@ -24,13 +24,21 @@ public class DebugAndTest {
             fout.write(dotStr);
             fout.close();
 
+//            Process p = Runtime.getRuntime().exec(new String[] {
+//                    "/bin/bash",
+//                    "-c",
+//                    "[[ -e output/instantOG.pdf ]] " +
+//                            "&& /usr/bin/mv output/instantOG.pdf " +
+//                            "output/instantOG.prev.pdf; " +
+//                            "/usr/bin/dot -Tpdf " + instantOG + " -o output/instantOG.pdf"
+//            });
             Process p = Runtime.getRuntime().exec(new String[] {
                     "/bin/bash",
                     "-c",
                     "[[ -e output/instantOG.pdf ]] " +
-                            "&& /usr/bin/mv output/instantOG.pdf " +
+                            "&& $(which mv) output/instantOG.pdf " +
                             "output/instantOG.prev.pdf; " +
-                            "/usr/bin/dot -Tpdf " + instantOG + " -o output/instantOG.pdf"
+                            "$(which dot) -Tpdf " + instantOG + " -o output/instantOG.pdf"
             });
 
             p.waitFor();
