@@ -24,6 +24,8 @@ import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
@@ -93,11 +95,13 @@ public class OGPORState implements AbstractState, Graphable {
     boolean isNormalEnteringEdge;
     private static HashMap<Integer, List<SharedEvent>> edgeVarMap;
     private static Set<String> atomicBegins = ImmutableSet.of("__VERIFIER_atomic_begin");
+    private final Set<Pattern> atomicBeginPatterns = new HashSet<>();
     private static Set<String> atomicEnds = ImmutableSet.of("__VERIFIER_atomic_end");
-    private static Set<String> lockBegins = ImmutableSet.of("pthread_mutex_lock",
-            "pthread_lock", "lock");
-    private static Set<String> lockEnds = ImmutableSet.of("pthread_mutex_unlock",
-            "pthread_unlock", "unlock");
+    private final Set<Pattern> atomicEndPatterns = new HashSet<>();
+    private static Set<String> lockBegins = ImmutableSet.of("pthread_mutex_lock", "pthread_lock", "lock");
+    private final Set<Pattern> lockBeginPatterns = new HashSet<>();
+    private static Set<String> lockEnds = ImmutableSet.of("pthread_mutex_unlock", "pthread_unlock", "unlock");
+    private final Set<Pattern> lockEndPatterns = new HashSet<>();
 
     public void setLocks(Map<String, Stack<String>> pLocks) {
         // Deep copy needed for 'Stack<Sting>'
@@ -187,6 +191,19 @@ public class OGPORState implements AbstractState, Graphable {
             }
         }
         isNormalEnteringEdge = isNormalEdge(pEdge);
+        extractPatterns(atomicBegins, atomicBeginPatterns);
+        extractPatterns(atomicEnds, atomicEndPatterns);
+        extractPatterns(lockBegins, lockBeginPatterns);
+        extractPatterns(lockEnds, lockEndPatterns);
+    }
+
+    private void extractPatterns(Set<String> atomicStmts, Set<Pattern> atomicPatterns) {
+        atomicStmts.forEach(stmt -> {
+            // FIXME: Write regular expression correctly, JDK Version is too low?
+            String patternStr = "^" + stmt + " *(.*)";
+            Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE);
+            atomicPatterns.add(pattern);
+        });
     }
 
     public Map<String, CriticalAreaAction> getCaas() {
@@ -204,11 +221,17 @@ public class OGPORState implements AbstractState, Graphable {
 
         if (edge instanceof CStatementEdge) {
             CStatement cStatement = ((CStatementEdge) edge).getStatement();
-            if (cStatement instanceof CFunctionCallStatement)
-                if (hasAtomicBegin(edge) || hasLockBegin(edge))
+            if (cStatement instanceof CFunctionCallStatement) {
+                String funcName = ((CFunctionCallStatement) cStatement).getFunctionCallExpression()
+                        .getFunctionNameExpression().toString();
+                if (hasAtomicBegin(funcName) || hasLockBegin(funcName))
                     return false;
+            }
         } else if (edge instanceof CFunctionCallEdge) {
-            if (hasAtomicBegin(edge) || hasLockBegin(edge))
+            CFunctionCallEdge functionCallEdge = (CFunctionCallEdge) edge;
+            String funcName = functionCallEdge.getSummaryEdge().getExpression()
+                    .getFunctionCallExpression().getFunctionNameExpression().toString();
+            if (hasAtomicBegin(funcName) || hasLockBegin(funcName))
                 return false;
         }
 
@@ -415,47 +438,68 @@ public class OGPORState implements AbstractState, Graphable {
             return Pair.of(LOCK_FREE, null);
         }
 
-        if (hasAtomicBegin(edge)) {
+        // Else: 1) edge instanceof CStatementEdge.
+        // or 2) edge instanceof CStatementEdge && edge.getStatement() instanceof CFunctionCallStatement.
+        String funcName;
+        if (edge instanceof CStatementEdge) {
+            CFunctionCallStatement cFunctionCallStatement =
+                    (CFunctionCallStatement) ((CStatementEdge) edge).getStatement();
+            funcName = cFunctionCallStatement.getFunctionCallExpression().getFunctionNameExpression().toString();
+        } else {
+            // Edge must be CFunctionCallEdge.
+            CFunctionCallEdge cFunctionCallEdge = (CFunctionCallEdge) edge;
+            funcName = cFunctionCallEdge.getSummaryEdge().getExpression()
+                    .getFunctionCallExpression()
+                    .getFunctionNameExpression().toString();
+        }
+
+        if (hasAtomicBegin(funcName)) {
             return Pair.of(LOCK, "__VERIFIER_atomic_begin");
         }
-        if (hasAtomicEnd(edge)) {
+        if (hasAtomicEnd(funcName)) {
             return Pair.of(UNLOCK, "__VERIFIER_atomic_end");
         }
 
-        if (hasLockBegin(edge)) {
+        if (hasLockBegin(funcName)) {
             return Pair.of(LOCK, getLockVarName(edge));
         }
-        if (hasLockEnd(edge)) {
+        if (hasLockEnd(funcName)) {
             return Pair.of(UNLOCK, getLockVarName(edge));
         }
 
         return Pair.of(LOCK_FREE, null);
     }
 
-    private boolean hasLockEnd(CFAEdge cfaEdge) {
-        for (String le : lockEnds)
-            if (cfaEdge.getRawStatement().contains(le)) return true;
+    private boolean hasLockEnd(String funcName) {
+        for (Pattern pattern : lockBeginPatterns) {
+            if (pattern.matcher(funcName).find()) // Matched.
+                return true;
+        }
         return false;
     }
 
-    private boolean hasAtomicEnd(CFAEdge cfaEdge) {
-        for (String ae : atomicEnds)
-            if (cfaEdge.getRawStatement().contains(ae)) return true;
+    private boolean hasAtomicEnd(String funcName) {
+        for (Pattern pattern : atomicEndPatterns) {
+            if (pattern.matcher(funcName).find()) // Matched.
+                return true;
+        }
         return false;
     }
 
-    private boolean hasLockBegin(CFAEdge cfaEdge) {
-        for (String lb : lockBegins)
-            if (cfaEdge.getRawStatement().contains(lb)) {
-                return !Objects.equals(lb, "lock") ||
-                        !cfaEdge.getRawStatement().contains("unlock");
-            }
+    // FIXME: correct the match method.
+    private boolean hasLockBegin(String funcName) {
+        for (Pattern pattern : lockBeginPatterns) {
+            if (pattern.matcher(funcName).find()) // Matched
+                return true;
+        }
         return false;
     }
 
-    private boolean hasAtomicBegin(CFAEdge cfaEdge) {
-        for (String ab : atomicBegins)
-            if (cfaEdge.getRawStatement().contains(ab)) return true;
+    private boolean hasAtomicBegin(String funcName) {
+        for (Pattern pattern : atomicBeginPatterns) {
+            if (pattern.matcher(funcName).find()) // Matched
+                return true;
+        }
         return false;
     }
 

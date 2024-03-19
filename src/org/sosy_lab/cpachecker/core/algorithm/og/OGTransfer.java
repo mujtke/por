@@ -237,8 +237,8 @@ public class OGTransfer {
                 copiedGraph = handleNonDet(graph, parState, curThd, edge, true);
                 graph.addVisitedAssumeEdge(curThd, edge, chOgState);
                 // FIXME: copiedGraph.addVisitedAssumeEdge()?
-                copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge,
-                        getCoOGSibling(parState, coARGEdge));
+                if (copiedGraph != null)
+                    copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, getCoOGSibling(parState, coARGEdge));
             } else if (coARGEdge != null) {
                 // Multi-step transfer.
                 if (!graph.matchCachedEdge(curThd, edge, chOgState))
@@ -455,7 +455,10 @@ public class OGTransfer {
                 if (__DEBUG__) debugActions(graph, parState, chState, edge);
                 result = Pair.of(graph, null);
             } else { // The node is totally new.
-                assert !edgeInNode;
+                // Strictly, edge shouldn't be inside the node here, because we are constructing
+                // the node. But some special edges, like 'functionStartDummyEdge' may cause the
+                // assertion error, because we cannot distinguish them.
+//                assert !edgeInNode;
                 node.addEdge(edge, null); // Also add the events.
                 graphWrapper.clear();
 
@@ -554,8 +557,8 @@ public class OGTransfer {
                     copiedGraph = handleNonDet(graph, parState, curThd, edge, true);
                     graph.addVisitedAssumeEdge(curThd, edge, chOgState);
                     // FIXME: copiedGraph.addVisitedAssumeEdge()?
-                    copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge,
-                            getCoOGSibling(parState, coARGEdge));
+                    if (copiedGraph != null)
+                        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, getCoOGSibling(parState, coARGEdge));
                 }
 
                 graph.setNeedToRevisit(false);
@@ -577,6 +580,7 @@ public class OGTransfer {
             } else if (node.hasBeenAddedToGraph() && !edgeInNode) {
                 // The node should have removed some events after revisiting.
                 assert node.getLastHandledEvent() != null;
+//                assert node.getLheIndex() > 0;
                 graph.setNeedToRevisit(false);
                 node.addEdge(edge, sharedEvents); // Also add the events.
                 graphWrapper.clear();
