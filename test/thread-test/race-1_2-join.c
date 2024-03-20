@@ -10,8 +10,8 @@ typedef unsigned pthread_mutex_t;
 extern void pthread_create(pthread_t *, void *, void *(*)(void *), void *);
 extern void pthread_mutex_lock(pthread_t *);
 extern void pthread_mutex_unlock(pthread_t *);
-extern void pthread_mutex_init(pthread_mutex_t *, int);
-extern void pthread_join(pthread_t , void *);
+extern void pthread_mutex_init(pthread_mutex_t *, void *);
+extern void pthread_join(pthread_t , void **);
 extern void pthread_mutex_destroy(pthread_mutex_t *);
 
 
@@ -19,6 +19,7 @@ extern void pthread_mutex_destroy(pthread_mutex_t *);
 extern void assert(int);
 extern void abort(void);
 
+extern void abort(void);
 extern void __VERIFIER_atomic_begin(void);
 extern void __VERIFIER_atomic_end(void);
 // #include <assert.h>
@@ -48,8 +49,12 @@ int module_init() {
       //enable thread 1
       pthread_create(&t1, NULL, thread1, NULL);
       //race
-      //pdev = 2;
-      //ldv_assert(pdev==2);
+      __VERIFIER_atomic_begin();
+      pdev = 2;
+      __VERIFIER_atomic_end();
+      __VERIFIER_atomic_begin();
+      ldv_assert(pdev==2);
+      __VERIFIER_atomic_end();
       return 0;
    }
    //not a race
@@ -62,12 +67,8 @@ int module_init() {
 void module_exit() {
    void *status;
    //race
-   __VERIFIER_atomic_begin();
-   pdev = 4;
-   __VERIFIER_atomic_end();
-   __VERIFIER_atomic_begin();
-   ldv_assert(pdev==4);
-   __VERIFIER_atomic_end();
+   //pdev = 4;
+   //ldv_assert(pdev==4);
    pthread_join(t1, &status);
    pthread_mutex_destroy(&mutex);
    //not a race

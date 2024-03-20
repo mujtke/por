@@ -6,6 +6,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
@@ -461,11 +462,21 @@ public class OGRevisitor {
         // FIXME: Add the events that are in the same node with and after r to delete?
         assert r.getInNode().getBlockEdges().contains(r.getInEdge()) :
                 "Edge: " + r.getInEdge() + " not in node: \n" + r.getInNode();
+        List<CFAEdge> blockEdges = r.getInNode().getBlockEdges();
         for (SharedEvent e : r.getInNode().getEvents()) {
-            assert r.getInNode().getBlockEdges().contains(e.getInEdge()) :
+//            assert r.getInNode().getBlockEdges().contains(e.getInEdge()) :
+//                    "Edge: " + r.getInEdge() + " not in node: \n" + r.getInNode();
+//            if (r.getInNode().getBlockEdges().indexOf(e.getInEdge()) >
+//                    r.getInNode().getBlockEdges().indexOf(r.getInEdge())) {
+//                delete.add(e);
+            // FIXME: w and r locates in the same node, should we regard w as the event
+            //  after the r?
+            assert blockEdges.contains(e.getInEdge()) :
                     "Edge: " + r.getInEdge() + " not in node: \n" + r.getInNode();
-            if (r.getInNode().getBlockEdges().indexOf(e.getInEdge()) >
-                    r.getInNode().getBlockEdges().indexOf(r.getInEdge())) {
+            if (blockEdges.indexOf(e.getInEdge()) > blockEdges.indexOf(r.getInEdge())) {
+                delete.add(e);
+            } else if (blockEdges.indexOf(e.getInEdge()) == blockEdges.indexOf(r.getInEdge())
+                    && e.getAType() == WRITE) {
                 delete.add(e);
             }
         }

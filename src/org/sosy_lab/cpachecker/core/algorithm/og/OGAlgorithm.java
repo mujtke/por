@@ -10,16 +10,15 @@ import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.exceptions.CPAEnabledAnalysisPropertyViolationException;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
+import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.dumpToJson;
@@ -187,6 +186,18 @@ public class OGAlgorithm implements Algorithm {
 
             AbstractState suc = precAdjustmentResult.abstractState();
             Precision pre = precAdjustmentResult.precision();
+            Action action = precAdjustmentResult.action();
+
+            // FIXME: handle the action?
+            if (action == Action.BREAK) {
+                // NO stop, so break means the termination?
+                if (AbstractStates.isTargetState(suc)) {
+                    reachedSet.add(suc, pre);
+                    waitlist.add(suc);
+                    return true;
+                }
+            }
+
             chState = (ARGState) suc;
 
             // Perform all possible single-step transferring.

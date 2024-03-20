@@ -256,7 +256,13 @@ public class OGTransfer {
                 return Pair.of(null, null);
             } else if(node != null) { // Node != null and no conflict exists.
                 // Node should be simple.
-                assert node.getBlockEdges().contains(edge);
+//                assert node.getBlockEdges().contains(edge);
+                // FIXME: if the edge not in the node?
+                if (!node.getBlockEdges().contains(edge)) {
+                    return Pair.of(null, null);
+                }
+
+                // Else, the node contains the edge.
                 OGPORState chOgState = AbstractStates.extractStateByType(chState,
                         OGPORState.class);
                 assert chOgState != null;

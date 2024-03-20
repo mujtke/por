@@ -5,10 +5,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.ast.AExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CFunctionCallStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CIdExpression;
-import org.sosy_lab.cpachecker.cfa.ast.c.CStatement;
-import org.sosy_lab.cpachecker.cfa.ast.c.CUnaryExpression;
+import org.sosy_lab.cpachecker.cfa.ast.c.*;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
@@ -471,7 +468,7 @@ public class OGPORState implements AbstractState, Graphable {
     }
 
     private boolean hasLockEnd(String funcName) {
-        for (Pattern pattern : lockBeginPatterns) {
+        for (Pattern pattern : lockEndPatterns) {
             if (pattern.matcher(funcName).find()) // Matched.
                 return true;
         }
@@ -503,6 +500,7 @@ public class OGPORState implements AbstractState, Graphable {
         return false;
     }
 
+    // FIXME: Use table to record the extracted lock name.
     private String getLockVarName(CFAEdge edge) {
         List<? extends AExpression> arguments;
         if (edge instanceof CFunctionCallEdge) {
@@ -521,8 +519,25 @@ public class OGPORState implements AbstractState, Graphable {
         AExpression arg = arguments.iterator().next();
         Preconditions.checkArgument(arg instanceof CUnaryExpression);
         CUnaryExpression unaryExpression = (CUnaryExpression) arg;
-        CIdExpression lockIdExpression = (CIdExpression) unaryExpression.getOperand();
-        return lockIdExpression.getName();
+        CIdExpression lockIdExpression;
+        String lockName;
+        try {
+            lockIdExpression = (CIdExpression) unaryExpression.getOperand();
+            lockName = lockIdExpression.getName();
+        } catch (ClassCastException e) { // Operand is not the CIdExpression.
+            try {
+                // Just handle the simplest case, like: lock(&lock.mutex);
+                CFieldReference fieldReference = (CFieldReference) unaryExpression.getOperand();
+                CExpression fieldOwner = fieldReference.getFieldOwner();
+                CIdExpression fieldOwnerIdExpr = (CIdExpression) fieldOwner;
+                lockName = fieldOwnerIdExpr.getName() + "." + fieldReference.getFieldName();
+            } catch (ClassCastException ee) { // Operand is not the simple field reference expression.
+                // FIXME: How to handle the complex field reference.
+                throw new ClassCastException("Complex lock var name is not supported yet.");
+            }
+        }
+
+        return lockName;
     }
 
     private CriticalAreaAction handleLock(Stack<String> curLocks,
