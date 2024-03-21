@@ -577,6 +577,8 @@ public class OGTransfer {
             // edgeType == 1
         } else if (edgeType == 2) { // Shared non-assumption edge.
             if (node.hasBeenAddedToGraph() && edgeInNode) {
+                // FIXME: Some events may get deleted during the revisit. Should
+                //  We add them here?
                 node.setLastVisitedEdge(edge);
                 graph.setNeedToRevisit(false);
                 graphWrapper.clear();
