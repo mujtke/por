@@ -376,8 +376,8 @@ public class ObsGraph implements Copier<ObsGraph> {
          for (i = 0; i < n; i++) {
              for (j = 0; j < n; j++) {
                  OGNode nodei = nodes.get(i), nodej = nodes.get(j);
-                 if (nodei.getSuccessors().contains(nodej)
-                 || nodei.getReadBy().contains(nodej)) {
+                 if (nodei.getSuccessors().contains(nodej) /* po */
+                         || nodei.getReadBy().contains(nodej) /* rf */) {
                      porf[i][j] = true;
                  }
              }

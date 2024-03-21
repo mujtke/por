@@ -762,4 +762,24 @@ public class OGNode implements Copier<OGNode> {
     public void setLheIndex(int pLheIndex) {
         lheIndex = pLheIndex;
     }
+
+    // Some events get deleted during the revisit, for example: in X = Y1,
+    // Write(X) gets deleted because X reads from a new location.
+    // We need to re-add Write(X) when it should be done.
+    public void addDeletedEvents(List<SharedEvent> sharedEvents, CFAEdge edge) {
+        int addedEventsNum = 0;
+        List<SharedEvent> toAdd = new ArrayList<>();
+        for (int i = events.size() - 1; i >= 0; i--) {
+            SharedEvent e = events.get(i);
+            if (!Objects.equals(e.getInEdge(), edge))
+                break;
+            addedEventsNum++;
+//            if (!sharedEvents.contains(e)) // 'Equals' method undefined in SharedEvent.
+//                toAdd.add(events.get(i));
+        }
+
+        // FIXME: an strong assumption: the order of the events keeps unchanged when these events
+        //  are added to the node.
+        addEvents(sharedEvents.subList(addedEventsNum, sharedEvents.size()));
+    }
 }

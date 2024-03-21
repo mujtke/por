@@ -579,6 +579,7 @@ public class OGTransfer {
             if (node.hasBeenAddedToGraph() && edgeInNode) {
                 // FIXME: Some events may get deleted during the revisit. Should
                 //  We add them here?
+                node.addDeletedEvents(sharedEvents, edge);
                 node.setLastVisitedEdge(edge);
                 graph.setNeedToRevisit(false);
                 graphWrapper.clear();
