@@ -553,7 +553,7 @@ public class OGRevisitor {
                 break;
 
             case "mo":
-                Preconditions.checkArgument(e1.getMoBefore() != e2);
+//                Preconditions.checkArgument(e1.getMoBefore() != e2);
                 e1.setMoBefore(e2);
                 e2.setMoAfter(e1);
                 if (!e1n.getMoBefore().contains(e2n)) e1n.getMoBefore().add(e2n);
@@ -596,9 +596,9 @@ public class OGRevisitor {
 
         // >>>>>
         // FIXME: from read?
-        for (OGNode n : A.getFromRead()) {
-            if (n == B || porf(n, B)) return true;
-        }
+//        for (OGNode n : A.getFromRead()) {
+//            if (n == B || porf(n, B)) return true;
+//        }
         // <<<<<
 
         return false;

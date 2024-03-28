@@ -1,6 +1,7 @@
 package org.sosy_lab.cpachecker.cpa.bdd;
 
 import com.google.common.base.Preconditions;
+import de.uni_freiburg.informatik.ultimate.smtinterpol.Config;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -9,13 +10,21 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.ast.c.*;
 import org.sosy_lab.cpachecker.cfa.model.*;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CDeclarationEdge;
 import org.sosy_lab.cpachecker.cfa.types.c.CBasicType;
 import org.sosy_lab.cpachecker.cfa.types.c.CNumericTypes;
 import org.sosy_lab.cpachecker.cfa.types.c.CSimpleType;
 import org.sosy_lab.cpachecker.cfa.types.c.CType;
+import org.sosy_lab.cpachecker.core.defaults.precision.VariableTrackingPrecision;
+import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
+import org.sosy_lab.cpachecker.cpa.pointer2.PointerState;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
@@ -37,6 +46,10 @@ public class ConditionalStatementHandler {
     private final NamedRegionManager nrmgr;
     private final PredicateManager predmgr;
     private final BitvectorComputer bvComputer;
+
+    // Debug.
+    private Configuration config;
+    private CFA cfa;
 
     @Option(
             secure = true,
@@ -67,13 +80,16 @@ public class ConditionalStatementHandler {
                 nrmgr,
                 predmgr,
                 pCfa.getMachineModel());
+
+        config = pConfig;
+        cfa = pCfa;
     }
 
     /**
      * FIXME
      * Before setting read-from relation, we should handle the case that r locates in
      * an assume statement (e.g., x > 1). When setting r to read from w that makes
-     * the condition not hold, i.e., (x > 1) not hold, set hasConflict as true. If w is
+     * the condition not hold, i.e., (x > 1) not hold, set easConflict as true. If w is
      * an indeterminate assignment, we set hasIndeterminacy as true.
      * @return <A, B>
      * A = true if letting r read from w leads to conflict.
@@ -408,9 +424,46 @@ public class ConditionalStatementHandler {
                 "Calculate formula for the write event failed.");
 
         if (nrmgr.makeAnd(assumeEvaluated, assignFormula).isFalse()) {
-//            // Change the node.
-//            cor = G.changeAssumeNode(r);
             hasConflict = true;
+        } else if (!nrmgr.makeAnd(assumeEvaluated, assignFormula).isTrue()) {
+            // FIXME: neither false nor true, should we use BDDState rather than wEdge to
+            //  compute the satisfiability?
+            // Debug.
+            CAssumeEdge assumeEdge = (CAssumeEdge) rEdge;
+            PointerState pointerInfo =
+                    AbstractStates.extractStateByType(wNode.getSucState(),
+                            PointerState.class);
+            BDDState wBDDState =
+                    AbstractStates.extractStateByType(wNode.getSucState(),
+                            BDDState.class);
+            assert wBDDState != null;
+
+            Precision precision;
+            try {
+                precision =
+                        VariableTrackingPrecision.createStaticPrecision(config, cfa.getVarClassification(),
+                                BDDCPA.class);
+            } catch (InvalidConfigurationException e) {
+                throw new RuntimeException(e);
+            }
+
+            final Region[] operand =
+                    bvComputer.evaluateVectorExpressionWithPointerState(
+                            varClass.getPartitionForEdge(assumeEdge),
+                            assumeEdge.getExpression(),
+                            CNumericTypes.INT,
+                            assumeEdge.getSuccessor(),
+                            pointerInfo,
+                            (VariableTrackingPrecision) precision);
+
+            // FIXME: Use bddState's bitvectorManager and NamedRegionManager. why?
+            BitvectorManager bvMgr = wBDDState.getBvmgr();
+            NamedRegionManager nrMgr = wBDDState.getManager();
+            Region evaluated = bvMgr.makeOr(operand);
+            if (!assumeEdge.getTruthAssumption())
+                evaluated = nrMgr.makeNot(evaluated);
+            Region newRegion = nrMgr.makeAnd(wBDDState.getRegion(), evaluated);
+            hasConflict = newRegion.isFalse();
         }
 
         if(hasIndeterminacy) {
@@ -463,5 +516,46 @@ public class ConditionalStatementHandler {
         }
 
         return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T extends ConfigurableProgramAnalysis> T
+    retriveCPA(final ConfigurableProgramAnalysis pCPA, Class<T> pClass)
+            throws InvalidConfigurationException {
+        if (pCPA.getClass().equals(pClass)) {
+            return (T) pCPA;
+        } else if (pCPA instanceof WrapperCPA) {
+            WrapperCPA wCPAs = (WrapperCPA) pCPA;
+            T result = wCPAs.retrieveWrappedCpa(pClass);
+
+            if (result != null) {
+                return result;
+            }
+        }
+        throw new InvalidConfigurationException("could not find the CPA " + pClass + " from " + pCPA);
+    }
+
+    // Debug.
+    public boolean isFalse(BDDState bddState, CFAEdge edge) {
+        CAssumeEdge assumeEdge = (CAssumeEdge) edge;
+        final Region[] operand;
+        BitvectorManager bvMgr = bddState.getBvmgr();
+        NamedRegionManager nrMgr = bddState.getManager();
+        try {
+            operand = bvComputer.evaluateVectorExpressionWithPointerState(
+                    varClass.getPartitionForEdge(assumeEdge),
+                    assumeEdge.getExpression(),
+                    CNumericTypes.INT,
+                    assumeEdge.getSuccessor(),
+                    null,
+                    null);
+        } catch (UnsupportedCodeException e) {
+            throw new RuntimeException(e);
+        }
+        Region evaluated = bvMgr.makeOr(operand);
+        if (!assumeEdge.getTruthAssumption())
+            evaluated = nrMgr.makeNot(evaluated);
+        Region newRegion = nrMgr.makeAnd(bddState.getRegion(), evaluated);
+        return newRegion.isFalse();
     }
 }

@@ -78,6 +78,9 @@ public class OGNode implements Copier<OGNode> {
     // FIXME: just used for the node that has been added to the graph. For a totally
     //  new node, set as null.
     private CFAEdge lastVisitedEdge;
+    // Indicating whether the node is complete. Because of revisiting, the node may
+    // become incomplete.
+    private boolean isComplete = true;
 
     public OGNode(final CFAEdge pBlockStartEdge,
                   final List<CFAEdge> pBlockEdges,
@@ -145,6 +148,7 @@ public class OGNode implements Copier<OGNode> {
         nNode.lheIndex = this.lheIndex;
         nNode.lastVisitedEdge = this.lastVisitedEdge;
         nNode.hasBeenAddedToGraph = this.hasBeenAddedToGraph;
+        nNode.isComplete = this.isComplete;
 
         /* preState & sucState */
         nNode.preState = this.preState; /* Shallow copy. */
@@ -616,7 +620,9 @@ public class OGNode implements Copier<OGNode> {
 
         // FIXME: Does last-visited event get updated only when revisiting?
         //  And what if nd contains more than one sharedEvent?
-        // TODO?
+
+        // FIXME
+        isComplete = false;
     }
 
     public boolean shouldRevisit() {
@@ -735,6 +741,9 @@ public class OGNode implements Copier<OGNode> {
             rmEdges.add(blockEdges.get(i));
         }
         blockEdges.removeAll(rmEdges);
+
+        // FIXME
+        isComplete = false;
     }
 
     // Remove events that come from the edge.
@@ -743,6 +752,8 @@ public class OGNode implements Copier<OGNode> {
         events.removeIf(filter);
         Rs.removeIf(filter);
         Ws.removeIf(filter);
+        // FIXME
+        isComplete = false;
     }
 
     public boolean hasBeenAddedToGraph() {
@@ -767,19 +778,36 @@ public class OGNode implements Copier<OGNode> {
     // Write(X) gets deleted because X reads from a new location.
     // We need to re-add Write(X) when it should be done.
     public void addDeletedEvents(List<SharedEvent> sharedEvents, CFAEdge edge) {
-        int addedEventsNum = 0;
-        List<SharedEvent> toAdd = new ArrayList<>();
-        for (int i = events.size() - 1; i >= 0; i--) {
-            SharedEvent e = events.get(i);
-            if (!Objects.equals(e.getInEdge(), edge))
-                break;
-            addedEventsNum++;
-//            if (!sharedEvents.contains(e)) // 'Equals' method undefined in SharedEvent.
-//                toAdd.add(events.get(i));
+        // Precondition: this node contains the edge.
+        SharedEvent lastEvent = events.get(events.size() - 1);
+        assert lastEvent != null;
+        if (!Objects.equals(edge, lastEvent.getInEdge())) {
+            // If the last event's inEdge != edge, then we don't need to add the sharedEvents.
+            return;
         }
 
-        // FIXME: an strong assumption: the order of the events keeps unchanged when these events
-        //  are added to the node.
+        // Else, we need to add the events.
+        // At least, one event from the edge is in events. So, we add events of
+        // sharedEvents form index 1 at least.
+        int addedEventsNum = 0;
+        for (int i = 0; i < sharedEvents.size(); i++) {
+            SharedEvent e = events.get(i);
+            addedEventsNum++;
+            // FIXME: Assumption: in an edge, there is a read or write to the same var at
+            //  most.
+            if (e.getAType() == lastEvent.getAType()
+                    && Objects.equals(e.getVar().getName(), lastEvent.getVar().getName())) {
+                break;
+            }
+        }
+
+        // FIXME: a strong assumption: the order of the events keeps unchanged when these
+        //  events are added to the node.
         addEvents(sharedEvents.subList(addedEventsNum, sharedEvents.size()));
+    }
+
+    public void setIsComplete(boolean pIsComplete) { isComplete = pIsComplete; }
+    public boolean isComplete() {
+        return isComplete;
     }
 }

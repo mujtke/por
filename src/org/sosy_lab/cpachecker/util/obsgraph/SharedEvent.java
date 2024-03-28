@@ -21,6 +21,7 @@ public class SharedEvent implements Copier<SharedEvent> {
         return allMoBefore;
     }
 
+    // A function for each part.
     public void removeAllRelations() {
         // Remove rf, fr and mo for this event.
         // Rf.
@@ -156,6 +157,16 @@ public class SharedEvent implements Copier<SharedEvent> {
             coEvent.moBefore = moBefore;
             moBefore.moAfter = coEvent;
             moBefore = null;
+        }
+    }
+
+    public void removeMoAfter() {
+        OGNode moAfterInNode = moAfter.inNode;
+        moAfter.setMoBefore(null);
+        moAfter = null;
+        if (inNode.getRefCount("ma", moAfterInNode) < 1) {
+            inNode.getMoAfter().remove(moAfterInNode);
+            moAfterInNode.getMoBefore().remove(inNode);
         }
     }
 

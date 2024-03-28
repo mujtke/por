@@ -1,9 +1,19 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import org.json.JSONObject;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.bdd.BDDState;
+import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
+import org.sosy_lab.cpachecker.util.predicates.regions.Region;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -374,5 +384,27 @@ public class DebugAndTest {
         public List<State> getReached() {
             return reached;
         }
+    }
+
+    // Given a state and assumption edge, test whether they are compatible.
+    public static boolean isFalse(AbstractState state,
+            CFAEdge assumeEdge) {
+        GlobalInfo globalInfo = GlobalInfo.getInstance();
+        ConditionalStatementHandler conditionalStatementHandler;
+        try {
+            conditionalStatementHandler = new ConditionalStatementHandler(
+                    Configuration.defaultConfiguration(),
+                    globalInfo.getEdgeInfo().getCFA(),
+                    globalInfo.getLogManager());
+        } catch (InvalidConfigurationException e) {
+            throw new RuntimeException(e);
+        }
+
+        boolean result = true;
+        BDDState bddState = AbstractStates.extractStateByType(state, BDDState.class);
+        assert bddState != null;
+        result = conditionalStatementHandler.isFalse(bddState, assumeEdge);
+
+        return result;
     }
 }
