@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
@@ -260,7 +261,7 @@ public class OGTransfer {
                         toCheckEvents = new ArrayList<>();
                 // In this case, we must check the conflict.
                 shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
-                if (isConflict(graph, curThd, node, edge)) {
+                if (isConflict(graph, curThd, node, edge, toCheckEvents, true)) {
                     return Pair.of(null, null);
                 }
 //                assert node.getBlockEdges().contains(edge);
@@ -310,7 +311,8 @@ public class OGTransfer {
             }
             // edgeType = 2
         } else { // Shared assumption edge.
-            if (node != null && isConflict(graph, curThd, node, edge)) {
+            if (node != null
+                    && isConflict(graph, curThd, node, edge, null, true)) {
                 return Pair.of(null, null);
             } else if(node != null) { // Node != null and no conflict exists.
                 // Node should be simple.
@@ -596,8 +598,7 @@ public class OGTransfer {
                 List<SharedEvent> toAddEvents = new ArrayList<>(),
                         toCheckEvents = new ArrayList<>();
                 shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
-                if (!toCheckEvents.isEmpty()
-                        && isConflict(graph, curThd, node, edge)) {
+                if (isConflict(graph, curThd, node, edge, toCheckEvents, false)) {
                     // TODO: rollback before node's start point.
                     transferRollback();
                     graphWrapper.clear();
@@ -620,8 +621,7 @@ public class OGTransfer {
                 List<SharedEvent> toAddEvents = new ArrayList<>(),
                         toCheckEvents = new ArrayList<>();
                 shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
-                if (!toCheckEvents.isEmpty()
-                        && isConflict(graph, curThd, node, edge)) {
+                if (isConflict(graph, curThd, node, edge, toCheckEvents, false)) {
                     // TODO: rollback before node's start point.
                     transferRollback();
                     graphWrapper.clear();
@@ -706,13 +706,56 @@ public class OGTransfer {
 
     // Check whether we need to check conflict caused by mo.
     // If we need to add some shared events to the node, then we put them into
-    // toAddEvents.
+    // toAddEvents. If we need to check conflict, we put the events into toCheckEvents.
     private void shouldCheckConflict(OGNode node,
             CFAEdge edge,
             List<SharedEvent> sharedEvents,
             List<SharedEvent> toAddEvents,
             List<SharedEvent> toCheckEvents) {
         // TODO
+        toAddEvents.addAll(sharedEvents);
+        int edgeStartIndex = -1, i;
+        for (i = 0; i < node.getEvents().size(); i++) {
+            SharedEvent e = node.getEvents().get(i);
+            if (edgeStartIndex >= 0) {
+                for (Iterator<SharedEvent> it = toAddEvents.iterator(); it.hasNext();) {
+                    SharedEvent ei = it.next();
+                    if (ei.isRead() && ei.accessSameVarWith(e))
+                        // ei will be covered by e.
+                        it.remove();
+                }
+
+                if (i > edgeStartIndex
+                        && !Objects.equals(e.getInEdge(), edge)
+                        && e.isWrite()) {
+                    for (Iterator<SharedEvent> it = toAddEvents.iterator(); it.hasNext();) {
+                        SharedEvent ei = it.next();
+                        if (ei.isWrite() && ei.accessSameVarWith(e))
+                            // ei will be covered by e.
+                            it.remove();
+                    }
+                }
+            }
+
+            if (edgeStartIndex < 0 && Objects.equals(e.getInEdge(), edge)) {
+                edgeStartIndex = node.getEvents().indexOf(e);
+            }
+        }
+
+        if (edgeStartIndex >= 0) { // Node has added some events in sharedEvents.
+            for (int j = edgeStartIndex; j < node.getEvents().size(); j++) {
+                SharedEvent ej = node.getEvents().get(j);
+                if (!Objects.equals(ej.getInEdge(), edge))
+                    break;
+                if (ej.isWrite()) // Only check write events.
+                    toCheckEvents.add(ej);
+            }
+        }
+        // Writes newly added should also be checked.
+        toAddEvents.forEach(e -> {
+            if (e.isWrite())
+                toCheckEvents.add(e);
+        });
     }
 
     // Send the graph back to a certain state.
@@ -740,7 +783,9 @@ public class OGTransfer {
                 // the edge at this time.
                 assert !node.isSimpleNode() && node.getBlockEdges().contains(edge);
                 // We will enter the node if no conflicts exist.
-                if (isConflict(graph, curThd, node, edge)) {
+                // FIXME: strong assumption: block start edge contains no writes.
+                //  I.e., toCheckEvents = null.
+                if (isConflict(graph, curThd, node, edge, null, true)) {
                     return Pair.of(null, null);
                 }
                 graph.setNeedToRevisit(false);
@@ -773,7 +818,7 @@ public class OGTransfer {
             if (node != null) { // Simple node.
                 assert !node.isSimpleNode();
                 // We will enter the node if no conflicts exist.
-                if (isConflict(graph, curThd, node, edge)) {
+                if (isConflict(graph, curThd, node, edge, null, true)) {
                     return Pair.of(null, null);
                 }
 
@@ -808,84 +853,6 @@ public class OGTransfer {
         }
 
         return result;
-    }
-
-    private @NonNull Triple<Integer, CFAEdge, Boolean> isInsideNode(
-            ARGState parState,
-            OGNode node,
-            CFAEdge edge,
-            List<SharedEvent> sharedEvents,
-            CriticalAreaAction caa) {
-        if (node.isSimpleNode()) {
-            return node.contains(edge) == 0 ? Triple.of(0, edge, true)
-                    : Triple.of(-1, edge, false);
-        } else {
-            // Complex node.
-            int idx = node.contains(edge);
-            if (idx >= 0) {
-                return Triple.of(idx, edge, true);
-            } else {
-                // The node (complex) doesn't contain the edge.
-                if (node.getLastVisitedEdge() != null) {
-                    // We are inside a node that has been added to the graph.
-                    // FIXME: Use "if(node.getLastHandledEvent() != null)"?
-                    int lastVisitEdgeIdx = -1;
-                    boolean edgeHasBeenVisited = false;
-                    if (edge instanceof AssumeEdge
-                            && (sharedEvents == null || sharedEvents.isEmpty())) {
-                        // The Replacing and adding of the edge won't happen when edge
-                        // access shared vars.
-                        // When edge's coEdge is inside the node but not in the ARG, we
-                        // may need to replace it with the edge.
-                        CFAEdge coCFAEdge = getCoEdgeFromCFA(edge),
-                                coARGEdge = getCoEdgeFromARG(parState, edge);
-
-                        if (node.getBlockEdges().contains(coCFAEdge)) {
-                            // coEdge is inside the node, replacement may happen.
-                            if (coARGEdge == null) {
-                                // Replacing.
-                                node.replaceCoEdge(edgeVarMap, edge, coCFAEdge);
-                                assert node.getBlockEdges().contains(edge) :
-                                        "The edge is not in the node after " +
-                                                "replacing:" + edge;
-                                lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
-                            }
-                            // Else, there is no need to replace coEdge.
-                            // Also, don't add the edge.
-                            // TODO
-                        } else {
-                            // Replacement shouldn't happen.
-                            // Add the edge to the node.
-                            node.getBlockEdges().add(edge);
-                            node.addEvents(sharedEvents);
-                            lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
-                        }
-                    } else {
-                        // Not an assumption edge, or
-                        // Assumption edge with shared vars.
-                        node.getBlockEdges().add(edge);
-                        node.addEvents(sharedEvents);
-                        lastVisitEdgeIdx = node.getBlockEdges().indexOf(edge);
-                    }
-
-                    return Triple.of(lastVisitEdgeIdx, edge, edgeHasBeenVisited);
-                } else {
-                    if (caa == NOT_IN ||
-                            /* FIXME: When we are inside a node but the node doesn't
-                                contain the edge? */
-                            (caa == CONTINUE && node.getLastHandledEvent() != null)) {
-                        // We haven't entered a critical area yet.
-                        return Triple.of(-1, edge, false);
-                    } else {
-                        // We are inside a node that hasn't been added to the graph yet.
-                        // Add the edge to the node.
-                        node.getBlockEdges().add(edge);
-                        node.addEvents(sharedEvents);
-                        return Triple.of(node.getBlockEdges().size(), edge, false);
-                    }
-                }
-            }
-        }
     }
 
     // Get edge's coEdge that comes from parState.
@@ -959,7 +926,7 @@ public class OGTransfer {
      *                     the container has no graph anymore, which means the graph has
      *                     been transferred, then there is no need to handle the left
      *                     states.
-     * @return
+     * @return pair of the target state and the graph.
      */
     public Pair<AbstractState, ObsGraph> multiStepTransfer(Vector<AbstractState> waitlist,
                                   ARGState leadState,
@@ -1036,10 +1003,9 @@ public class OGTransfer {
      * @return true, if conflicted.
      */
     private boolean isConflict(ObsGraph graph, String curThread, OGNode curNode,
-            CFAEdge edge, List<SharedEvent> toCheckEvents, boolean isForNode) {
-        // TODO
-        // Check porf-deduced conflicts. Only for complete nodes.
-        if (curNode.isComplete()) {
+            CFAEdge edge, List<SharedEvent> toCheckEvents, boolean shouldCheckNode) {
+        // Check porf-deduced conflicts. Only when checkNode is true.
+        if (shouldCheckNode) {
             Set<OGNode> otherNodes = new HashSet<>();
             graph.getNodeTable().forEach((k, v) -> {
                 if (!curThread.equals(k) && v != null && !v.isInGraph())
@@ -1053,70 +1019,52 @@ public class OGTransfer {
             }
         }
 
-        // Check mo-deduced conflicts. For complete and incomplete nodes.
-        // Construct mo relations.
-        List<SharedEvent> builtMoEvents = constructMO(graph, curNode, edge);
+        // Check mo-deduced conflicts.
+        // Get mo predecessors.
+        List<SharedEvent> moPredecessors = new ArrayList<>();
+        getMoPredecessors(graph, toCheckEvents, moPredecessors);
 
-        // Find all possible conflicts, and if there is any, we should erase the all mo
-        // relations built.
-        if (builtMoEvents != null) {
-            for (SharedEvent bme : builtMoEvents) {
-                SharedEvent mop = bme.getMoAfter();
-                while (mop != null) {
-                    // Check conflict.
-                    // FIXME: it's enough to use rb only?
-                    for (SharedEvent moprb : mop.getReadBy()) {
-                        if (!moprb.getInNode().isInGraph()) {
-                            // Conflict found, we should erase the built mo relations.
-                            builtMoEvents.forEach(SharedEvent::removeMoAfter);
-                            return true;
-                        }
+        // Find possible conflict.
+        for (SharedEvent mpe : moPredecessors) {
+            while (mpe != null) {
+                // Check conflict.
+                // FIXME: it's enough to use rb only?
+                for (SharedEvent mperb : mpe.getReadBy()) {
+                    if (!mperb.getInNode().isInGraph()) { // Conflict found.
+                        moPredecessors.clear();
+                        return true;
                     }
-                    mop = mop.getMoAfter();
                 }
+                mpe = mpe.getMoAfter();
             }
         }
 
         return false;
     }
 
-    // Build the mo relations and return the list of events that we build mo relations
-    // for.
-    private List<SharedEvent> constructMO(ObsGraph graph, OGNode curNode, CFAEdge edge) {
-        List<SharedEvent> builtMoEvents = null;
-        if (curNode.isComplete()) {
-            builtMoEvents = new ArrayList<>(curNode.getWs());
-        } else {
-            // Incomplete node.
-            builtMoEvents = curNode.getWs().stream().filter(e ->
-                            Objects.equals(e.getInEdge(), edge))
-                            .collect(Collectors.toList());
-        }
+    // Get all direct mo-predecessors of events in toCheckEvents.
+    private void getMoPredecessors(ObsGraph graph,
+            List<SharedEvent> toCheckEvents,
+            List<SharedEvent> moPredecessors) {
+        if (toCheckEvents == null) return;
 
         // Build mo relations for builtMoEvents.
         OGNode n = graph.getLastNode();
-        Set<SharedEvent> wFlag = new HashSet<>(builtMoEvents), toRemove = new HashSet<>();
-        while (n != null && !wFlag.isEmpty()) {
+        List<SharedEvent> toRemove = new ArrayList<>();
+        while (n != null && !toCheckEvents.isEmpty()) {
             for (SharedEvent w : n.getWs()) {
-                for (SharedEvent w0 : wFlag) {
+                for (SharedEvent w0 : toCheckEvents) {
                     if(w.accessSameVarWith(w0)) {
-                        w.setMoBefore(w0);
-                        w0.setMoAfter(w);
-                        OGNode wNode = w.getInNode(), w0Node = w0.getInNode();
-                        if (!wNode.getMoBefore().contains(w0Node))
-                            wNode.getMoBefore().add(w0Node);
-                        if (!w0Node.getMoAfter().contains(wNode))
-                            w0Node.getMoAfter().add(wNode);
+                        moPredecessors.add(w); // Find the moPredecessor of w0.
                         toRemove.add(w0);
                     }
                 }
             }
 
-            wFlag.removeAll(toRemove);
+            toCheckEvents.removeAll(toRemove);
+            toRemove.clear();
             n = n.getTrAfter();
         }
-
-        return builtMoEvents;
     }
 
     private void visitNode(ObsGraph graph, OGNode node,
