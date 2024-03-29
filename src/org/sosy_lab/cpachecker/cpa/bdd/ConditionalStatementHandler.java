@@ -124,8 +124,8 @@ public class ConditionalStatementHandler {
         // FIXME: do we need precision here?
         final Region[] assumeOperand = bvComputer.evaluateVectorExpression(rPartition,
                 rExpression, CNumericTypes.INT, rLocation, null);
-        Preconditions.checkArgument(assumeOperand != null, "Assumption cannot be " +
-                "evaluated.");
+        Preconditions.checkArgument(assumeOperand != null,
+                "Assumption cannot be evaluated.");
         Region assumeEvaluated = bvmgr.makeOr(assumeOperand), assignFormula = null;
 
         if (!assumption.getTruthAssumption()) { // If false-branch.

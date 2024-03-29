@@ -305,4 +305,12 @@ public class SharedEvent implements Copier<SharedEvent> {
     public boolean accessSameVarWith(SharedEvent other) {
         return this.var.getName().equals(other.var.getName());
     }
+
+    public boolean isRead() {
+        return aType == AccessType.READ;
+    }
+
+    public boolean isWrite() {
+        return aType == AccessType.WRITE;
+    }
 }

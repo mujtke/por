@@ -806,8 +806,20 @@ public class OGNode implements Copier<OGNode> {
         addEvents(sharedEvents.subList(addedEventsNum, sharedEvents.size()));
     }
 
-    public void setIsComplete(boolean pIsComplete) { isComplete = pIsComplete; }
+    public void setComplete(boolean pIsComplete) { isComplete = pIsComplete; }
     public boolean isComplete() {
         return isComplete;
+    }
+
+    public void addEdge(CFAEdge edge) {
+        blockEdges.add(edge);
+    }
+
+    public void addEventsWithoutCheck(List<SharedEvent> toAddEvents) {
+        toAddEvents.forEach(e -> {
+            events.add(e);
+            if (e.isRead()) Rs.add(e);
+            else if (e.isWrite()) Ws.add(e);
+        });
     }
 }
