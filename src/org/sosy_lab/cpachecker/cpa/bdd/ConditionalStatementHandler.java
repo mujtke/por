@@ -145,8 +145,8 @@ public class ConditionalStatementHandler {
                         Preconditions.checkArgument(w.getVar().getName().equals(varName),
                                 "Wrong cfaEdge '" + wEdge + "' for event in " + wNode);
                     } else {
-                        throw new UnsupportedOperationException("Lhs" + lhs + " is not " +
-                                "a CIdExpression.");
+                        throw new UnsupportedOperationException("Lhs " + lhs + " is not" +
+                                " a CIdExpression.");
                     }
 
                     final CType targetType = lhs.getExpressionType();

@@ -717,28 +717,38 @@ public class OGTransfer {
         int edgeStartIndex = -1, i;
         for (i = 0; i < node.getEvents().size(); i++) {
             SharedEvent e = node.getEvents().get(i);
-            if (edgeStartIndex >= 0) {
+            if (edgeStartIndex < 0) {
+                if (Objects.equals(e.getInEdge(), edge)) {
+                    edgeStartIndex = i;
+                    i--;
+                    continue;
+                }
                 for (Iterator<SharedEvent> it = toAddEvents.iterator(); it.hasNext();) {
                     SharedEvent ei = it.next();
-                    if (ei.isRead() && ei.accessSameVarWith(e))
-                        // ei will be covered by e.
+                    // When e and ei access the same var, e will cover ei.
+                    if (ei.accessSameVarWith(e))
                         it.remove();
                 }
-
-                if (i > edgeStartIndex
-                        && !Objects.equals(e.getInEdge(), edge)
-                        && e.isWrite()) {
-                    for (Iterator<SharedEvent> it = toAddEvents.iterator(); it.hasNext();) {
-                        SharedEvent ei = it.next();
-                        if (ei.isWrite() && ei.accessSameVarWith(e))
-                            // ei will be covered by e.
-                            it.remove();
-                    }
+            } else if (Objects.equals(edge, e.getInEdge())){
+                // edgeStartIndex >= 0
+                for (Iterator<SharedEvent> it = toAddEvents.iterator(); it.hasNext();) {
+                    SharedEvent ei = it.next();
+                    // When e and ei access the same var and have the same access type,
+                    // ei will have no need to be added.
+                    if (ei.accessSameVarWith(e) && (e.getAType() == ei.getAType()))
+                        it.remove();
                 }
-            }
-
-            if (edgeStartIndex < 0 && Objects.equals(e.getInEdge(), edge)) {
-                edgeStartIndex = node.getEvents().indexOf(e);
+            } else {
+                // edgeStartIndex >= 0 && edge != e.getInEdge()
+                for (Iterator<SharedEvent> it = toAddEvents.iterator(); it.hasNext();) {
+                    SharedEvent ei = it.next();
+                    // When both e and ei are write and access the same var. ei will be
+                    // covered by e.
+                    if (ei.accessSameVarWith(e)
+                            && e.getAType() == SharedEvent.AccessType.WRITE
+                            && ei.getAType() == SharedEvent.AccessType.WRITE)
+                        it.remove();
+                }
             }
         }
 

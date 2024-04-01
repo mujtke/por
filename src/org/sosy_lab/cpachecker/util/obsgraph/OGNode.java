@@ -817,6 +817,7 @@ public class OGNode implements Copier<OGNode> {
 
     public void addEventsWithoutCheck(List<SharedEvent> toAddEvents) {
         toAddEvents.forEach(e -> {
+            e.setInNode(this);
             events.add(e);
             if (e.isRead()) Rs.add(e);
             else if (e.isWrite()) Ws.add(e);
