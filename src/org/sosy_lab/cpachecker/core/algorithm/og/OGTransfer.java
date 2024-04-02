@@ -1,8 +1,6 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
-import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -10,7 +8,6 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
@@ -24,7 +21,6 @@ import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.porf;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
 import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction;
-import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction.*;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class OGTransfer {
@@ -274,7 +270,6 @@ public class OGTransfer {
                 // Else, the node contains the edge.
 //                node.addDeletedEvents(sharedEvents, edge);
                 node.addEventsWithoutCheck(toAddEvents);
-                node.setComplete(true);
                 OGPORState chOgState = AbstractStates.extractStateByType(chState,
                         OGPORState.class);
                 assert chOgState != null;
@@ -296,7 +291,6 @@ public class OGTransfer {
                                 false);
                 newNode.addEvents(edgeVarMap.get(edge.hashCode()));
                 newNode.setThreadInfo(chState);
-                newNode.setComplete(true);
                 updatePreSucState(edge, newNode, parState, chState);
                 OGPORState chOgState = AbstractStates.extractStateByType(chState,
                         OGPORState.class);
@@ -329,7 +323,6 @@ public class OGTransfer {
                     return Pair.of(null, null);
                 }
 
-                node.setComplete(true);
                 // Else, the node contains the edge.
                 node.addDeletedEvents(sharedEvents, edge);
                 OGPORState chOgState = AbstractStates.extractStateByType(chState,
@@ -360,7 +353,6 @@ public class OGTransfer {
                         false);
                 newNode.addEvents(edgeVarMap.get(edge.hashCode()));
                 newNode.setThreadInfo(chState);
-                newNode.setComplete(true);
                 updatePreSucState(edge, newNode, parState, chState);
                 OGPORState chOgState = AbstractStates.extractStateByType(chState,
                         OGPORState.class);
@@ -401,7 +393,6 @@ public class OGTransfer {
             } else {
                 node.setLastVisitedEdge(edge);
             }
-            node.setComplete(true);
             // Even if the node has been added to the graph, we may still need
             // to set relations for the events after lhe.
 //            visitNode(graph, node, chOgState, node.hasBeenAddedToGraph());
@@ -420,7 +411,6 @@ public class OGTransfer {
             } else {
                 node.setLastVisitedEdge(edge);
             }
-            node.setComplete(true);
 
 //            visitNode(graph, node, chOgState, node.hasBeenAddedToGraph());
             visitNode(graph, node, chOgState, !node.shouldRevisit());
@@ -600,7 +590,7 @@ public class OGTransfer {
                 shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
                 if (isConflict(graph, curThd, node, edge, toCheckEvents, false)) {
                     // TODO: rollback before node's start point.
-                    transferRollback();
+                    transferRollback(graph, node, parState, __DEBUG__);
                     graphWrapper.clear();
                     return Pair.of(null, null);
                 }
@@ -623,7 +613,7 @@ public class OGTransfer {
                 shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
                 if (isConflict(graph, curThd, node, edge, toCheckEvents, false)) {
                     // TODO: rollback before node's start point.
-                    transferRollback();
+                    transferRollback(graph, node, parState, __DEBUG__);
                     graphWrapper.clear();
                     return Pair.of(null, null);
                 }
@@ -706,13 +696,12 @@ public class OGTransfer {
 
     // Check whether we need to check conflict caused by mo.
     // If we need to add some shared events to the node, then we put them into
-    // toAddEvents. If we need to check conflict, we put the events into toCheckEvents.
+    // toAddEvents. If we need to check conflict, we put some events into toCheckEvents.
     private void shouldCheckConflict(OGNode node,
             CFAEdge edge,
             List<SharedEvent> sharedEvents,
             List<SharedEvent> toAddEvents,
             List<SharedEvent> toCheckEvents) {
-        // TODO
         toAddEvents.addAll(sharedEvents);
         int edgeStartIndex = -1, i;
         for (i = 0; i < node.getEvents().size(); i++) {
@@ -730,7 +719,7 @@ public class OGTransfer {
                         it.remove();
                 }
             } else if (Objects.equals(edge, e.getInEdge())){
-                // edgeStartIndex >= 0
+                // edgeStartIndex >= 0 && edge == e.getInEdge()
                 for (Iterator<SharedEvent> it = toAddEvents.iterator(); it.hasNext();) {
                     SharedEvent ei = it.next();
                     // When e and ei access the same var and have the same access type,
@@ -743,7 +732,9 @@ public class OGTransfer {
                 for (Iterator<SharedEvent> it = toAddEvents.iterator(); it.hasNext();) {
                     SharedEvent ei = it.next();
                     // When both e and ei are write and access the same var. ei will be
-                    // covered by e.
+                    // covered by e. NOTE: such e may don't exist. In that case, we will
+                    //  add ei into toAddEvents (Strictly, this is not correct, but the
+                    //  ei added here will be covered by other write events added later).
                     if (ei.accessSameVarWith(e)
                             && e.getAType() == SharedEvent.AccessType.WRITE
                             && ei.getAType() == SharedEvent.AccessType.WRITE)
@@ -769,10 +760,37 @@ public class OGTransfer {
     }
 
     // Send the graph back to a certain state.
-    private void transferRollback() {
+    private void transferRollback(ObsGraph graph,
+            OGNode curNode,
+            ARGState parState,
+            boolean __DEBUG__) {
         // TODO
-        throw new UnsupportedOperationException(
-                "Rollback of transfer is not implemented.");
+//        throw new UnsupportedOperationException(
+//                "Rollback of transfer is not implemented.");
+        // Move the graph to curNode.preState.
+        ARGState preState = curNode.getPreState();
+        assert preState != null;
+        assert OGMap.get(parState.getStateId()).contains(graph) : "The graph should " +
+                "locate in state s" + parState.getStateId();
+        if (parState.getStateId() != preState.getStateId()) {
+            // If equal, we don't need to roll back.
+            OGMap.get(parState.getStateId()).remove(graph);
+            assert OGMap.get(preState.getStateId()) == null ||
+                    !OGMap.get(preState.getStateId()).contains(graph) :
+                    "Trying to add an existing graph at s" + preState.getStateId();
+            List<ObsGraph> preOgs = OGMap.computeIfAbsent(preState.getStateId(),
+                    k -> new ArrayList<>());
+            preOgs.add(graph);
+        }
+
+        // When set __DEBUG__ on, clear the incorrect transfer information.
+        if (__DEBUG__) {
+            ARGState pre = parState;
+            while (pre.getStateId() != preState.getStateId()) {
+                removeGraphFromFull(graph, pre.getStateId());
+                pre = pre.getParents().iterator().next(); // One parent assumed.
+            }
+        }
     }
 
     private Pair<ObsGraph, ObsGraph> handleBlockStart(
@@ -798,6 +816,7 @@ public class OGTransfer {
                 if (isConflict(graph, curThd, node, edge, null, true)) {
                     return Pair.of(null, null);
                 }
+                updatePreSucState(edge, node, parState, chState);
                 graph.setNeedToRevisit(false);
                 graphWrapper.clear();
                 if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -825,13 +844,14 @@ public class OGTransfer {
             }
             // edgeType == 0
         } else if (edgeType == 2) { // Shared non-assumption edge.
-            if (node != null) { // Simple node.
+            if (node != null) {
                 assert !node.isSimpleNode();
                 // We will enter the node if no conflicts exist.
                 if (isConflict(graph, curThd, node, edge, null, true)) {
                     return Pair.of(null, null);
                 }
 
+                updatePreSucState(edge, node, parState, chState);
                 graph.setNeedToRevisit(false);
                 graphWrapper.clear();
 
@@ -917,8 +937,7 @@ public class OGTransfer {
         } else { // Not a simple node.
             if (edge.equals(node.getBlockStartEdge())) {
                 node.setPreState(parState);
-            }
-            else if (edge.equals(node.getLastBlockEdge())) {
+            } else if (edge.equals(node.getLastBlockEdge())) {
                 node.setSucState(chState);
             }
         }
@@ -1023,7 +1042,10 @@ public class OGTransfer {
             });
 
             for (OGNode on : otherNodes) {
-                if (on.getFromRead().contains(curNode) || porf(on, curNode)) {
+                // FIXME: add the happen-before constraint.
+                if (on.getFromRead().contains(curNode)
+                        || porf(on, curNode)
+                        || on.getHappenBefore().contains(curNode)) {
                     return true;
                 }
             }
@@ -1038,9 +1060,14 @@ public class OGTransfer {
         for (SharedEvent mpe : moPredecessors) {
             while (mpe != null) {
                 // Check conflict.
-                // FIXME: it's enough to use rb only?
+                // FIXME: it's enough to use 'readBy' only?
                 for (SharedEvent mperb : mpe.getReadBy()) {
                     if (!mperb.getInNode().isInGraph()) { // Conflict found.
+                        // mperb should happen before the curNode.
+                        // FIXME: add new constraint here?
+                        assert mperb.getInNode() != null;
+                        curNode.getHappenAfter().add(mperb.getInNode());
+                        mperb.getInNode().getHappenBefore().add(curNode);
                         moPredecessors.clear();
                         return true;
                     }
@@ -1170,7 +1197,8 @@ public class OGTransfer {
         for (; j < waitlist.size(); j++) {
             assert waitlist.get(j) instanceof ARGState;
             ARGState other = (ARGState) waitlist.get(j);
-            // Just searching for state's siblings that are closer to the end of waitlist.
+            // Just searching for the state's siblings that are closer to the end of the
+            // waitlist.
             if (Collections.disjoint(state.getParents(), other.getParents())) {
                 // If we find some states that belong to different parents with state,
                 // We can stop.
@@ -1190,21 +1218,26 @@ public class OGTransfer {
         }
     }
 
-    public static void getHb(OGNode n, Set<OGNode> hbn) {
-        assert hbn != null;
-        if (n.getPredecessor() != null) hbn.add(n.getPredecessor());
-        hbn.addAll(n.getReadFrom());
-        hbn.addAll(n.getFromReadBy());
-        hbn.addAll(n.getWAfter());
-    }
-
     // Debug.
     public void addGraphToFull(ObsGraph graph, Integer stateId) {
         String gStr = getDotStr(graph);
         OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
         assert ogInfo != null;
-        List<String> ogs = ogInfo.getFullOGMap().computeIfAbsent(stateId,
-                k -> new ArrayList<>());
-        ogs.add(gStr);
+//        List<String> ogs = ogInfo.getFullOGMap().computeIfAbsent(stateId,
+//                k -> new ArrayList<>());
+        Map<Integer, String> ogs = ogInfo.getFullOGMap().computeIfAbsent(stateId,
+                k -> new HashMap<>());
+//        ogs.add(gStr);
+        ogs.put(graph.getIdentityHash(), gStr);
+    }
+
+    // Debug.
+    public void removeGraphFromFull(ObsGraph graph, Integer stateId) {
+        OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
+        assert ogInfo != null;
+        Map<Integer, String> ogs = ogInfo.getFullOGMap().get(stateId);
+        assert ogs != null && ogs.containsKey(graph.getIdentityHash()) :
+                "Missing graph at s" + stateId;
+        ogs.remove(graph.getIdentityHash());
     }
 }

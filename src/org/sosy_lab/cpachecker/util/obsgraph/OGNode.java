@@ -67,6 +67,10 @@ public class OGNode implements Copier<OGNode> {
     private OGNode trBefore;
     private OGNode trAfter;
 
+    // Restriction used in transfer.
+    private final List<OGNode> happenBefore = new ArrayList<>();
+    private final List<OGNode> happenAfter = new ArrayList<>();
+
     // Indicate whether this node is in a graph. The true means this node is in the trace
     // of the graph.
     private boolean inGraph;
@@ -78,9 +82,6 @@ public class OGNode implements Copier<OGNode> {
     // FIXME: just used for the node that has been added to the graph. For a totally
     //  new node, set as null.
     private CFAEdge lastVisitedEdge;
-    // Indicating whether the node is complete. Because of revisiting, the node may
-    // become incomplete.
-    private boolean isComplete = true;
 
     public OGNode(final CFAEdge pBlockStartEdge,
                   final List<CFAEdge> pBlockEdges,
@@ -117,7 +118,7 @@ public class OGNode implements Copier<OGNode> {
      */
     public OGNode deepCopy(Map<Object, Object> memo) {
         if (memo.containsKey(this)) {
-            // If current object has been copied.
+            // If the current object has been copied.
             assert memo.get(this) instanceof OGNode;
             return (OGNode) memo.get(this);
         }
@@ -148,7 +149,6 @@ public class OGNode implements Copier<OGNode> {
         nNode.lheIndex = this.lheIndex;
         nNode.lastVisitedEdge = this.lastVisitedEdge;
         nNode.hasBeenAddedToGraph = this.hasBeenAddedToGraph;
-        nNode.isComplete = this.isComplete;
 
         /* preState & sucState */
         nNode.preState = this.preState; /* Shallow copy. */
@@ -181,6 +181,10 @@ public class OGNode implements Copier<OGNode> {
         /* Trace order */
         nNode.trBefore = this.trBefore != null ? this.trBefore.deepCopy(memo) : null;
         nNode.trAfter = this.trAfter != null ? this.trAfter.deepCopy(memo) : null;
+
+        // Happen-before and happen-after.
+        this.happenBefore.forEach(hb -> nNode.happenBefore.add(hb.deepCopy(memo)));
+        this.happenAfter.forEach(ha -> nNode.happenAfter.add(ha.deepCopy(memo)));
 
         return nNode;
     }
@@ -620,9 +624,6 @@ public class OGNode implements Copier<OGNode> {
 
         // FIXME: Does last-visited event get updated only when revisiting?
         //  And what if nd contains more than one sharedEvent?
-
-        // FIXME
-        isComplete = false;
     }
 
     public boolean shouldRevisit() {
@@ -741,9 +742,6 @@ public class OGNode implements Copier<OGNode> {
             rmEdges.add(blockEdges.get(i));
         }
         blockEdges.removeAll(rmEdges);
-
-        // FIXME
-        isComplete = false;
     }
 
     // Remove events that come from the edge.
@@ -752,8 +750,6 @@ public class OGNode implements Copier<OGNode> {
         events.removeIf(filter);
         Rs.removeIf(filter);
         Ws.removeIf(filter);
-        // FIXME
-        isComplete = false;
     }
 
     public boolean hasBeenAddedToGraph() {
@@ -806,11 +802,6 @@ public class OGNode implements Copier<OGNode> {
         addEvents(sharedEvents.subList(addedEventsNum, sharedEvents.size()));
     }
 
-    public void setComplete(boolean pIsComplete) { isComplete = pIsComplete; }
-    public boolean isComplete() {
-        return isComplete;
-    }
-
     public void addEdge(CFAEdge edge) {
         blockEdges.add(edge);
     }
@@ -823,4 +814,8 @@ public class OGNode implements Copier<OGNode> {
             else if (e.isWrite()) Ws.add(e);
         });
     }
+
+    public List<OGNode> getHappenBefore() { return happenBefore; }
+
+    public List<OGNode> getHappenAfter() { return happenAfter; }
 }

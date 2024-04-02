@@ -281,8 +281,12 @@ public class DebugAndTest {
     }
 
     public static void dumpToJson(ReachedSet reachedSet) {
-        Map<Integer, List<String>> fullOGMap =
+//        Map<Integer, List<String>> fullOGMap =
+//                GlobalInfo.getInstance().getOgInfo().getFullOGMap();
+        Map<Integer, Map<Integer, String>> fullOGMap0 =
                 GlobalInfo.getInstance().getOgInfo().getFullOGMap();
+        Map<Integer, List<String>> fullOGMap = new HashMap<>();
+        fullOGMap0.forEach((k, v) -> fullOGMap.put(k, new ArrayList<>(v.values())));
         JSONObject json = new JSONObject(fullOGMap);
         try {
             // Export ogs in json.

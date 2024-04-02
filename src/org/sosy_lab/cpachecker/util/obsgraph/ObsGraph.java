@@ -43,6 +43,9 @@ public class ObsGraph implements Copier<ObsGraph> {
     // Do not copy this when copying deeply.
     // private final Map<SharedEvent, SharedEvent> cachedTempFR = new HashMap<>();
 
+    // Based object's memory address, so this should be different for every graph object.
+    private final int identityHash = System.identityHashCode(this);
+
     // Debug: indicating when the graph created.
     ARGState creationState = null;
 
@@ -51,6 +54,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         RE = new ArrayList<>();
     }
 
+    public int getIdentityHash() { return this.identityHash; }
     public ARGState getCreationState() {
         return creationState;
     }
@@ -697,5 +701,4 @@ public class ObsGraph implements Copier<ObsGraph> {
             }
         }
     }
-
 }
