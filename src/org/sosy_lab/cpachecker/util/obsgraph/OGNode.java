@@ -117,12 +117,17 @@ public class OGNode implements Copier<OGNode> {
      * @return The deep copy of this OGNode.
      */
     public OGNode deepCopy(Map<Object, Object> memo) {
-        if (memo.containsKey(this)) {
-            // If the current object has been copied.
-            assert memo.get(this) instanceof OGNode;
-            return (OGNode) memo.get(this);
+//        if (memo.containsKey(this)) {
+//            // If the current object has been copied.
+//            assert memo.get(this) instanceof OGNode;
+//            return (OGNode) memo.get(this);
+//        }
+        if (memo.containsKey(System.identityHashCode(this))) {
+            // The current object has been copied somewhere.
+            assert memo.get(System.identityHashCode(this)) instanceof OGNode;
+            return (OGNode) memo.get(System.identityHashCode(this));
         }
-        // Else, try copying 'this' to a new object.
+        // Else, try to copy 'this' to a new object.
         OGNode nNode = new OGNode(
                 this.blockStartEdge,    /* Shallow copy. */
                 new ArrayList<>(),
@@ -133,7 +138,8 @@ public class OGNode implements Copier<OGNode> {
                 new HashSet<>());
         nNode.blockEdges.addAll(this.blockEdges);
         // Put the copy into memo.
-        memo.put(this, nNode);
+//        memo.put(this, nNode);
+        memo.put(System.identityHashCode(this), nNode);
 
         // The threadsLoc and inThread are used to distinguish different OGNodes that has
         // the same 'blockEdges', so they should be copied deeply.
@@ -156,7 +162,7 @@ public class OGNode implements Copier<OGNode> {
 
         // The left part will need to be copied in a deep way.
         /* events */
-        this.events.forEach(r -> nNode.events.add(r.deepCopy(memo)));
+        this.events.forEach(e -> nNode.events.add(e.deepCopy(memo)));
         nNode.lheIndex = this.lheIndex;
         nNode.lastVisitedEdge = this.lastVisitedEdge;
         /* Rs & Ws. */

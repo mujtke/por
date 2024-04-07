@@ -211,13 +211,18 @@ public class SharedEvent implements Copier<SharedEvent> {
     }
 
     public SharedEvent deepCopy(Map<Object, Object> memo) {
-        if (memo.containsKey(this)) {
-            assert memo.get(this) instanceof SharedEvent;
-            return (SharedEvent) memo.get(this);
+//        if (memo.containsKey(this)) {
+//            assert memo.get(this) instanceof SharedEvent;
+//            return (SharedEvent) memo.get(this);
+//        }
+        if (memo.containsKey(System.identityHashCode(this))) {
+            assert memo.get(System.identityHashCode(this)) instanceof SharedEvent;
+            return (SharedEvent) memo.get(System.identityHashCode(this));
         }
 
         SharedEvent nEvent = new SharedEvent(this.var, this.aType, this.inEdge);
-        memo.put(this, nEvent);
+//        memo.put(this, nEvent);
+        memo.put(System.identityHashCode(this), nEvent);
 
         /* Read from & read by. */
         nEvent.readFrom = this.readFrom != null ? this.readFrom.deepCopy(memo) : null;
@@ -227,7 +232,7 @@ public class SharedEvent implements Copier<SharedEvent> {
             nEvent.readBy.add(nrb);
         }
 
-        /* Modification order: no copy. */
+        /* Modification order. */
         nEvent.moAfter = this.moAfter != null ? this.moAfter.deepCopy(memo) : null;
         nEvent.moBefore = this.moBefore != null ? this.moBefore.deepCopy(memo) : null;
 

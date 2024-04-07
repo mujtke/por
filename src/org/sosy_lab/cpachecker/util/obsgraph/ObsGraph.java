@@ -208,14 +208,19 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     @Override
     public ObsGraph deepCopy(Map<Object, Object> memo) {
-        if (memo.containsKey(this)) {
-            assert memo.get(this) instanceof ObsGraph;
-            return (ObsGraph) memo.get(this);
+//        if (memo.containsKey(this)) {
+//            assert memo.get(this) instanceof ObsGraph;
+//            return (ObsGraph) memo.get(this);
+//        }
+        if (memo.containsKey(System.identityHashCode(this))) {
+            assert memo.get(System.identityHashCode(this)) instanceof ObsGraph;
+            return (ObsGraph) memo.get(System.identityHashCode(this));
         }
 
         ObsGraph nGraph = new ObsGraph();
         // Put the copy into memo.
-        memo.put(this, nGraph);
+//        memo.put(this, nGraph);
+        memo.put(System.identityHashCode(this), nGraph);
         // Copy nodes.
         this.nodes.forEach(n -> nGraph.nodes.add(n.deepCopy(memo)));
         this.RE.forEach(re -> nGraph.RE.add(re.deepCopy(memo)));

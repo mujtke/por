@@ -590,8 +590,8 @@ public class OGTransfer {
                 shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
                 if (isConflict(graph, curThd, node, edge, toCheckEvents, false)) {
                     // TODO: rollback before node's start point.
-                    transferRollback(graph, node, parState, __DEBUG__);
-                    graphWrapper.clear();
+//                    transferRollback(graph, node, parState, __DEBUG__);
+//                    graphWrapper.clear();
                     return Pair.of(null, null);
                 }
                 // FIXME: Some events may get deleted during the revisit. Should
@@ -613,8 +613,8 @@ public class OGTransfer {
                 shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
                 if (isConflict(graph, curThd, node, edge, toCheckEvents, false)) {
                     // TODO: rollback before node's start point.
-                    transferRollback(graph, node, parState, __DEBUG__);
-                    graphWrapper.clear();
+//                    transferRollback(graph, node, parState, __DEBUG__);
+//                    graphWrapper.clear();
                     return Pair.of(null, null);
                 }
                 // The node should have removed some events after revisiting.
@@ -714,8 +714,8 @@ public class OGTransfer {
                 }
                 for (Iterator<SharedEvent> it = toAddEvents.iterator(); it.hasNext();) {
                     SharedEvent ei = it.next();
-                    // When e and ei access the same var, e will cover ei.
-                    if (ei.accessSameVarWith(e))
+                    // When ei is a read and accesses the save var with e, e will cover ei.
+                    if (ei.isRead() && ei.accessSameVarWith(e))
                         it.remove();
                 }
             } else if (Objects.equals(edge, e.getInEdge())){
