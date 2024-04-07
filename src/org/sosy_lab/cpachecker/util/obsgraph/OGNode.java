@@ -183,8 +183,8 @@ public class OGNode implements Copier<OGNode> {
         nNode.trAfter = this.trAfter != null ? this.trAfter.deepCopy(memo) : null;
 
         // Happen-before and happen-after.
-        this.happenBefore.forEach(hb -> nNode.happenBefore.add(hb.deepCopy(memo)));
-        this.happenAfter.forEach(ha -> nNode.happenAfter.add(ha.deepCopy(memo)));
+//        this.happenBefore.forEach(hb -> nNode.happenBefore.add(hb.deepCopy(memo)));
+//        this.happenAfter.forEach(ha -> nNode.happenAfter.add(ha.deepCopy(memo)));
 
         return nNode;
     }

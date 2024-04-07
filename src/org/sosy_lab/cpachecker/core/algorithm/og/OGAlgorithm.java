@@ -43,14 +43,15 @@ public class OGAlgorithm implements Algorithm {
 
     private final HashMap<Integer, Integer> nlt;
 
-    // We don't use the waitlist provided by reachedSet, it's read-only.
+    // We don't use the waitlist provided by reachedSet, because it's read-only.
     // Instead, use the 'waitlist' we define. But it is better to keep
     // their behavior synchronous except when we adjust the order of
     // states in 'waitlist'. In other cases, if we perform some
-    // operation on a state, e.g., pop a state from 'waitlist', then we
+    // operation on a state, e.g., pop a state from 'waitlist', and then we
     // should perform the same or similar operation on the waitlist in
     // reachedSet.
-    private final Vector<AbstractState> waitlist;
+    private final static Vector<AbstractState> waitlist = new Vector<>();
+
     public OGAlgorithm(ConfigurableProgramAnalysis cpa,
                        LogManager pLog,
                        ShutdownNotifier pShutdownNotifier) {
@@ -66,9 +67,10 @@ public class OGAlgorithm implements Algorithm {
         assert OGMap != null;
         this.revisitor = ogInfo.getRevisitor();
         this.transfer = ogInfo.getTransfer();
-        this.waitlist = new Vector<>();
         this.nlt = ogInfo.getNlt();
     }
+
+    public static Vector<AbstractState> getWaitlist() { return waitlist; }
 
     @Override
     public AlgorithmStatus run(ReachedSet reachedSet)

@@ -774,6 +774,12 @@ public class OGTransfer {
                 "locate in state s" + parState.getStateId();
         if (parState.getStateId() != preState.getStateId()) {
             // If equal, we don't need to roll back.
+            // Before rolling back, we need to reset the curNode because we may have
+            // added some events before.
+            SharedEvent lastHandledEvent = curNode.getLastHandledEvent();
+            if (lastHandledEvent != null)
+                curNode.removeEventAfter(lastHandledEvent);
+
             OGMap.get(parState.getStateId()).remove(graph);
             assert OGMap.get(preState.getStateId()) == null ||
                     !OGMap.get(preState.getStateId()).contains(graph) :
@@ -781,6 +787,12 @@ public class OGTransfer {
             List<ObsGraph> preOgs = OGMap.computeIfAbsent(preState.getStateId(),
                     k -> new ArrayList<>());
             preOgs.add(graph);
+
+            // FIXME
+            assert !OGAlgorithm.getWaitlist().isEmpty();
+            List<ObsGraph> graphWrapper = new ArrayList<>();
+            graphWrapper.add(graph);
+            multiStepTransfer(OGAlgorithm.getWaitlist(), preState, graphWrapper);
         }
 
         // When set __DEBUG__ on, clear the incorrect transfer information.
@@ -986,7 +998,7 @@ public class OGTransfer {
                 OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
                 List<ObsGraph> chGraphs = OGMap.get(chState.getStateId());
                 chGraphs.add(chGraph);
-                // Adjust waitlist to ensure chState will be explored before its
+                // Adjust the waitlist to ensure chState will be explored before its
                 // siblings that has no graphs.
                 adjustWaitlist(OGMap, waitlist, chState);
                 return Pair.of(chState, chGraph);
@@ -1062,7 +1074,9 @@ public class OGTransfer {
                 // Check conflict.
                 // FIXME: it's enough to use 'readBy' only?
                 for (SharedEvent mperb : mpe.getReadBy()) {
-                    if (!mperb.getInNode().isInGraph()) { // Conflict found.
+                    if (mperb.getInNode() != curNode
+                            && !mperb.getInNode().isInGraph()) { //
+                        // Conflict found.
                         // mperb should happen before the curNode.
                         // FIXME: add new constraint here?
                         assert mperb.getInNode() != null;

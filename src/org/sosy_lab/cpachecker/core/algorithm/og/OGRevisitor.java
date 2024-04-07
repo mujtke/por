@@ -331,6 +331,13 @@ public class OGRevisitor {
             next.getMoAfter().clear();
             next.getMoBefore().forEach(n -> n.getMoAfter().remove(finalNext));
             next.getMoBefore().clear();
+
+            // FIXME: happen-before relation for nodes.
+            next.getHappenBefore().forEach(n -> n.getHappenAfter().remove(finalNext));
+            next.getHappenBefore().clear();
+            next.getHappenAfter().forEach(n -> n.getHappenBefore().remove(finalNext));
+            next.getHappenAfter().clear();
+
             // Set node invisible.
             next.setInGraph(false);
             // Set lastVisitedEdge null.
