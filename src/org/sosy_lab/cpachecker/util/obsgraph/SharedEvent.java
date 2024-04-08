@@ -170,6 +170,16 @@ public class SharedEvent implements Copier<SharedEvent> {
         }
     }
 
+    public void removeMoBefore() {
+        OGNode moBeforeInNode = moBefore.inNode;
+        moBefore.setMoAfter(null);
+        moBefore = null;
+        if (inNode.getRefCount("mb", moBeforeInNode) < 1) {
+            inNode.getMoBefore().remove(moBeforeInNode);
+            moBeforeInNode.getMoAfter().remove(inNode);
+        }
+    }
+
     public enum AccessType { WRITE, READ, UNKNOWN; }
     private final Var var;
     private final AccessType aType;
@@ -274,7 +284,21 @@ public class SharedEvent implements Copier<SharedEvent> {
     }
 
     public void setMoBefore(SharedEvent moBefore) {
-        this.moBefore = moBefore;
+        SharedEvent oldMoBefore = this.moBefore;
+        if (moBefore == null) {
+            this.moBefore = null;
+        } else {
+            this.moBefore = moBefore;
+            moBefore.moAfter = this;
+            if (!this.inNode.getMoBefore().contains(moBefore.inNode))
+                inNode.getMoBefore().add(moBefore.inNode);
+            if (!moBefore.inNode.getMoAfter().contains(this.inNode))
+                moBefore.inNode.getMoAfter().add(this.inNode);
+        }
+        // Remove old mo for oldMoBefore.
+        if (oldMoBefore != null) {
+            oldMoBefore.removeMoAfter();
+        }
     }
 
     public SharedEvent getMoAfter() {
@@ -282,7 +306,21 @@ public class SharedEvent implements Copier<SharedEvent> {
     }
 
     public void setMoAfter(SharedEvent moAfter) {
-        this.moAfter = moAfter;
+        SharedEvent oldMoAfter = this.moAfter;
+        if (moAfter == null) {
+            this.moAfter = null;
+        } else {
+            this.moAfter = moAfter;
+            moAfter.moBefore = this;
+            if (!this.inNode.getMoAfter().contains(moAfter.inNode))
+                inNode.getMoAfter().add(moAfter.inNode);
+            if (!moAfter.inNode.getMoBefore().contains(this.inNode))
+                moAfter.inNode.getMoBefore().add(this.inNode);
+        }
+        // Remove old mo for oldMoAfter.
+        if (oldMoAfter != null) {
+            oldMoAfter.removeMoBefore();
+        }
     }
 
     public List<SharedEvent> getReadBy() {

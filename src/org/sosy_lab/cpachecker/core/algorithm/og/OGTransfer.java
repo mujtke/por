@@ -1065,11 +1065,15 @@ public class OGTransfer {
 
         // Check mo-deduced conflicts.
         // Get mo predecessors.
-        List<SharedEvent> moPredecessors = new ArrayList<>();
+        List<Pair<SharedEvent, SharedEvent>> moPredecessors = new ArrayList<>();
         getMoPredecessors(graph, toCheckEvents, moPredecessors);
 
         // Find possible conflict.
-        for (SharedEvent mpe : moPredecessors) {
+        for (Pair<SharedEvent, SharedEvent> pair : moPredecessors) {
+            SharedEvent ce = pair.getFirstNotNull(),    // Checked event.
+                    mpe = pair.getSecondNotNull(),      // Direct mo predecessor of ce.
+                    msuc = mpe.getMoBefore();           // Direct mo successor of mpe.
+            // 1. There exists r (mperb) reads from mpe, but r.inNode is not the graph.
             while (mpe != null) {
                 // Check conflict.
                 // FIXME: it's enough to use 'readBy' only?
@@ -1088,6 +1092,28 @@ public class OGTransfer {
                 }
                 mpe = mpe.getMoAfter();
             }
+
+            // 2. There exists wsuc is a mo-descendant of the mpe, s.t., for some rs
+            // that reads from ce: 1) msuc porf r
+            //                     2) msuc.inNode is not in the graph.
+            //                     3) r.inNode is not in the graph.
+            for (SharedEvent rb : ce.getReadBy()) {
+                while (msuc != null) {
+                    // In this case, wsuc, ce and r locate different nodes respectively.
+                    if (msuc.getInNode() != curNode
+                            &&!msuc.getInNode().isInGraph()
+                            && !rb.getInNode().isInGraph()
+                            && porf(msuc.getInNode(), rb.getInNode())) {
+                        // Conflict found.
+                        // msuc should happen before the curNode.
+                        msuc.getInNode().getHappenBefore().add(curNode);
+                        curNode.getHappenAfter().add(msuc.getInNode());
+                        moPredecessors.clear();
+                        return true;
+                    }
+                    msuc = msuc.getMoBefore();
+                }
+            }
         }
 
         return false;
@@ -1096,7 +1122,7 @@ public class OGTransfer {
     // Get all direct mo-predecessors of events in toCheckEvents.
     private void getMoPredecessors(ObsGraph graph,
             List<SharedEvent> toCheckEvents,
-            List<SharedEvent> moPredecessors) {
+            List<Pair<SharedEvent, SharedEvent>> moPredecessors) {
         if (toCheckEvents == null) return;
 
         // Build mo relations for builtMoEvents.
@@ -1106,7 +1132,8 @@ public class OGTransfer {
             for (SharedEvent w : n.getWs()) {
                 for (SharedEvent w0 : toCheckEvents) {
                     if(w.accessSameVarWith(w0)) {
-                        moPredecessors.add(w); // Find the moPredecessor of w0.
+                        moPredecessors.add(Pair.of(w0, w)); // Find the moPredecessor of
+                        // w0.
                         toRemove.add(w0);
                     }
                 }
@@ -1121,8 +1148,9 @@ public class OGTransfer {
     private void visitNode(ObsGraph graph, OGNode node,
             OGPORState chOgState,
             boolean hasBeenVisited) {
-        // 1.1 Add rf, mo, fr relations if the node is visited the first time.
-        // For the visited nodes, just updating mo.
+        // 1.1 Add rf, mo and fr relations for the events behind the last-handled event
+        // of the node. At the same time, add corresponding relations for the node.
+        // For the totally visited nodes (no events after lhe), just updating mo.
         Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>(node.getWs());
         if (!hasBeenVisited) {
             // FIXME: Not all but only Rs after the lastHandledEvent should be added?
@@ -1151,7 +1179,10 @@ public class OGTransfer {
                 }
             }
 
-            addRfMoForNewNode(graph, n, rFlag, wFlag);
+            // FIXME: Add rf and mo only when n is in the graph?
+            if (n.isInGraph()) {
+                addRfMoForNewNode(graph, n, rFlag, wFlag);
+            }
             n = n.getTrAfter();
         }
 
@@ -1192,9 +1223,20 @@ public class OGTransfer {
             toRemove.clear();
 
             // Mo.
+            // FIXME: we don't remove the previous mo relations.
             for (SharedEvent j : wFlag) {
                 if (j.accessSameVarWith(w)) {
-                    setRelation("mo", graph, w, j);
+                    // Original mo: w --> wmb
+                    // New mo: w --> j --> wmb
+                    // NOTE: (w, j) may have been in the mo.
+                    SharedEvent wmb = w.getMoBefore();
+                    if (wmb != null && wmb != j) {
+                        wmb.setMoAfter(j);
+                        j.setMoAfter(w);
+                    } else if (wmb != j) {  // wmb == null
+                        j.setMoAfter(w);    // Add new mo for j.
+                    }
+//                    setRelation("mo", graph, w, j);
                     toRemove.add(j);
                 }
             }

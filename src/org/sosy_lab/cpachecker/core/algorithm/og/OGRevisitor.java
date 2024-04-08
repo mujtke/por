@@ -314,23 +314,26 @@ public class OGRevisitor {
             // Trace order.
             next.setTrAfter(null);
             next.setTrBefore(null);
+
+            // FIXME: don't remove mo relations here?
             // Modify order.
             // Events.
-            next.getWs().forEach(w -> {
-                if (w.getMoAfter() != null) {
-                    w.getMoAfter().setMoBefore(null);
-                    w.setMoAfter(null);
-                }
-                if (w.getMoBefore() != null) {
-                    w.getMoBefore().setMoAfter(null);
-                    w.setMoBefore(null);
-                }
-            });
+//            next.getWs().forEach(w -> {
+//                if (w.getMoAfter() != null) {
+//                    w.getMoAfter().setMoBefore(null);
+//                    w.setMoAfter(null);
+//                }
+//                if (w.getMoBefore() != null) {
+//                    w.getMoBefore().setMoAfter(null);
+//                    w.setMoBefore(null);
+//                }
+//            });
+            // Nodes.
             OGNode finalNext = next;
-            next.getMoAfter().forEach(n -> n.getMoBefore().remove(finalNext));
-            next.getMoAfter().clear();
-            next.getMoBefore().forEach(n -> n.getMoAfter().remove(finalNext));
-            next.getMoBefore().clear();
+//            next.getMoAfter().forEach(n -> n.getMoBefore().remove(finalNext));
+//            next.getMoAfter().clear();
+//            next.getMoBefore().forEach(n -> n.getMoAfter().remove(finalNext));
+//            next.getMoBefore().clear();
 
             // FIXME: happen-before relation for nodes.
             next.getHappenBefore().forEach(n -> n.getHappenAfter().remove(finalNext));
