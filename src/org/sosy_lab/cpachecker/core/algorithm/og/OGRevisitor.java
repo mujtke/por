@@ -220,9 +220,10 @@ public class OGRevisitor {
             // We get a new graph because r reads from a indeterminate value.
             Map<Object, Object> memo = new HashMap<>();
             coGraph = G.deepCopy(memo);
-            assert memo.containsKey(r) && memo.containsKey(w) : "Wrong copy result.";
-            SharedEvent rp = (SharedEvent) memo.get(r),
-                    wp = (SharedEvent) memo.get(w);
+            assert memo.containsKey(System.identityHashCode(r))
+                    && memo.containsKey(System.identityHashCode(w)) : "Wrong copy result.";
+            SharedEvent rp = (SharedEvent) memo.get(System.identityHashCode(r)),
+                    wp = (SharedEvent) memo.get(System.identityHashCode(w));
             SharedEvent corp = coGraph.changeAssumeNode(rp);
 //            coGraph.setReadFrom(corp, wp);
             setRelation("rf", coGraph, wp, corp);
