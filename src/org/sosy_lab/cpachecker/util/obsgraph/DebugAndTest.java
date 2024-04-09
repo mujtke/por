@@ -191,6 +191,22 @@ public class DebugAndTest {
         return true;
     }
 
+    public static boolean testMo(ObsGraph g) {
+        for (OGNode node : g.getNodes()) {
+            for (OGNode mbn : node.getMoBefore())
+                if (!mbn.getMoAfter().contains(node)) return false;
+            for (OGNode mba : node.getMoAfter())
+                if (!mba.getMoBefore().contains(node)) return false;
+            for (SharedEvent e : node.getWs()) {
+                if (e.getMoAfter() != null && e.getMoAfter().getMoBefore() != e)
+                    return false;
+                if (e.getMoBefore() != null && e.getMoBefore().getMoAfter() != e)
+                    return false;
+            }
+        }
+        return true;
+    }
+
 
     public static String getDotStr(ObsGraph g) {
         Map<OGNode, String> visited = new HashMap<>();

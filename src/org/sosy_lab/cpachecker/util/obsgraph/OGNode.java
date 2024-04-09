@@ -117,11 +117,6 @@ public class OGNode implements Copier<OGNode> {
      * @return The deep copy of this OGNode.
      */
     public OGNode deepCopy(Map<Object, Object> memo) {
-//        if (memo.containsKey(this)) {
-//            // If the current object has been copied.
-//            assert memo.get(this) instanceof OGNode;
-//            return (OGNode) memo.get(this);
-//        }
         if (memo.containsKey(System.identityHashCode(this))) {
             // The current object has been copied somewhere.
             assert memo.get(System.identityHashCode(this)) instanceof OGNode;

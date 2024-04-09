@@ -79,7 +79,7 @@ public class OGRevisitor {
         List<ObsGraph> RG = new ArrayList<>();
         RG.add(g);
 
-        // Debug.
+        // DEBUG.
         boolean debug = true;
         int depth = 0;
         while (!RG.isEmpty()) {

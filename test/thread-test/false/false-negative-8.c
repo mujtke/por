@@ -145,11 +145,7 @@ _Bool weak$$choice2;
 
 void * P0(void *arg)
 {
-  __VERIFIER_atomic_begin();
   y = 2;
-  __VERIFIER_atomic_end();
-  __VERIFIER_atomic_begin();
-  __VERIFIER_atomic_end();
   __VERIFIER_atomic_begin();
   weak$$choice0 = __VERIFIER_nondet_bool();
   weak$$choice2 = __VERIFIER_nondet_bool();
@@ -166,11 +162,8 @@ void * P0(void *arg)
   x = x$flush_delayed ? x$mem_tmp : x;
   x$flush_delayed = FALSE;
   __VERIFIER_atomic_end();
-  __VERIFIER_atomic_begin();
-  __VERIFIER_atomic_end();
-  __VERIFIER_atomic_begin();
+
   __unbuffered_cnt = __unbuffered_cnt + 1;
-  __VERIFIER_atomic_end();
   return 0;
 }
 
@@ -183,15 +176,16 @@ void * P1(void *arg)
   x$w_buff0 = 1;
   x$w_buff1_used = x$w_buff0_used;
   x$w_buff0_used = TRUE;
-  __VERIFIER_assert(!(x$w_buff1_used && x$w_buff0_used));
+//   __VERIFIER_assert(!(x$w_buff1_used && x$w_buff0_used));
+  if (x$w_buff1_used && x$w_buff0_used) {
+ERROR:reach_error();
+  }
   x$r_buff1_thd0 = x$r_buff0_thd0;
   x$r_buff1_thd1 = x$r_buff0_thd1;
   x$r_buff1_thd2 = x$r_buff0_thd2;
   x$r_buff0_thd2 = TRUE;
   __VERIFIER_atomic_end();
-  __VERIFIER_atomic_begin();
   y = 1;
-  __VERIFIER_atomic_end();
   __VERIFIER_atomic_begin();
   x = x$w_buff0_used && x$r_buff0_thd2 ? x$w_buff0 : (x$w_buff1_used && x$r_buff1_thd2 ? x$w_buff1 : x);
   x$w_buff0_used = x$w_buff0_used && x$r_buff0_thd2 ? FALSE : x$w_buff0_used;
@@ -199,9 +193,7 @@ void * P1(void *arg)
   x$r_buff0_thd2 = x$w_buff0_used && x$r_buff0_thd2 ? FALSE : x$r_buff0_thd2;
   x$r_buff1_thd2 = x$w_buff0_used && x$r_buff0_thd2 || x$w_buff1_used && x$r_buff1_thd2 ? FALSE : x$r_buff1_thd2;
   __VERIFIER_atomic_end();
-  __VERIFIER_atomic_begin();
   __unbuffered_cnt = __unbuffered_cnt + 1;
-  __VERIFIER_atomic_end();
   return 0;
 }
 
@@ -214,7 +206,10 @@ int main()
   __VERIFIER_atomic_begin();
   main$tmp_guard0 = __unbuffered_cnt == 2;
   __VERIFIER_atomic_end();
-  assume_abort_if_not(main$tmp_guard0);
+//   assume_abort_if_not(main$tmp_guard0);
+  if (main$tmp_guard0 == 0) {
+	  abort();
+  }
   __VERIFIER_atomic_begin();
   x = x$w_buff0_used && x$r_buff0_thd0 ? x$w_buff0 : (x$w_buff1_used && x$r_buff1_thd0 ? x$w_buff1 : x);
   x$w_buff0_used = x$w_buff0_used && x$r_buff0_thd0 ? FALSE : x$w_buff0_used;
@@ -229,7 +224,10 @@ This likely is a bug in the tool chain. */
   __VERIFIER_atomic_end();
   /* Program was expected to be safe for X86, model checker should have said NO.
 This likely is a bug in the tool chain. */
-  __VERIFIER_assert(main$tmp_guard1);
+//   __VERIFIER_assert(main$tmp_guard1);
+  if (main$tmp_guard1 == 0) {
+ERROR:reach_error();
+  }
   return 0;
 }
 

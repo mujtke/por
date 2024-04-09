@@ -6,7 +6,7 @@ fi
 
 targetDir="$1"
 
-echo -e "\033[32mFile\t\t\t\t\t\t\t\t\033[33mResult\033[0m"
+echo -e "\033[32mFile\t\t\t\t\033[33mResult\033[0m"
 
 function runTask() {
 	TEST_FILE="$1"

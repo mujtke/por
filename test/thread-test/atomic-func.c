@@ -8,7 +8,7 @@ extern void abort(void);
 #include <assert.h>
 void reach_error() { assert(0); }
 void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; return; }
-extern void __VERIFIER_atomic_begin();
+// extern void __VERIFIER_atomic_begin();
 extern void __VERIFIER_atomic_end();
 
 typedef unsigned pthread_t;

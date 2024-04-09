@@ -10,6 +10,7 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
+import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
@@ -160,6 +161,9 @@ public class OGTransfer {
         int edgeType = getEdgeType(hasSharedVars, isAssumeEdge);
 
         Pair<ObsGraph, ObsGraph> result = null;
+        // Debug
+        boolean testFlag = DebugAndTest.testMo(graph);
+        assert testFlag;
         // CriticalAreaAction.
         switch (criticalAreaAction) {
             case START:
@@ -269,7 +273,8 @@ public class OGTransfer {
 
                 // Else, the node contains the edge.
 //                node.addDeletedEvents(sharedEvents, edge);
-                node.addEventsWithoutCheck(toAddEvents);
+//                node.addEventsWithoutCheck(toAddEvents);
+                node.addEvents(toAddEvents);
                 OGPORState chOgState = AbstractStates.extractStateByType(chState,
                         OGPORState.class);
                 assert chOgState != null;
@@ -395,8 +400,6 @@ public class OGTransfer {
             }
             // Even if the node has been added to the graph, we may still need
             // to set relations for the events after lhe.
-//            visitNode(graph, node, chOgState, node.hasBeenAddedToGraph());
-//            visitNode(graph, node, chOgState, node.hasBeenAddedToGraph());
             visitNode(graph, node, chOgState, !node.shouldRevisit());
             graph.setNeedToRevisit(node.shouldRevisit());
             graph.updateCurrentNodeTable(curThd, node);
@@ -598,7 +601,8 @@ public class OGTransfer {
                 //  We add them here?
 //                node.addDeletedEvents(sharedEvents, edge);
                 // Add events in toAddEvents to the node without checking.
-                node.addEventsWithoutCheck(toAddEvents);
+//                node.addEventsWithoutCheck(toAddEvents);
+                node.addEvents(toAddEvents);
                 node.setLastVisitedEdge(edge);
                 graph.setNeedToRevisit(false);
                 graphWrapper.clear();
@@ -622,7 +626,8 @@ public class OGTransfer {
 //                assert node.getLheIndex() > 0;
                 graph.setNeedToRevisit(false);
 //                node.addEdge(edge, sharedEvents); // Also add the events.
-                node.addEventsWithoutCheck(toAddEvents);
+//                node.addEventsWithoutCheck(toAddEvents);
+                node.addEvents(toAddEvents);
                 node.addEdge(edge);
                 graphWrapper.clear();
 
@@ -717,6 +722,8 @@ public class OGTransfer {
                     // When ei is a read and accesses the save var with e, e will cover ei.
                     if (ei.isRead() && ei.accessSameVarWith(e))
                         it.remove();
+                    // FIXME: when both ei and e are write, and they access the same
+                    //  var, then ei will cover e.
                 }
             } else if (Objects.equals(edge, e.getInEdge())){
                 // edgeStartIndex >= 0 && edge == e.getInEdge()
@@ -1230,11 +1237,11 @@ public class OGTransfer {
                     // New mo: w --> j --> wmb
                     // NOTE: (w, j) may have been in the mo.
                     SharedEvent wmb = w.getMoBefore();
-                    if (wmb != null && wmb != j) {
+                    if (wmb == null) {      // wmb == null
+                        j.setMoAfter(w);    // Add new mo for j.
+                    } else if (wmb != j) {
                         wmb.setMoAfter(j);
                         j.setMoAfter(w);
-                    } else if (wmb != j) {  // wmb == null
-                        j.setMoAfter(w);    // Add new mo for j.
                     }
 //                    setRelation("mo", graph, w, j);
                     toRemove.add(j);
