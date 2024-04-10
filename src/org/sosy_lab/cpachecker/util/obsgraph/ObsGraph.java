@@ -72,10 +72,17 @@ public class ObsGraph implements Copier<ObsGraph> {
             List<SharedEvent> events = lastNode.getEvents();
             SharedEvent lastHandledE = lastNode.getLastHandledEvent();
             if (!RE.isEmpty()) RE.clear();
-            if (lastHandledE == null) {
-                RE.addAll(events);
-            } else {
-                for (int i = lastNode.getLheIndex() + 1; i < events.size(); i++) {
+            // FIXME: In RE, a read event should always be front of a write?
+            int i, lheIndex = lastHandledE == null ? -1 : lastNode.getLheIndex(),
+                    lastReadIndex = lheIndex;
+            for (i = lheIndex + 1; i < events.size(); i++) {
+                if (events.get(i).isRead()) { // Read.
+                    assert lastReadIndex + 1 == i :
+                            "Some write events added before the read " + events.get(i);
+//                    RE.add(++lastReadIndex, events.get(i));
+                    RE.add(events.get(i));
+                    lastReadIndex++;
+                } else { // Write.
                     RE.add(events.get(i));
                 }
             }

@@ -161,9 +161,9 @@ public class OGTransfer {
         int edgeType = getEdgeType(hasSharedVars, isAssumeEdge);
 
         Pair<ObsGraph, ObsGraph> result = null;
-        // Debug
-        boolean testFlag = DebugAndTest.testMo(graph);
-        assert testFlag;
+
+        if (__DEBUG__)  assert DebugAndTest.testMo(graph);
+
         // CriticalAreaAction.
         switch (criticalAreaAction) {
             case START:
