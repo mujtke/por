@@ -139,7 +139,6 @@ public class OGAlgorithm implements Algorithm {
 
             // debug.
             boolean debug = false;
-//            debug = true;
             if (debug) {
                 ARGState pars = (ARGState) state;
                 for (AbstractState ch : successors) {

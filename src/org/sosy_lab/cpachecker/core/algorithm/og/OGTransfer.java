@@ -30,13 +30,17 @@ public class OGTransfer {
     private final Map<Integer, OGNode> nodeMap;
     private final Map<Integer, List<SharedEvent>> edgeVarMap;
     private final NLTComparator nltcmp = new NLTComparator();
+    private boolean enableDebug;
 
-    public OGTransfer(Map<Integer, List<ObsGraph>> pOGMap,
-                      Map<Integer, OGNode> pNodeMap,
-            Map<Integer, List<SharedEvent>> pEdgeVarMap) {
+    public OGTransfer(
+            Map<Integer, List<ObsGraph>> pOGMap,
+            Map<Integer, OGNode> pNodeMap,
+            Map<Integer, List<SharedEvent>> pEdgeVarMap,
+            boolean pEnableDebug) {
         this.OGMap = pOGMap;
         this.nodeMap = pNodeMap;
         this.edgeVarMap = pEdgeVarMap;
+        this.enableDebug = pEnableDebug;
     }
 
     public NLTComparator getNltcmp() { return nltcmp; }
@@ -140,7 +144,7 @@ public class OGTransfer {
 			boolean isSimpleTransfer) {
 
         // Debug.
-        boolean __DEBUG__ = true;
+        boolean __DEBUG__ = enableDebug;
         int parId = parState.getStateId(), chId = chState.getStateId();
 
         Preconditions.checkArgument(graphWrapper.size() == 1);

@@ -62,6 +62,10 @@ public class OGInfo {
             description = "extract shared variables for every cfa edge.")
     private boolean extractVarsForCFAEdge = true;
 
+    @Option(secure = true,
+    description = "switch for debugging.")
+    private boolean enableDebug = false;
+
     public OGInfo(final Configuration pConfig,
                   final ConfigurableProgramAnalysis pCpa,
                   final CFA pCfa,
@@ -83,8 +87,8 @@ public class OGInfo {
             }
 
             fullOGMap = new HashMap<>();
-            transfer = new OGTransfer(OGMap, nodeMap, edgeVarMap);
-            revisitor = new OGRevisitor(OGMap, nodeMap, pConfig, pCfa, pLogger);
+            transfer = new OGTransfer(OGMap, nodeMap, edgeVarMap, enableDebug);
+            revisitor = new OGRevisitor(OGMap, nodeMap, pConfig, pCfa, pLogger, enableDebug);
             nlt = new HashMap<>();
         } else {
             OGMap = null;
@@ -109,15 +113,15 @@ public class OGInfo {
        return revisitor;
     }
 
-//    public Map<Integer, List<String>> getFullOGMap() {
-//        return fullOGMap;
-//    }
-
     public Map<Integer, Map<Integer, String>> getFullOGMap() {
         return fullOGMap;
     }
 
     public HashMap<Integer, Integer> getNlt() {
         return nlt;
+    }
+
+    public boolean isEnableDebug() {
+        return enableDebug;
     }
 }

@@ -28,18 +28,22 @@ public class OGRevisitor {
 
     private final Map<Integer, List<ObsGraph>> OGMap;
     private final Map<Integer, OGNode> nodeMap;
+    private boolean enableDebug;
 
     // Handle conditional statements.
     private static ConditionalStatementHandler CSHandler;
 
-    public OGRevisitor(Map<Integer, List<ObsGraph>> pOGMap,
-                       Map<Integer, OGNode> nodeMap,
-                       Configuration config,
-                       CFA cfa,
-                       LogManager logger) throws InvalidConfigurationException {
+    public OGRevisitor(
+            Map<Integer, List<ObsGraph>> pOGMap,
+            Map<Integer, OGNode> nodeMap,
+            Configuration config,
+            CFA cfa,
+            LogManager logger,
+            boolean pEnableDebug) throws InvalidConfigurationException {
         this.OGMap = pOGMap;
         this.nodeMap = nodeMap;
         CSHandler = new ConditionalStatementHandler(config, cfa, logger);
+        this.enableDebug = pEnableDebug;
     }
 
     /**
@@ -67,21 +71,14 @@ public class OGRevisitor {
     }
 
     // parState: indicating where the revisit takes place.
-    private List<Pair<AbstractState, ObsGraph>> revisit(ARGState parState,
-            ObsGraph g) {
-        List<Pair<AbstractState, ObsGraph>> result = new ArrayList<>();
-        List<OGNode> nodes = g.getNodes();
-        OGNode node0 = g.getLastNode();
-        int nodeNum = nodes.size();
-        // FIXME: The revisited node may not be the last node.
-        // assert node0 != null && node0.equals(nodes.get(nodeNum - 1));
+    private List<Pair<AbstractState, ObsGraph>> revisit(ARGState parState, ObsGraph g) {
+        // DEBUG.
+        boolean debug = enableDebug;
 
+        List<Pair<AbstractState, ObsGraph>> result = new ArrayList<>();
         List<ObsGraph> RG = new ArrayList<>();
         RG.add(g);
 
-        // DEBUG.
-        boolean debug = true;
-        int depth = 0;
         while (!RG.isEmpty()) {
             ObsGraph G0 = RG.remove(0);
 
@@ -174,15 +171,11 @@ public class OGRevisitor {
                                 if (coGw != null) {
                                     RG.add(coGw);
                                     if (consistent(coGw)) {
-//                                        handleResultForWriteRevisit(result, coGw, rp,
-//                                                delete, parState, debug);
                                         handleResultForWriteRevisit(result, coGw, revisitNodeIndex, parState, debug);
                                     }
                                 }
 
                                 if (consistent(Gw)) {
-//                                    handleResultForWriteRevisit(result, Gw, rp, delete,
-//                                            parState, debug);
                                     handleResultForWriteRevisit(result, Gw, revisitNodeIndex, parState, debug);
                                 }
                             }
