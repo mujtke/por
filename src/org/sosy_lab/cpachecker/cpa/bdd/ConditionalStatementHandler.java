@@ -1,13 +1,13 @@
 package org.sosy_lab.cpachecker.cpa.bdd;
 
 import com.google.common.base.Preconditions;
-import de.uni_freiburg.informatik.ultimate.smtinterpol.Config;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.*;
 import org.sosy_lab.cpachecker.cfa.model.*;
 import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
@@ -24,7 +24,6 @@ import org.sosy_lab.cpachecker.cpa.pointer2.PointerState;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
@@ -91,7 +90,7 @@ public class ConditionalStatementHandler {
      * an assume statement (e.g., x > 1). When setting r to read from w that makes
      * the condition not hold, i.e., (x > 1) not hold, set easConflict as true. If w is
      * an indeterminate assignment, we set hasIndeterminacy as true.
-     * @return <A, B>
+     * @return < A, B >
      * A = true if letting r read from w leads to conflict.
      * B = true if the w is an indeterminate assignment.
      */
@@ -428,42 +427,8 @@ public class ConditionalStatementHandler {
         } else if (!nrmgr.makeAnd(assumeEvaluated, assignFormula).isTrue()) {
             // FIXME: neither false nor true, should we use BDDState rather than wEdge to
             //  compute the satisfiability?
-            // Debug.
-            CAssumeEdge assumeEdge = (CAssumeEdge) rEdge;
-            PointerState pointerInfo =
-                    AbstractStates.extractStateByType(wNode.getSucState(),
-                            PointerState.class);
-            BDDState wBDDState =
-                    AbstractStates.extractStateByType(wNode.getSucState(),
-                            BDDState.class);
-            assert wBDDState != null;
-
-            Precision precision;
-            try {
-                precision =
-                        VariableTrackingPrecision.createStaticPrecision(config, cfa.getVarClassification(),
-                                BDDCPA.class);
-            } catch (InvalidConfigurationException e) {
-                throw new RuntimeException(e);
-            }
-
-            final Region[] operand =
-                    bvComputer.evaluateVectorExpressionWithPointerState(
-                            varClass.getPartitionForEdge(assumeEdge),
-                            assumeEdge.getExpression(),
-                            CNumericTypes.INT,
-                            assumeEdge.getSuccessor(),
-                            pointerInfo,
-                            (VariableTrackingPrecision) precision);
-
-            // FIXME: Use bddState's bitvectorManager and NamedRegionManager. why?
-            BitvectorManager bvMgr = wBDDState.getBvmgr();
-            NamedRegionManager nrMgr = wBDDState.getManager();
-            Region evaluated = bvMgr.makeOr(operand);
-            if (!assumeEdge.getTruthAssumption())
-                evaluated = nrMgr.makeNot(evaluated);
-            Region newRegion = nrMgr.makeAnd(wBDDState.getRegion(), evaluated);
-            hasConflict = newRegion.isFalse();
+//            hasConflict = hasConflict(rEdge, wNode);
+            hasConflict = hasConflict2(assumption, wNode);
         }
 
         if(hasIndeterminacy) {
@@ -473,6 +438,70 @@ public class ConditionalStatementHandler {
 
 //        return cor;
         return Pair.of(hasConflict, hasIndeterminacy);
+    }
+
+    private boolean hasConflict2(AssumeEdge assumption, OGNode wNode) {
+        BDDState wBDDState = AbstractStates.extractStateByType(wNode.getSucState(),
+                        BDDState.class);
+        assert wBDDState != null;
+        AExpression aExpression = assumption.getExpression();
+        assert aExpression instanceof CExpression;
+        CExpression cExpression = (CExpression) aExpression;
+        Region[] assumeRegion = null;
+        try {
+            // Debug.
+            PredicateManager predMgr = new PredicateManager(config, wBDDState.getManager(), cfa);
+            assumeRegion = cExpression.accept(new BDDVectorCExpressionVisitor(predMgr,
+                    null, wBDDState.getBvmgr(), cfa.getMachineModel(), null));
+        } catch (Exception e) {
+            throw new UnsupportedOperationException("Cannot compute the BDD region for " + assumption);
+        }
+
+        assert assumeRegion != null;
+
+        Region assumeRegionEvaluated = wBDDState.getBvmgr().makeOr(assumeRegion),
+        region = wBDDState.getManager().makeAnd(wBDDState.getRegion(), assumeRegionEvaluated);
+
+        return region.isFalse();
+    }
+
+    private boolean hasConflict(CFAEdge rEdge, OGNode wNode)
+            throws UnsupportedCodeException {
+        CAssumeEdge assumeEdge = (CAssumeEdge) rEdge;
+        PointerState pointerInfo =
+                AbstractStates.extractStateByType(wNode.getSucState(),
+                        PointerState.class);
+        BDDState wBDDState =
+                AbstractStates.extractStateByType(wNode.getSucState(),
+                        BDDState.class);
+        assert wBDDState != null;
+
+        Precision precision;
+        try {
+            precision =
+                    VariableTrackingPrecision.createStaticPrecision(config, cfa.getVarClassification(),
+                            BDDCPA.class);
+        } catch (InvalidConfigurationException e) {
+            throw new RuntimeException(e);
+        }
+
+        final Region[] operand =
+                bvComputer.evaluateVectorExpressionWithPointerState(
+                        varClass.getPartitionForEdge(assumeEdge),
+                        assumeEdge.getExpression(),
+                        CNumericTypes.INT,
+                        assumeEdge.getSuccessor(),
+                        pointerInfo,
+                        (VariableTrackingPrecision) precision);
+
+        // FIXME: Use bddState's bitvectorManager and NamedRegionManager. why?
+        BitvectorManager bvMgr = wBDDState.getBvmgr();
+        NamedRegionManager nrMgr = wBDDState.getManager();
+        Region evaluated = bvMgr.makeOr(operand);
+        if (!assumeEdge.getTruthAssumption())
+            evaluated = nrMgr.makeNot(evaluated);
+        Region newRegion = nrMgr.makeAnd(wBDDState.getRegion(), evaluated);
+        return newRegion.isFalse();
     }
 
     /** This function returns true if the variable is used in the Expression. */

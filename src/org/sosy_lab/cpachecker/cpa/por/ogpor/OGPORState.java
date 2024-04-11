@@ -10,6 +10,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
 import org.sosy_lab.cpachecker.cfa.model.c.CFunctionCallEdge;
+import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
@@ -91,7 +92,8 @@ public class OGPORState implements AbstractState, Graphable {
     // Record whether the enteringEdge is the normal edge.
     boolean isNormalEnteringEdge;
     private static HashMap<Integer, List<SharedEvent>> edgeVarMap;
-    private static Set<String> atomicBegins = ImmutableSet.of("__VERIFIER_atomic_begin");
+    private static Set<String> atomicBegins = ImmutableSet.of("__VERIFIER_atomic_begin"
+            , "__VERIFIER_atomic_r", "__VERIFIER_atomic_w");
     private final Set<Pattern> atomicBeginPatterns = new HashSet<>();
     private static Set<String> atomicEnds = ImmutableSet.of("__VERIFIER_atomic_end");
     private final Set<Pattern> atomicEndPatterns = new HashSet<>();
@@ -427,6 +429,10 @@ public class OGPORState implements AbstractState, Graphable {
     private Pair<LockStatus, String> getLock(CFAEdge edge) {
 
         if (!(edge instanceof CStatementEdge) && !(edge instanceof CFunctionCallEdge)) {
+            // FIXME: handle the function return edge, which may terminate a atomic block.
+            if (edge instanceof CFunctionReturnEdge) {
+                return getLockFromFunctionReturnEdge((CFunctionReturnEdge) edge);
+            }
             return Pair.of(LOCK_FREE, null);
         }
 
@@ -452,9 +458,11 @@ public class OGPORState implements AbstractState, Graphable {
 
         if (hasAtomicBegin(funcName)) {
             return Pair.of(LOCK, "__VERIFIER_atomic_begin");
+//            return Pair.of(LOCK, funcName);
         }
         if (hasAtomicEnd(funcName)) {
             return Pair.of(UNLOCK, "__VERIFIER_atomic_end");
+//            return Pair.of(UNLOCK, funcName);
         }
 
         if (hasLockBegin(funcName)) {
@@ -462,6 +470,20 @@ public class OGPORState implements AbstractState, Graphable {
         }
         if (hasLockEnd(funcName)) {
             return Pair.of(UNLOCK, getLockVarName(edge));
+        }
+
+        return Pair.of(LOCK_FREE, null);
+    }
+
+    private Pair<LockStatus, String>
+    getLockFromFunctionReturnEdge(CFunctionReturnEdge pFuncRetEdge) {
+        String funcName = pFuncRetEdge.getFunctionEntry().getFunctionName(),
+                curLockName = locks.get(inThread).peek();
+        assert funcName != null :
+                "Cannot get the name of the called function for the return edge" + pFuncRetEdge;
+        if (Objects.equals(funcName, curLockName)) {
+            // Matched. The block ends by pFuncRetEdge.
+            return Pair.of(UNLOCK, curLockName);
         }
 
         return Pair.of(LOCK_FREE, null);

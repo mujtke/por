@@ -202,7 +202,7 @@ public class OGRevisitor {
             // B = true if the w is an indeterminate assignment.
             evaluation = CSHandler.handleAssumeStatement(G, r, w);
         } catch (UnsupportedCodeException e) {
-            e.printStackTrace();
+//            e.printStackTrace();
         }
 
         assert evaluation != null;

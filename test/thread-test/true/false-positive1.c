@@ -3,22 +3,12 @@ void assume_abort_if_not(int cond) {
   if(!cond) {abort();}
 }
 extern void abort(void);
-// #include <assert.h>
-extern void reach_error();
+#include <assert.h>
+void reach_error() { assert(0); }
 extern void __VERIFIER_atomic_begin(void);
 extern void __VERIFIER_atomic_end(void);
 
-// #include <pthraed.h>
-typedef unsigned pthread_t;
-typedef unsigned pthread_mutex_t;
-#define NULL ((void *) 0)
-extern void pthread_create(pthread_t *, void *, void *(*)(void *), void *);
-
-// #include <assert.h>
-extern void assert(int);
-extern void abort(void);
-
-// #include <pthread.h>
+#include <pthread.h>
 
 #define assume(e) assume_abort_if_not(e)
 #undef assert
@@ -28,11 +18,9 @@ int w=0, r=0, x, y;
 
 void __VERIFIER_atomic_w()
 {
-//     assume(w==0);
-//     assume(r==0);
 	__VERIFIER_atomic_begin();
-    if (!(w==0)) abort();
-    if (!(r==0)) abort();
+    assume(w==0);
+    assume(r==0);
     w = 1;
 	__VERIFIER_atomic_end();
 }
@@ -49,9 +37,8 @@ void* thr1(void* arg) { //writer
 
 void __VERIFIER_atomic_r()
 {
-//     assume(w==0);
 	__VERIFIER_atomic_begin();
-    if (!(w==0)) abort();
+    assume(w==0);
     r = r+1;
 	__VERIFIER_atomic_end();
 }
@@ -70,10 +57,7 @@ void* thr2(void* arg) { //reader
   __VERIFIER_atomic_begin();
   int lx = x;
   __VERIFIER_atomic_end();
-//   assert(ly == lx);
-  if (ly != lx){
-ERROR: reach_error();
-  }
+  assert(ly == lx);
   __VERIFIER_atomic_begin();
   int lr = r;
   __VERIFIER_atomic_end();

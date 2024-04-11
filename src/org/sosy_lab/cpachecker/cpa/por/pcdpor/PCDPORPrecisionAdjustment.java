@@ -248,7 +248,7 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
     DGNode depCheckNode = condDepGraph.getDGNode(pCheckEdge.hashCode()),
         depCurNode = condDepGraph.getDGNode(pCurEdge.hashCode());
 
-    // we do cannot determine the dependency of thread creation edges.
+    // we cannot determine the dependency of thread creation edges.
     boolean containThreadCreationEdge =
         (isThreadCreationEdge(pCheckEdge) || isThreadCreationEdge(pCurEdge));
     // compute conditional independence of the two nodes.
@@ -256,7 +256,7 @@ public class PCDPORPrecisionAdjustment implements PrecisionAdjustment {
     
     //
     if(ics == null) {
-      // they are unconditional independent.
+      // they are unconditionally independent.
       if (!containThreadCreationEdge
           && !pCheckEdge.getSuccessor().isLoopStart()
           && !pCurEdge.getSuccessor().isLoopStart()) { // TODO: loop start point should be carefully

@@ -812,7 +812,7 @@ public class DepConstraintBuilder {
   private CondDepConstraints checkSatOfConstraintAndReturn(final CondDepConstraints pConstraints) {
     Preconditions.checkNotNull(pConstraints);
 
-    // this flag is used to check whether all constraints are always satisifiable.
+    // this flag is used to check whether all constraints are always satisfiable.
     // if so, then the constraint will be null (i.e., corresponding transitions are naturally
     // independent)
     boolean areAllTop = true;
@@ -841,7 +841,7 @@ public class DepConstraintBuilder {
     } catch (Exception e) {
       logger.log(
           Level.WARNING,
-          "exception occured when checking the satisfiability of constraints: " + pConstraints);
+          "exception occurred when checking the satisfiability of constraints: " + pConstraints);
       e.printStackTrace();
     }
 
