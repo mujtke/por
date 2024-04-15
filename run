@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+
+# Last modified: Thu Apr 11 03:51:43 PM CST 2024.
+# The script is used to run CPAchecker with specified
+# configuration files by selecting a certain number.
+#
+# Argument: the relatiev path of the program that will 
+# be verified.
+#
+# Usage: ./run ./test.c
+# NOTE: $pwd == "/home/mujueke/Code/Java/por"
+
+function err_log() {
+	echo -e "$1"
+	exit 0
+}
+
+[[ $# -lt 1 ]] && err_log "Missing file for verification."
+
+FILE="$1"
+[[ ! -e "$FILE" ]] && err_log "$FILE doesn't exist!\nExit."
+
+FZF_EXE=$(which fzf)
+[[ ! -x "$FZF_EXE" ]] && err_log "Missing the executable of fzf."
+
+PWD="/home/mujueke/Code/Java/por"
+CONFIG_FILE=""
+ARGS="-spec default -preprocess"
+EXECUTABLE="./scripts/cpa.sh"
+COLOR_GREEN="\033[32m"
+COLOR_DEFAULT="\033[0m"
+
+function get_configuration() {
+	# If we find a properties file successfully, exit the function with 0.
+	# Else exit with 1.
+	cd "$PWD/config"
+	while true; do
+		tmp_config=$(echo $($FZF_EXE))
+		valid_config=$(grep .properties <<< "$tmp_config")
+		if [[ "$valid_config" == "" ]]; then
+			read -p "Invalid configuration selected: $tmp_config.
+Continue (any key) or exit(q)? "
+			[[ "$REPLY" == "q" ]] && exit 1
+		else
+			echo "$(realpath --relative-to=../ $valid_config)"
+			exit 0
+		fi
+	done
+}
+
+function run_with_provided_configuration() {
+	read -p "* (1) ogpor with output
+  (2) ogpor with no output
+  (3) pcdpor with output
+  (4) pcdpor with n output
+  (5) original bdd analysis
+Select a configuration that you would like to use(<Enter> with *): "
+	case "$REPLY" in
+		""|"1" ) echo "empty or 1 input."
+			CONFIG_FILE="config/myAnalysis-concurrency-bdd-ogpor.properties"
+			;;
+		"2" ) echo "2 input."
+			CONFIG_FILE="config/myAnalysis-concurrency-bdd-ogpor-no-out.properties"
+			;;
+		"3" ) echo "3 input."
+			CONFIG_FILE="config/myAnalysis-concurrency-bdd-pcdpor.properties"
+			;;
+		"4" ) echo "4 input."
+			CONFIG_FILE="config/myAnalysis-concurrency-bdd-pcdpor-no-out.properties"
+			;;
+		"5" ) echo "5 input."
+			CONFIG_FILE="config/bddAnalysis-concurrency.properties"
+			;;
+		* ) echo "Invalid input. Exit."
+			exit 1
+			;;
+	esac
+
+	echo -e "Select configuration: ${COLOR_GREEN}${CONFIG_FILE}${COLOR_DEFAULT}"
+	sleep 1
+	echo "$EXECUTABLE -config $CONFIG_FILE $ARGS $FILE"
+	eval "$EXECUTABLE -config $CONFIG_FILE $ARGS $FILE"
+}
+
+function run_with_new_configuration() {
+	CONFIG_FILE=$(get_configuration)
+	[[ $? -eq 1 ]] && exit 0
+
+	echo -e "Select configuration: ${COLOR_GREEN}${CONFIG_FILE}${COLOR_DEFAULT}"
+	sleep 1 
+	echo "$EXECUTABLE -config $CONFIG_FILE $ARGS $FILE"
+	eval "$EXECUTABLE -config $CONFIG_FILE $ARGS $FILE"
+}
+
+read -p "Use a provided configuration(<Enter>) or select a new one(n): "
+if [[ "$REPLY" != "n" ]]; then
+	run_with_provided_configuration
+else
+	run_with_new_configuration
+fi

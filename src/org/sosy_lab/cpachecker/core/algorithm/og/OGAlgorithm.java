@@ -16,6 +16,7 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
+import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
@@ -52,6 +53,10 @@ public class OGAlgorithm implements Algorithm {
     // reachedSet.
     private final static Vector<AbstractState> waitlist = new Vector<>();
 
+    // Debug.
+    private boolean enableDebug;
+    private final List<AbstractState> terminatedStates = new ArrayList<>();
+
     public OGAlgorithm(ConfigurableProgramAnalysis cpa,
                        LogManager pLog,
                        ShutdownNotifier pShutdownNotifier) {
@@ -68,6 +73,7 @@ public class OGAlgorithm implements Algorithm {
         this.revisitor = ogInfo.getRevisitor();
         this.transfer = ogInfo.getTransfer();
         this.nlt = ogInfo.getNlt();
+        this.enableDebug = ogInfo.isEnableDebug();
     }
 
     public static Vector<AbstractState> getWaitlist() { return waitlist; }
@@ -89,7 +95,10 @@ public class OGAlgorithm implements Algorithm {
                 reachedSet.popFromWaitlist();
             }
             // Debug.
-            dumpToJson(reachedSet);
+            if (enableDebug) {
+                // Export observing graphs.
+                dumpToJson(reachedSet);
+            }
         }
     }
 
@@ -137,20 +146,21 @@ public class OGAlgorithm implements Algorithm {
         try {
             successors = transferRelation.getAbstractSuccessors(state, precision);
 
-            // debug.
-            boolean debug = false;
-            if (debug) {
-                ARGState pars = (ARGState) state;
-                for (AbstractState ch : successors) {
-                    ARGState chs = (ARGState) ch;
-                    CFAEdge chtp = pars.getEdgeToChild(chs);
-                    int parId = pars.getStateId(), chId = chs.getStateId();
-                    // Debug.
-                    System.out.println("s" + parId
-                            + " -> s" + chId
-                            + " [label=\"" + chtp + "\"]");
-                }
-            }
+//            if (enableDebug && successors.isEmpty()) {
+//                terminatedStates.add(state);
+//            }
+//            if (enableDebug) {
+//                ARGState pars = (ARGState) state;
+//                for (AbstractState ch : successors) {
+//                    ARGState chs = (ARGState) ch;
+//                    CFAEdge chtp = pars.getEdgeToChild(chs);
+//                    int parId = pars.getStateId(), chId = chs.getStateId();
+//                    // Debug.
+//                    System.out.println("s" + parId
+//                            + " -> s" + chId
+//                            + " [label=\"" + chtp + "\"]");
+//                }
+//            }
 
         } finally {
             // Stop timer for transfer.
@@ -235,6 +245,17 @@ public class OGAlgorithm implements Algorithm {
                                 parState,
                                 chState,
                                 true);
+
+//                if (enableDebug) {
+//                    // Check redundancy.
+//                    terminatedStates.forEach(ts -> {
+//                        if (DebugAndTest.testRedundancy((ARGState) ts,
+//                                GlobalInfo.getInstance().getOgInfo().getFullOGMap()))
+//                            throw new IllegalStateException("Redundant graphs found at " +
+//                                    "state " + ((ARGState) ts).getStateId());
+//                    });
+//                }
+
                 ObsGraph chGraph = transferResult.getFirst(),
                         copiedGraph = transferResult.getSecond();
                 if (copiedGraph != null) {

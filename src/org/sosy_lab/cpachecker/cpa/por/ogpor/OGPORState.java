@@ -14,6 +14,7 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
+import org.sosy_lab.cpachecker.cpa.threading.ThreadingState;
 import org.sosy_lab.cpachecker.util.LoopStructure;
 import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
 import org.sosy_lab.cpachecker.util.Pair;
@@ -399,8 +400,20 @@ public class OGPORState implements AbstractState, Graphable {
             caas.put(inThread, END);
             return;
         }
+//        if (willTerminate(edge)) {
+//            terminateBlock(inThread);
+//            return;
+//        }
 
         caas.put(inThread, handleLock(curLocks, l));
+    }
+
+    public boolean terminateBlock(String thd) {
+        if (caas.get(thd) == START || caas.get(thd) == CONTINUE){
+            caas.put(thd, END);
+            return true;
+        }
+        return false;
     }
 
     private boolean willTerminate(CFAEdge edge) {
@@ -417,11 +430,41 @@ public class OGPORState implements AbstractState, Graphable {
 
     /** the whole program will terminate after this edge */
     private static boolean isTerminatingEdge(CFAEdge edge) {
-        return edge.getSuccessor() instanceof CFATerminationNode;
+        if (edge.getSuccessor() instanceof CFATerminationNode) {
+            return true;
+        } else if (edge instanceof CStatementEdge) { // Call of 'abort()'.
+            CStatement cStatement = ((CStatementEdge) edge).getStatement();
+            if (!(cStatement instanceof CFunctionCallStatement)) {
+                return false;
+            }
+            CFunctionCallExpression funcCallExpr =
+                    ((CFunctionCallStatement) cStatement).getFunctionCallExpression();
+            // FIXME: do a better match.
+            if (Objects.equals(getFunctionName(funcCallExpr), "abort")) {
+                return true;
+            }
+        } else if (edge instanceof CFunctionCallEdge) {
+            CFunctionCallEdge cFunctionCallEdge = (CFunctionCallEdge) edge;
+            CFunctionCallExpression funcCallExpr = cFunctionCallEdge.getSummaryEdge()
+                    .getExpression().getFunctionCallExpression();
+            // FIXME: do a better match.
+            if (Objects.equals(getFunctionName(funcCallExpr), "abort")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static String getFunctionName(CFunctionCallExpression cFuncCallExpr) {
+        assert cFuncCallExpr.getFunctionNameExpression() instanceof CIdExpression;
+        String funcName = ((CIdExpression) cFuncCallExpr.getFunctionNameExpression()).getName();
+        assert funcName != null;
+        return funcName;
     }
 
     /** the whole program will terminate after this edge */
-    private boolean isEndOfMainFunction(CFAEdge edge) {
+    private static boolean isEndOfMainFunction(CFAEdge edge) {
         return Objects.equals(cfa.getMainFunction().getExitNode(), edge.getSuccessor());
     }
 
@@ -478,7 +521,7 @@ public class OGPORState implements AbstractState, Graphable {
     private Pair<LockStatus, String>
     getLockFromFunctionReturnEdge(CFunctionReturnEdge pFuncRetEdge) {
         String funcName = pFuncRetEdge.getFunctionEntry().getFunctionName(),
-                curLockName = locks.get(inThread).peek();
+                curLockName = locks.get(inThread).isEmpty() ? null : locks.get(inThread).peek();
         assert funcName != null :
                 "Cannot get the name of the called function for the return edge" + pFuncRetEdge;
         if (Objects.equals(funcName, curLockName)) {

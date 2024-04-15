@@ -12,7 +12,7 @@
 	<tasks name="ConcurrencySafety-Main">
 		<includesfile>../sv-benchmarks/c/ConcurrencySafety-Main.set</includesfile>
 		<propertyfile>../sv-benchmarks/c/properties/unreach-call.prp</propertyfile>
-		<option name="-config">./config/myAnalysis-concurrency-bdd-ogpor-experiment.properties</option>
+		<option name="-config">./config/myAnalysis-concurrency-bdd-ogpor-no-out.properties</option>
 	</tasks>
 </rundefinition>
 

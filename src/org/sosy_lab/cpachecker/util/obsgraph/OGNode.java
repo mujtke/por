@@ -532,7 +532,6 @@ public class OGNode implements Copier<OGNode> {
         }
         Preconditions.checkArgument(i > j,
                 "Update lastHandledEvent failed.");
-//        lastHandledEvent = resetLastHandledE;
         LHEIndex = k;
     }
 

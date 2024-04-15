@@ -15,6 +15,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
@@ -26,6 +27,8 @@ import org.sosy_lab.cpachecker.util.obsgraph.*;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction.*;
 
 @Options(prefix="cpa.ogpor")
 public class OGPORTransferRelation extends SingleEdgeTransferRelation {
@@ -67,6 +70,7 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         pConfig.inject(this);
         mainThreadId = pCfa.getMainFunction().getFunctionName();
         mainExitNode = pCfa.getMainFunction().getExitNode();
+        assert mainExitNode != null;
         logger = pLogger;
         shutdownNotifier = pShutdownNotifier;
         nodeMap = GlobalInfo.getInstance().getOgInfo().getNodeMap();

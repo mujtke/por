@@ -3,9 +3,7 @@ package org.sosy_lab.cpachecker.util.obsgraph;
 import org.json.JSONObject;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
-import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
@@ -13,7 +11,6 @@ import org.sosy_lab.cpachecker.cpa.bdd.BDDState;
 import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
-import org.sosy_lab.cpachecker.util.predicates.regions.Region;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -205,6 +202,27 @@ public class DebugAndTest {
             }
         }
         return true;
+    }
+
+    // Detecting whether there some duplicated graphs in the given ARG state.
+    public static boolean testRedundancy(ARGState state,
+            Map<Integer, Map<Integer, String>> fullOGMap) {
+        int stateNum = state.getStateId();
+        Map<Integer, String> graphs = fullOGMap.get(stateNum);
+        if (graphs == null || graphs.size() < 2) {
+            return false;
+        } else {
+            List<String> stringsOfGraphs = new ArrayList<>(graphs.values());
+//            List<ObsGraph> redundantGraphs = new ArrayList<>();
+            for (int i = 0; i < stringsOfGraphs.size(); i++) {
+                for (int j = i + 1; j < stringsOfGraphs.size(); j++) {
+                    if (Objects.equals(stringsOfGraphs.get(i), stringsOfGraphs.get(j)))
+                        return true;
+                }
+            }
+        }
+
+        return false;
     }
 
 

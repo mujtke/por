@@ -4,7 +4,7 @@ TEST_FILE="$(realpath $1)"
 
 cd "$HOME/Code/Java/por"
 
-OGPOR=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor.properties \
+OGPOR=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
 	-spec default -preprocess \
 	"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')
 
@@ -16,7 +16,7 @@ else
 	OGPOR="ERROR."
 fi
 
-PCDPOR=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-pcdpor.properties \
+PCDPOR=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-pcdpor-no-out.properties \
 	-spec default -preprocess \
 	"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')
 

@@ -84,8 +84,7 @@ public class OGRevisitor {
 
             if (debug) {
                 // Debug: perform some tests on G0.
-                if (!DebugAndTest.testPO(G0))
-                    System.out.println("Incorrect po relation.");
+                if (!DebugAndTest.testPO(G0)) System.out.println("Incorrect po relation.");
             }
 
             List<SharedEvent> RE = new ArrayList<>(G0.getRE());
@@ -259,15 +258,15 @@ public class OGRevisitor {
             boolean debug) {
 
         if (debug) {
-            if (!DebugAndTest.testPO(Gw))
-                System.out.println("Incorrect po relation.");
+            if (!DebugAndTest.testPO(Gw)) System.out.println("Incorrect po relation.");
+//            if (!DebugAndTest.testLHE()) System.out.println("Error LHE.");
         }
 
         // FIXME: for the Gw, its lastNode (w.inNode) should be visited?
         //  I.e., let w.inNode.shouldRevisit = false, at the same time
         //  set the last event in w.inNode as its last-visited event.
-        OGNode revisitNode = Gw.getNodes().get(revisitNodeIndex);
-        revisitNode.setLheIndex(revisitNode.getEvents().size());
+//        OGNode revisitNode = Gw.getNodes().get(revisitNodeIndex);
+//        revisitNode.setLheIndex(revisitNode.getEvents().size());
 
         result.add(Pair.of(getPivotState(Gw), Gw));
         Gw.setCreationState(parState);
