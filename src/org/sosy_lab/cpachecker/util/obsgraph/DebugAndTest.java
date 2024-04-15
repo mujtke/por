@@ -15,6 +15,7 @@ import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class DebugAndTest {
 
@@ -315,11 +316,17 @@ public class DebugAndTest {
     }
 
     public static void dumpToJson(ReachedSet reachedSet) {
-//        Map<Integer, List<String>> fullOGMap =
-//                GlobalInfo.getInstance().getOgInfo().getFullOGMap();
         Map<Integer, Map<Integer, String>> fullOGMap0 =
                 GlobalInfo.getInstance().getOgInfo().getFullOGMap();
         Map<Integer, List<String>> fullOGMap = new HashMap<>();
+        // Order the graphs by key.
+//        fullOGMap0.forEach((k, v) -> {
+//            List<Map.Entry<Integer, String>> entryList = new ArrayList<>(v.entrySet());
+//            entryList.sort(Comparator.comparingInt(Map.Entry::getKey));
+//            List<String> values =
+//                    entryList.stream().map(Map.Entry::getValue).collect(Collectors.toList());
+//            fullOGMap.put(k, new ArrayList<>(values));
+//        });
         fullOGMap0.forEach((k, v) -> fullOGMap.put(k, new ArrayList<>(v.values())));
         JSONObject json = new JSONObject(fullOGMap);
         try {
@@ -336,6 +343,12 @@ public class DebugAndTest {
             stack.push(s);
             while (!stack.isEmpty()) {
                 ARGState cur = stack.pop(), par;
+                if (cur.getChildren().isEmpty()
+                        && (!fullOGMap.containsKey(cur.getStateId())
+                        || fullOGMap.get(cur.getStateId()) == null
+                        || fullOGMap.get(cur.getStateId()).isEmpty())) {
+                    continue; // Has neither children nor graph.
+                }
                 cur.getChildren().forEach(stack::push);
                 int curStateId = cur.getStateId();
                 if (cur.getParents().isEmpty()) {

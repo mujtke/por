@@ -50,13 +50,13 @@ void * P1(void *arg);
 
 int __unbuffered_cnt = 0;
 
-int p0_EAX = 0;
+int EA0 = 0;
 
-int p0_EBX = 0;
+int EB0 = 0;
 
-int p1_EAX = 0;
+int EA1 = 0;
 
-int p1_EBX = 0;
+int EB1 = 0;
 
 _Bool main$tmp_guard0;
 
@@ -71,10 +71,10 @@ int y = 0;
 void * P0(void *arg)
 {
   y = 1;
-  p0_EAX = y;
+  EA0 = y;
 
   __VERIFIER_atomic_begin();
-  p0_EBX = x;
+  EB0 = x;
   x = __VERIFIER_nondet_bool();
   __VERIFIER_atomic_end();
 
@@ -88,11 +88,11 @@ void * P1(void *arg)
 
   __VERIFIER_atomic_begin();
   x$flush_delayed = __VERIFIER_nondet_bool();
-  p1_EAX = 1;
+  EA1 = 1;
   x = x$flush_delayed ? x : 1;
   __VERIFIER_atomic_end();
 
-  p1_EBX = y;
+  EB1 = y;
 
   __unbuffered_cnt = __unbuffered_cnt + 1;
 
@@ -114,7 +114,8 @@ int main()
 //   if (main$tmp_guard0 == 0) abort();
 
   __VERIFIER_atomic_begin();
-  main$tmp_guard1 = !(p0_EAX == 1 && p0_EBX == 0 && p1_EAX == 1 && p1_EBX == 0);
+//   main$tmp_guard1 = !(EA0 == 1 && EB0 == 0 && EA1 == 1 && EB1 == 0);
+  main$tmp_guard1 = !(EB0 == 0 && EA1 == 1 && EB1 == 0);
   __VERIFIER_atomic_end();
 
   if (main$tmp_guard1 == 0)
