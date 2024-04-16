@@ -836,6 +836,7 @@ public class OGTransfer {
                 // Replacement won't happen for shared-var edge.
                 CFAEdge coCFAEdge = getCoEdgeFromCFA(edge),
                         coARGEdge = getCoEdgeFromARG(parState, edge);
+                assert coARGEdge == null || (coARGEdge == coCFAEdge);
                 boolean coCFAEdgeInNode = node.getBlockEdges().contains(coCFAEdge);
                 if (coCFAEdgeInNode && coARGEdge == null) { // case (1)
                     // We cannot replace the coCFAEdge, transfer gets blocked here.
@@ -1110,7 +1111,6 @@ public class OGTransfer {
         for (int i = 0; i < edge.getPredecessor().getNumLeavingEdges(); i++) {
             tmp = edge.getPredecessor().getLeavingEdge(i);
             if (tmp instanceof AssumeEdge && tmp != edge) {
-                tmp = edge;
                 break;
             }
         }
@@ -1469,19 +1469,32 @@ public class OGTransfer {
         assert ogInfo != null;
 //        List<String> ogs = ogInfo.getFullOGMap().computeIfAbsent(stateId,
 //                k -> new ArrayList<>());
-        Map<Integer, String> ogs = ogInfo.getFullOGMap().computeIfAbsent(stateId,
-                k -> new HashMap<>());
+//        Map<Integer, String> ogs = ogInfo.getFullOGMap().computeIfAbsent(stateId,
+//                k -> new HashMap<>());
+        List<Pair<Integer, String>> ogs = ogInfo.getFullOGMap().computeIfAbsent(stateId,
+                k -> new ArrayList<>());
 //        ogs.add(gStr);
-        ogs.put(graph.getIdentityHash(), gStr);
+        ogs.add(Pair.of(graph.getIdentityHash(), gStr));
     }
 
     // Debug.
     public void removeGraphFromFull(ObsGraph graph, Integer stateId) {
         OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
         assert ogInfo != null;
-        Map<Integer, String> ogs = ogInfo.getFullOGMap().get(stateId);
-        assert ogs != null && ogs.containsKey(graph.getIdentityHash()) :
-                "Missing graph at s" + stateId;
-        ogs.remove(graph.getIdentityHash());
+//        Map<Integer, String> ogs = ogInfo.getFullOGMap().get(stateId);
+        List<Pair<Integer, String>> ogs = ogInfo.getFullOGMap().get(stateId);
+//        assert ogs != null && ogs.containsKey(graph.getIdentityHash()) :
+//                "Missing graph at s" + stateId;
+        assert ogs != null : "Missing graph a s" + stateId;
+        int index = -1, i = 0;
+        for (; i < ogs.size(); i++) {
+            if (Objects.equals(ogs.get(i).getFirst(), graph.getIdentityHash())) {
+                index = i;
+                break;
+            }
+        }
+        assert index >= 0 : "Missing graph a s" + stateId;
+//        ogs.remove(graph.getIdentityHash());
+        ogs.remove(index);
     }
 }

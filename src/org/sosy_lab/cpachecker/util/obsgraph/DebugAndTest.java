@@ -10,6 +10,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.BDDState;
 import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 
 import java.io.FileWriter;
@@ -316,18 +317,14 @@ public class DebugAndTest {
     }
 
     public static void dumpToJson(ReachedSet reachedSet) {
-        Map<Integer, Map<Integer, String>> fullOGMap0 =
+//        Map<Integer, Map<Integer, String>> fullOGMap0 =
+//                GlobalInfo.getInstance().getOgInfo().getFullOGMap();
+        Map<Integer, List<Pair<Integer, String>>> fullOGMap0 =
                 GlobalInfo.getInstance().getOgInfo().getFullOGMap();
         Map<Integer, List<String>> fullOGMap = new HashMap<>();
-        // Order the graphs by key.
-//        fullOGMap0.forEach((k, v) -> {
-//            List<Map.Entry<Integer, String>> entryList = new ArrayList<>(v.entrySet());
-//            entryList.sort(Comparator.comparingInt(Map.Entry::getKey));
-//            List<String> values =
-//                    entryList.stream().map(Map.Entry::getValue).collect(Collectors.toList());
-//            fullOGMap.put(k, new ArrayList<>(values));
-//        });
-        fullOGMap0.forEach((k, v) -> fullOGMap.put(k, new ArrayList<>(v.values())));
+//        fullOGMap0.forEach((k, v) -> fullOGMap.put(k, new ArrayList<>(v.values())));
+        fullOGMap0.forEach((k, v) -> fullOGMap.put(k,
+                new ArrayList<>(v.stream().map(Pair::getSecondNotNull).collect(Collectors.toList()))));
         JSONObject json = new JSONObject(fullOGMap);
         try {
             // Export ogs in json.

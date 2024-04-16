@@ -9,6 +9,7 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNodeBuilder;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
@@ -32,7 +33,8 @@ public class OGInfo {
     // For debugging.
 //    private static Map<Integer, List<String>> fullOGMap;
     // StateId -> (graphId -> graph_str)
-    private static Map<Integer, Map<Integer, String>> fullOGMap;
+//    private static Map<Integer, Map<Integer, String>> fullOGMap;
+    private static Map<Integer, List<Pair<Integer, String>>> fullOGMap;
 
     private static OGTransfer transfer;
 
@@ -113,7 +115,10 @@ public class OGInfo {
        return revisitor;
     }
 
-    public Map<Integer, Map<Integer, String>> getFullOGMap() {
+//    public Map<Integer, Map<Integer, String>> getFullOGMap() {
+//        return fullOGMap;
+//    }
+    public Map<Integer, List<Pair<Integer, String>>> getFullOGMap() {
         return fullOGMap;
     }
 
