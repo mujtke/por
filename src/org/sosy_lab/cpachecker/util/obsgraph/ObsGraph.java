@@ -521,11 +521,16 @@ public class ObsGraph implements Copier<ObsGraph> {
                 event.copyRelations(coEvent);
             } else {
                 // Events after rEdge.
-                toRm.add(event);
+                // FIXME: we remove the event inEdge of which is after the r.inEdge.
+                if (rNode.getBlockEdges().indexOf(event.getInEdge()) >=
+                        rNode.getBlockEdges().indexOf(rEdge))
+                    toRm.add(event);
             }
         }
-        toRm.forEach(SharedEvent::removeAllRelations);
-        rNode.getEvents().removeAll(toRm);
+        toRm.forEach(rme -> {
+            rme.removeAllRelations();
+            rNode.removeEvent(rme);
+        });
 
         assert cor != null;
         return cor;

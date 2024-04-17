@@ -599,9 +599,9 @@ public class OGRevisitor {
 
         // >>>>>
         // FIXME: from read?
-//        for (OGNode n : A.getFromRead()) {
-//            if (n == B || porf(n, B)) return true;
-//        }
+        for (OGNode n : A.getFromRead()) {
+            if (n == B || porf(n, B)) return true;
+        }
         // <<<<<
 
         return false;

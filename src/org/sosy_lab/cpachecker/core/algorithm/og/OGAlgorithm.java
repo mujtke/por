@@ -146,9 +146,9 @@ public class OGAlgorithm implements Algorithm {
         try {
             successors = transferRelation.getAbstractSuccessors(state, precision);
 
-//            if (enableDebug && successors.isEmpty()) {
-//                terminatedStates.add(state);
-//            }
+            if (enableDebug && successors.isEmpty()) {
+                terminatedStates.add(state);
+            }
 //            if (enableDebug) {
 //                ARGState pars = (ARGState) state;
 //                for (AbstractState ch : successors) {
@@ -246,15 +246,22 @@ public class OGAlgorithm implements Algorithm {
                                 chState,
                                 true);
 
-//                if (enableDebug) {
-//                    // Check redundancy.
+                if (enableDebug) {
+//                    // Check the redundancy.
 //                    terminatedStates.forEach(ts -> {
 //                        if (DebugAndTest.testRedundancy((ARGState) ts,
 //                                GlobalInfo.getInstance().getOgInfo().getFullOGMap()))
 //                            throw new IllegalStateException("Redundant graphs found at " +
 //                                    "state " + ((ARGState) ts).getStateId());
 //                    });
-//                }
+                    // Check the blocking.
+//                    terminatedStates.removeIf(ts -> !((ARGState) ts).getChildren().isEmpty());
+//                    terminatedStates.forEach(ts -> {
+//                        if (DebugAndTest.testBlocking((ARGState) ts))
+//                            throw new IllegalStateException("Transfer of some graph " +
+//                                    "gets blocked at state s" + ((ARGState) ts).getStateId());
+//                    });
+                }
 
                 ObsGraph chGraph = transferResult.getFirst(),
                         copiedGraph = transferResult.getSecond();

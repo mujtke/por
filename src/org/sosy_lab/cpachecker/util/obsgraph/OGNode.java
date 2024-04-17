@@ -479,6 +479,8 @@ public class OGNode implements Copier<OGNode> {
         } else {
             Ws.remove(event);
         }
+
+        assert lastReadIndex < events.size() : "Index out of bound.";
     }
 
     public SharedEvent getLastHandledEvent() {
@@ -748,13 +750,12 @@ public class OGNode implements Copier<OGNode> {
         List<SharedEvent> rmEvents = new ArrayList<>();
         for (int i = LHEIndex + 1; i < events.size(); i++) {
             SharedEvent e = events.get(i);
-            rmEvents.add(e);
-            e.removeAllRelations();
+            // FIXME: remove events whose inEdge is equal to or after the e0.inEdge?
+            if (blockEdges.indexOf(e.getInEdge()) >= blockEdges.indexOf(e0.getInEdge())) {
+                rmEvents.add(e);
+                e.removeAllRelations();
+            }
         }
-//        events.removeAll(rmEvents);
-//        rmEvents.forEach(Rs::remove);
-//        rmEvents.forEach(Ws::remove);
-        // FIXME: Update the lastReadEvent.
         rmEvents.forEach(this::removeEvent);
 
         // Remove edges.

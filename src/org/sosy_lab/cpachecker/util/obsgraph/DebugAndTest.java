@@ -4,6 +4,9 @@ import org.json.JSONObject;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
+import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
+import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
@@ -17,6 +20,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static org.sosy_lab.cpachecker.core.algorithm.residualprogram.ConditionFolder.FOLDER_TYPE.CFA;
 
 public class DebugAndTest {
 
@@ -33,14 +38,6 @@ public class DebugAndTest {
             fout.write(dotStr);
             fout.close();
 
-//            Process p = Runtime.getRuntime().exec(new String[] {
-//                    "/bin/bash",
-//                    "-c",
-//                    "[[ -e output/instantOG.pdf ]] " +
-//                            "&& /usr/bin/mv output/instantOG.pdf " +
-//                            "output/instantOG.prev.pdf; " +
-//                            "/usr/bin/dot -Tpdf " + instantOG + " -o output/instantOG.pdf"
-//            });
             Process p = Runtime.getRuntime().exec(new String[] {
                     "/bin/bash",
                     "-c",
@@ -227,6 +224,30 @@ public class DebugAndTest {
         return false;
     }
 
+    // Detecting whether the transfer of some graphs gets blocked somewhere.
+    public static boolean testBlocking(ARGState state) {
+        Map<Integer, List<Pair<Integer, String>>> fullOGMap =
+                GlobalInfo.getInstance().getOgInfo().getFullOGMap();
+        if (fullOGMap.get(state.getStateId()) != null
+                && !fullOGMap.get(state.getStateId()).isEmpty()) {
+            assert state.getParents().size() == 1;
+            ARGState parent = state.getParents().iterator().next();
+            CFAEdge edge = parent.getEdgeToChild(state);
+            assert edge != null;
+            assert GlobalInfo.getInstance().getCFAInfo().isPresent();
+            CFANode suc = edge.getSuccessor(),
+                    mainExitNode = GlobalInfo.getInstance().getCFAInfo().get().getCFA()
+                            .getMainFunction().getExitNode();
+            if (!(suc instanceof CFATerminationNode)
+                    && (suc != mainExitNode)
+                    && !(suc instanceof FunctionExitNode)
+                    && !edge.toString().contains("abort();")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public static String getDotStr(ObsGraph g) {
         Map<OGNode, String> visited = new HashMap<>();
