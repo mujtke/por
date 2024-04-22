@@ -1424,7 +1424,6 @@ public class OGTransfer {
                         wmb.setMoAfter(j);
                         j.setMoAfter(w);
                     }
-//                    setRelation("mo", graph, w, j);
                     toRemove.add(j);
                 }
             }
