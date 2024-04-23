@@ -459,8 +459,12 @@ public class ConditionalStatementHandler {
 
         assert assumeRegion != null;
 
-        Region assumeRegionEvaluated = wBDDState.getBvmgr().makeOr(assumeRegion),
-        region = wBDDState.getManager().makeAnd(wBDDState.getRegion(), assumeRegionEvaluated);
+        Region assumeRegionEvaluated = wBDDState.getBvmgr().makeOr(assumeRegion);
+        if (!assumption.getTruthAssumption()) {
+            assumeRegionEvaluated = wBDDState.getManager().makeNot(assumeRegionEvaluated);
+        }
+
+        Region region = wBDDState.getManager().makeAnd(wBDDState.getRegion(), assumeRegionEvaluated);
 
         return region.isFalse();
     }

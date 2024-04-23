@@ -47,7 +47,6 @@ public class OGRevisitor {
     }
 
     /**
-     *
      * @param graphs The list of graphs on which revisit will be performed if needed.
      * @param result All results produced by revisit process will be put into it.
      */
@@ -64,6 +63,17 @@ public class OGRevisitor {
                 e.printStackTrace();
             }
         }
+    }
+
+    // Localized revisiting for blocked graphs.
+    public void apply(ObsGraph graph, OGNode node, ARGState parState,
+            List<Pair<AbstractState, ObsGraph>> results) {
+        // TODO
+        assert graph.isNeedToRevisit();
+        assert graph.getNodes().contains(node);
+        graph.setLastNode(node);
+
+        results.addAll(revisit(parState, graph));
     }
 
     private boolean needToRevisit(ObsGraph graph) {
@@ -102,7 +112,6 @@ public class OGRevisitor {
                             // After deep copy, a not in Gr.
                             SharedEvent ap = getCopyEvent(Gr, G0, a),
                                     wp = getCopyEvent(Gr, G0, w);
-//                            Gr.setReadFromAndFromRead(ap, wp);
                             Pair<ObsGraph, ObsGraph> GrAndCoGr =
                                     setReadFromAndFromRead(Gr, ap, wp);
 
@@ -191,8 +200,7 @@ public class OGRevisitor {
     // Return: <G, coG>
     private Pair<ObsGraph, ObsGraph> setReadFromAndFromRead(ObsGraph G, SharedEvent r,
             SharedEvent w) {
-        // When setting read-from relation, we may get a new graph because of the
-        // indeterminacy.
+        // When setting read-from relation, we may get a new graph because of the indeterminacy.
         ObsGraph coGraph = null;
         Pair<Boolean, Boolean> evaluation = null;
         try {
@@ -216,15 +224,15 @@ public class OGRevisitor {
                     && memo.containsKey(System.identityHashCode(w)) : "Wrong copy result.";
             SharedEvent rp = (SharedEvent) memo.get(System.identityHashCode(r)),
                     wp = (SharedEvent) memo.get(System.identityHashCode(w));
+
             SharedEvent corp = coGraph.changeAssumeNode(rp);
-//            coGraph.setReadFrom(corp, wp);
             setRelation("rf", coGraph, wp, corp);
             coGraph.deduceFromRead();
-            // FIXME: set corp as the last-handled event of its inNode? Because we have
-            //  changed rp as corp.
+            // FIXME: Have we set corp as the last-handled event already?
             OGNode corpNode = corp.getInNode();
             assert  corpNode != null;
             corpNode.setLastHandledEvent(corp);
+            setRelation("rf", G, w, r);
         }
 
         if (hasConflict) {
@@ -234,14 +242,12 @@ public class OGRevisitor {
             SharedEvent cor = G.changeAssumeNode(r);
             setRelation("rf", G, w, cor);
             G.deduceFromRead();
-            // FIXME: set cor as the last-handled event of its inNode? Because we have
-            //  changed r as cor.
+            // FIXME: Have we set corp as the last-handled event already?
             OGNode corNode = cor.getInNode();
             assert corNode != null;
             corNode.setLastHandledEvent(cor);
         } else {
             // No conflict.
-//            G.setReadFrom(r, w);
             setRelation("rf", G, w, r);
             G.deduceFromRead();
         }
@@ -548,7 +554,7 @@ public class OGRevisitor {
 
             case "fr":
                 // from read.
-                Preconditions.checkArgument(!e1.getFromRead().contains(e2));
+//                Preconditions.checkArgument(!e1.getFromRead().contains(e2));
                 e1.getFromRead().add(e2);
                 e2.getFromReadBy().add(e1);
                 if (!e1n.getFromRead().contains(e2n)) e1n.getFromRead().add(e2n);
@@ -566,6 +572,7 @@ public class OGRevisitor {
         }
     }
 
+    // FIXME: replace this method, get value from the map used in deep copy.
     private SharedEvent getCopyEvent(ObsGraph G, ObsGraph G0, SharedEvent e) {
         // e is in the graph G0, and G is the copy of G0.
         // Try to get the e's copy in G.
@@ -586,7 +593,6 @@ public class OGRevisitor {
      * @implNote porf only contains po and rf relations.
      */
     public static boolean porf(OGNode A, OGNode B) {
-        // FIXME: avoid endless loop.
         if (A == null || B == null) return false;
 
         for (OGNode n : A.getSuccessors()) {

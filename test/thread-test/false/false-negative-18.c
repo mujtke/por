@@ -72,53 +72,16 @@ int x = 0;
 int y = 0;
 
 
-
-
-
-
-
-
 _Bool r0_thd0;
 
 
 _Bool r0_thd1;
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 int w0;
 
 
 _Bool w0_used;
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 void * P0(void *arg)
@@ -129,9 +92,6 @@ void * P0(void *arg)
 
   w0_used = TRUE;
 
-
-
-
   r0_thd1 = TRUE;
   x = 1;
   __VERIFIER_atomic_end();
@@ -140,20 +100,12 @@ void * P0(void *arg)
 
   __VERIFIER_atomic_begin();
 
-
-
-
-
   y = w0_used ? w0 : y;
 
   w0_used = FALSE;
 
-
-
   cnt = cnt + 1;
   __VERIFIER_atomic_end();
-
-
 
   return 0;
 }
@@ -166,36 +118,13 @@ void * P1(void *arg)
 
   __VERIFIER_atomic_begin();
 
-
-
-
-
-
-
-
-
-
   w0 = (!w0_used ? w0 : w0);
-
-
 
   p1_EAX = y;
 
-
   __VERIFIER_atomic_end();
 
-
-
-
-
-
-
-
-
   cnt = cnt + 1;
-
-
-
 
   return 0;
 }
@@ -212,18 +141,7 @@ int main()
   main$tmp_guard0 = cnt == 2;
   __VERIFIER_atomic_end();
 
-
   if (main$tmp_guard0 == 0) abort();
-
-
-
-
-
-
-
-
-
-
 
   __VERIFIER_atomic_begin();
   /* Program proven to be relaxed for X86, model checker says YES. */

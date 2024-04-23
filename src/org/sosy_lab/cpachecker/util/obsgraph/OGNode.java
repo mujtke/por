@@ -254,10 +254,6 @@ public class OGNode implements Copier<OGNode> {
         return this.simpleNode;
     }
 
-    public boolean isContainNonDetVar() {
-        return this.containNonDetVar;
-    }
-
     public Set<SharedEvent> getRs() {
         return this.Rs;
     }

@@ -10,22 +10,24 @@ import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.exceptions.CPAEnabledAnalysisPropertyViolationException;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
-import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
+import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.dumpToJson;
 
 import java.util.*;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 public class OGAlgorithm implements Algorithm {
 
@@ -300,6 +302,13 @@ public class OGAlgorithm implements Algorithm {
             }
         }
 
+        List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
+        // FIXME: there may be some graphs get blocked.
+        if ((!successors.isEmpty() && withGraphs.isEmpty())
+                && (parGraphs != null && !parGraphs.isEmpty())) {
+            parGraphs.forEach(g -> performRevisitForBlockedGraph(g, parState,
+                    successors, revisitResult));
+        }
         // Remove transferred graphs.
         if (parGraphs != null) parGraphs.clear();
         // FIXME: If no graphs in parState, set its graphs to be null?
@@ -322,7 +331,6 @@ public class OGAlgorithm implements Algorithm {
         });
 
         // Perform revisit for states with graphs.
-        List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
         do {
             for (Iterator<Pair<AbstractState, Precision>> it = withGraphs.iterator();
                  it.hasNext(); ) {
@@ -360,6 +368,48 @@ public class OGAlgorithm implements Algorithm {
 
         return false;
 //        return findError;
+    }
+
+    /**
+     * Perform revisit for the blocked graphs.
+     */
+    private void performRevisitForBlockedGraph(ObsGraph graph,
+            ARGState parState, Collection<? extends AbstractState> successors,
+            List<Pair<AbstractState, ObsGraph>> revisitResult) {
+        int nodeNum = graph.getNodes().size();
+        assert nodeNum > 0;
+        OGNode lastAddedNode = graph.getNodes().get(nodeNum - 1);
+        String thd = lastAddedNode.getInThread();
+        List<AbstractState> sucInThd =
+                successors.stream().filter(suc -> {
+                    OGPORState ogporSuc = AbstractStates.extractStateByType(suc, OGPORState.class);
+                    assert ogporSuc != null;
+                    return Objects.equals(thd, ogporSuc.getInThread());
+                }).collect(Collectors.toList());
+        assert sucInThd.size() == 1;
+        ARGState suc = (ARGState) sucInThd.iterator().next();
+        CFAEdge edge = parState.getEdgeToChild(suc);
+        assert edge != null;
+        // NOTE: here edge should contain some write event, else, graph should not get
+        //  blocked.
+        if (!lastAddedNode.getBlockEdges().contains(edge)) {
+            // The edge hasn't been added to the graph yet.
+            Map<Integer, List<SharedEvent>> edgeVarMap =
+                    GlobalInfo.getInstance().getOgInfo().getEdgeVarMap();
+            // FIXME: add events directly?
+            lastAddedNode.addEdge(edge, edgeVarMap.get(edge.hashCode()));
+        }
+
+        assert lastAddedNode.shouldRevisit();
+        graph.setNeedToRevisit(lastAddedNode.shouldRevisit());
+//
+//        assert graph.getNodes().contains(lastAddedNode);
+//        graph.setLastNode(lastAddedNode);
+
+        transfer.visitNode(graph, lastAddedNode, AbstractStates.extractStateByType(suc,
+                OGPORState.class), false);
+
+        revisitor.apply(parState, List.of(graph), revisitResult);
     }
 
     /**

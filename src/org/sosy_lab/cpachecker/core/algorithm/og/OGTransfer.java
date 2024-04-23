@@ -840,7 +840,8 @@ public class OGTransfer {
                 boolean coCFAEdgeInNode = node.getBlockEdges().contains(coCFAEdge);
                 if (coCFAEdgeInNode && coARGEdge == null) { // case (1)
                     // We cannot replace the coCFAEdge, transfer gets blocked here.
-                    throw new UnsupportedOperationException("Transfer gets blocked at " + parState);
+                    throw new UnsupportedOperationException("Transfer gets blocked at " +
+                            "s" + parState.getStateId());
                 } else if (!coCFAEdgeInNode && coARGEdge == null) { // case (2)
                     node.addEdge(edge, sharedEvents);
                     graph.setNeedToRevisit(false);
@@ -1333,7 +1334,7 @@ public class OGTransfer {
         }
     }
 
-    private void visitNode(ObsGraph graph, OGNode node,
+    public void visitNode(ObsGraph graph, OGNode node,
             OGPORState chOgState,
             boolean hasBeenVisited) {
         // 1.1 Add rf, mo and fr relations for the events behind the last-handled event
@@ -1383,6 +1384,8 @@ public class OGTransfer {
 
         // 2. Update the info for the node and graph.
         node.setInGraph(true);
+        // FIXME: add fr?
+//        graph.deduceFromRead();
         // FIXME: loopDepth?
         node.setLoopDepth(chOgState.getLoopDepth());
         if (graph.getLastNode() != null) {
@@ -1404,6 +1407,10 @@ public class OGTransfer {
                 if (r.accessSameVarWith(w)) {
                     // set w <_rf r.
                     setRelation("rf", graph, w, r);
+                    // FIXME: deduce fromRead for the newly set readFrom.
+//                    r.setReadFrom(w);
+//                    graph.deduceFromRead(w, r);
+//                    graph.deduceFromRead();
                     toRemove.add(r);
                 }
             }

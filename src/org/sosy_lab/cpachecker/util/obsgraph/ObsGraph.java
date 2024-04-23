@@ -261,7 +261,7 @@ public class ObsGraph implements Copier<ObsGraph> {
             OGNode nodei = nodes.get(i);
 
             // FIXME: how to handle the nodes not in the graph?
-            if (!nodei.isInGraph()) continue;
+//            if (!nodei.isInGraph()) continue;
 
             if (a.getAType() == READ) {
                 SharedEvent arf = a.getReadFrom();
@@ -304,11 +304,6 @@ public class ObsGraph implements Copier<ObsGraph> {
         // If A porf B, then we think a porf b too.
         return OGRevisitor.porf(A, B);
     }
-
-     public void RESubtract(SharedEvent a) {
-         Preconditions.checkState(RE.contains(a), "Event a not in RE.");
-         RE.remove(a);
-     }
 
      public void removeDelete(List<SharedEvent> delete, SharedEvent rp) {
          // remove the relations before remove the nodes.
@@ -476,7 +471,7 @@ public class ObsGraph implements Copier<ObsGraph> {
      * contradicts r, i.e., r /\ w -> false, we change r to its co-event cor. If r
      * comes from conditional branch d, then cor should come from !d. At the same time,
      * we should also replace the rNode (r in) with the corNode (cor in), and assign all
-     * relations rNode has to corNode.
+     * relations that rNode has to corNode.
      * @return r's co-event cor.
      */
     public SharedEvent changeAssumeNode(SharedEvent r) {
@@ -717,5 +712,9 @@ public class ObsGraph implements Copier<ObsGraph> {
                 rNode.getFromRead().clear();
             }
         }
+    }
+
+    public void deduceFromRead(SharedEvent w, SharedEvent r) {
+        // TODO
     }
 }

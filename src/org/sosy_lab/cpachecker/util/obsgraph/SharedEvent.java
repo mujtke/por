@@ -259,7 +259,9 @@ public class SharedEvent implements Copier<SharedEvent> {
         return readFrom;
     }
 
+    // FIXME: rewrite this method.
     public void setReadFrom(SharedEvent readFrom) {
+        // TODO
         this.readFrom = readFrom;
     }
 
