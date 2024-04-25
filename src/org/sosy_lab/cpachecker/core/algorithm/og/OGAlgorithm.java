@@ -409,6 +409,7 @@ public class OGAlgorithm implements Algorithm {
 //        assert graph.getNodes().contains(lastAddedNode);
 //        graph.setLastNode(lastAddedNode);
 
+        graph.clearFR();
         transfer.visitNode(graph, lastAddedNode, AbstractStates.extractStateByType(suc,
                 OGPORState.class), false);
 

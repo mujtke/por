@@ -19,9 +19,8 @@ import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static org.sosy_lab.cpachecker.core.algorithm.residualprogram.ConditionFolder.FOLDER_TYPE.CFA;
 
 public class DebugAndTest {
 
@@ -161,9 +160,44 @@ public class DebugAndTest {
         }
     }
 
-    public static boolean isCyclic() {
+    // Detecting whether there is a cycle from node A to B.
+    public static boolean isCyclic(ObsGraph G, OGNode A, OGNode B) {
 
-        return false;
+        Set<OGNode> descendantsOfA = new HashSet<>(),
+                descendantsOfB = new HashSet<>(),
+                visitedNodes = new HashSet<>();
+        getAllDescendants(G, A, descendantsOfA, visitedNodes);
+        visitedNodes.clear();
+        getAllDescendants(G, B, descendantsOfB, visitedNodes);
+        return descendantsOfA.contains(B) && descendantsOfB.contains(A);
+    }
+
+    // Get all direct successors of node N. Considering po, rf and fr.
+    private static void getAllDescendants(ObsGraph G, OGNode N,
+            Set<OGNode> descendants, Set<OGNode> visitedNodes) {
+        if (visitedNodes.contains(N))
+            return;
+        N.getFromRead().forEach(frn -> {
+            if (!visitedNodes.contains(frn)) {
+                visitedNodes.add(frn);
+                descendants.add(frn);
+                getAllDescendants(G, frn, descendants, visitedNodes);
+            }
+        });
+        N.getReadBy().forEach(rbn -> {
+            if (!visitedNodes.contains(rbn)) {
+                visitedNodes.add(rbn);
+                descendants.add(rbn);
+                getAllDescendants(G, rbn, descendants, visitedNodes);
+            }
+        });
+        N.getSuccessors().forEach(suc -> {
+            if (!visitedNodes.contains(suc)) {
+                visitedNodes.add(suc);
+                descendants.add(suc);
+                getAllDescendants(G, suc, descendants, visitedNodes);
+            }
+        });
     }
 
     // Test po relation.
@@ -337,7 +371,7 @@ public class DebugAndTest {
         return strBuilder.toString();
     }
 
-    public static void dumpToJson(ReachedSet reachedSet) {
+    public static int dumpToJson(ReachedSet reachedSet) {
 //        Map<Integer, Map<Integer, String>> fullOGMap0 =
 //                GlobalInfo.getInstance().getOgInfo().getFullOGMap();
         Map<Integer, List<Pair<Integer, String>>> fullOGMap0 =
@@ -365,7 +399,7 @@ public class DebugAndTest {
                         && (!fullOGMap.containsKey(cur.getStateId())
                         || fullOGMap.get(cur.getStateId()) == null
                         || fullOGMap.get(cur.getStateId()).isEmpty())) {
-                    continue; // Has neither children nor graph.
+//                    continue; // Has neither children nor graph.
                 }
                 cur.getChildren().forEach(stack::push);
                 int curStateId = cur.getStateId();
@@ -400,9 +434,12 @@ public class DebugAndTest {
                             "/model/; $(which cp) " + argFile + " $HOME/mmm/js" +
                             "/ogs-visual/model/"
             });
-        } catch (IOException e) {
+            p.waitFor();
+        } catch (IOException | InterruptedException e) {
             throw new RuntimeException(e);
         }
+
+        return 0;
     }
 
     public static class ARG {

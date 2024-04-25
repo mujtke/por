@@ -130,7 +130,7 @@ public class OGRevisitor {
                             } else if (coGr != null){
 //                                // FIXME: is it necessary to do this?
 //                                //  Remove fr relations?
-                                coGr.clearFR();
+//                                coGr.clearFR();
 //                                RG.add(coGr);
                                 assert coGr.getLastNode() != null;
                                 SharedEvent coAp = coGr.getLastNode().getLastHandledEvent();
@@ -143,7 +143,7 @@ public class OGRevisitor {
                                 ap = Gr.getLastNode().getLastHandledEvent();
                                 handleResultForReadRevisit(result, Gr, ap, parState, debug);
                             } else {
-                                Gr.clearFR();
+//                                Gr.clearFR();
 //                                RG.add(Gr);
                                 handleResultForReadRevisit(result, Gr, ap, parState, debug);
                             }
@@ -617,22 +617,23 @@ public class OGRevisitor {
      * @implNote porf only contains po and rf relations.
      */
     public static boolean porf(OGNode A, OGNode B) {
-        if (A == null || B == null) return false;
+        if (A == null || B == null)
+            return false;
 
         for (OGNode n : A.getSuccessors()) {
-            if (n == B || porf(n, B)) return true;
+            if (n == B || porf(n, B))
+                return true;
         }
 
         for (OGNode n : A.getReadBy()) {
-            if (n == B || porf(n, B)) return true;
+            if (n == B || porf(n, B))
+                return true;
         }
 
-        // >>>>>
-        // FIXME: from read?
-        for (OGNode n : A.getFromRead()) {
-            if (n == B || porf(n, B)) return true;
-        }
-        // <<<<<
+//        for (OGNode n : A.getFromRead()) {
+//            if (n == B || porf(n, B))
+//                return true;
+//        }
 
         return false;
     }

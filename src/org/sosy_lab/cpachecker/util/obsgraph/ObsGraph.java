@@ -267,40 +267,38 @@ public class ObsGraph implements Copier<ObsGraph> {
         }
 
         for (int i = nodes.indexOf(a.getInNode()) - 1; i >= 0; i--) {
-            OGNode nodei = nodes.get(i), checkNode = null;
-
+            OGNode nodei = nodes.get(i);
             // FIXME: how to handle the nodes not in the graph?
 //            if (!nodei.isInGraph()) continue;
 
             if (a.isRead()) {
                 // FIXME: could we skip some nodes.
+                if (nodei.getWs().stream().noneMatch(w -> w.accessSameVarWith(a)))
+                    continue;
 //                if (i == nodes.indexOf(arf.getInNode())) continue;
                 if (porfPres.isEmpty()) {
-                    if (exclusivePorf(nodei, aNode, a)) {
+                    if (exclusivePorf(nodei, aNode, a))
                         porfPres.add(nodei);
-                    }
                     if (nodes.indexOf(arfNode) == i)
                         continue;
-                    checkNode = nodei;
                 }
                 else {
                     if (exclusivePorf(nodei, aNode, a)) {
                         List<OGNode> coveredPorfPres = porfPres.stream()
                                 .filter(pre -> OGRevisitor.porf(nodei, pre))
                                 .collect(Collectors.toList());
-                        porfPres.removeAll(coveredPorfPres);
+//                        porfPres.removeAll(coveredPorfPres);
                         porfPres.add(nodei);
+                        // If nodei porf some nodes in porfPres, then we cannot use the
+                        // write event comes from it.
                         if (!coveredPorfPres.isEmpty())
                             continue;
                     }
                     if (nodes.indexOf(arfNode) == i)
                         continue;
-                    checkNode = nodei;
                 }
 
-                if (checkNode == null)
-                    continue;
-
+                // The write event in nodei should be considered.
                 for (SharedEvent w : nodei.getWs()) {
                     if (w.accessSameVarWith(a)) {
                         result.add(w);
