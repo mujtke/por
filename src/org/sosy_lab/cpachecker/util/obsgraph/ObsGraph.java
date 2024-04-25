@@ -13,6 +13,7 @@ import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
@@ -72,14 +73,13 @@ public class ObsGraph implements Copier<ObsGraph> {
             List<SharedEvent> events = lastNode.getEvents();
             SharedEvent lastHandledE = lastNode.getLastHandledEvent();
             if (!RE.isEmpty()) RE.clear();
-            // FIXME: In RE, a read event should always be front of a write?
+            // NOTE: In RE, a read event should always be front of a write?
             int i, lheIndex = lastHandledE == null ? -1 : lastNode.getLheIndex(),
                     lastReadIndex = lheIndex;
             for (i = lheIndex + 1; i < events.size(); i++) {
                 if (events.get(i).isRead()) { // Read.
                     assert lastReadIndex + 1 == i :
                             "Some write events added before the read " + events.get(i);
-//                    RE.add(++lastReadIndex, events.get(i));
                     RE.add(events.get(i));
                     lastReadIndex++;
                 } else { // Write.
@@ -255,20 +255,52 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     // FIXME.
     public List<SharedEvent> getSameLocationAs(SharedEvent a) {
+
         List<SharedEvent> result = new ArrayList<>();
+        List<OGNode> porfPres = new ArrayList<>();
+        OGNode aNode = a.getInNode(), arfNode = null;
+        if (a.isRead()) {
+            SharedEvent arf = a.getReadFrom();
+            assert arf != null :
+                    "ReadFrom must be not null When revisiting a read event.";
+            arfNode = arf.getInNode();
+        }
 
         for (int i = nodes.indexOf(a.getInNode()) - 1; i >= 0; i--) {
-            OGNode nodei = nodes.get(i);
+            OGNode nodei = nodes.get(i), checkNode = null;
 
             // FIXME: how to handle the nodes not in the graph?
 //            if (!nodei.isInGraph()) continue;
 
-            if (a.getAType() == READ) {
-                SharedEvent arf = a.getReadFrom();
-                assert arf != null : ("Its readFrom must be not null When we " +
-                        "are revisiting a read event.");
-                // fixme: could we skip some nodes.
-                if (i == nodes.indexOf(arf.getInNode())) continue;
+            if (a.isRead()) {
+                // FIXME: could we skip some nodes.
+//                if (i == nodes.indexOf(arf.getInNode())) continue;
+                if (porfPres.isEmpty()) {
+                    if (exclusivePorf(nodei, aNode, a)) {
+                        porfPres.add(nodei);
+                    }
+                    if (nodes.indexOf(arfNode) == i)
+                        continue;
+                    checkNode = nodei;
+                }
+                else {
+                    if (exclusivePorf(nodei, aNode, a)) {
+                        List<OGNode> coveredPorfPres = porfPres.stream()
+                                .filter(pre -> OGRevisitor.porf(nodei, pre))
+                                .collect(Collectors.toList());
+                        porfPres.removeAll(coveredPorfPres);
+                        porfPres.add(nodei);
+                        if (!coveredPorfPres.isEmpty())
+                            continue;
+                    }
+                    if (nodes.indexOf(arfNode) == i)
+                        continue;
+                    checkNode = nodei;
+                }
+
+                if (checkNode == null)
+                    continue;
+
                 for (SharedEvent w : nodei.getWs()) {
                     if (w.accessSameVarWith(a)) {
                         result.add(w);
@@ -287,6 +319,24 @@ public class ObsGraph implements Copier<ObsGraph> {
         }
 
         return result;
+    }
+
+    // Compute whether nodei still porf aNode in the case where event 'a' reads from some
+    // write event in nodei, but we will ignore the rf relation.
+    private boolean exclusivePorf(OGNode nodei, OGNode aNode, SharedEvent a) {
+        SharedEvent arf = a.getReadFrom();
+        assert arf != null;
+        if (arf.getInNode() != nodei)
+            return OGRevisitor.porf(nodei, aNode);
+        // Else, arf.inNode == nodei.
+        a.removeReadFrom(arf);
+        if (OGRevisitor.porf(nodei, aNode)) {
+            a.setReadFrom0(arf);
+            return true;
+        }
+
+        a.setReadFrom0(arf);
+        return false;
     }
 
     public boolean porf(SharedEvent a, SharedEvent b) {
@@ -557,13 +607,11 @@ public class ObsGraph implements Copier<ObsGraph> {
         OGNode firstNode = nodes.get(0);
         String curThread = firstNode.getInThread();
         nodeTable.put(curThread, firstNode);
-        OGPORState initialOgState =
-                AbstractStates.extractStateByType(initialState, OGPORState.class);
-        assert initialOgState != null;
-        // FIXME: initial state have one and only one thread.
-        for (String thrd : initialOgState.getThreads().keySet()) {
-            if (!Objects.equals(curThread, thrd)) {
-                nodeTable.put(thrd, null);
+
+        // FIXME: other threads' current nodes should be null.
+        for (String thd : nodeTable.keySet()) {
+            if (!Objects.equals(thd, curThread)) {
+                nodeTable.put(thd, null);
             }
         }
     }

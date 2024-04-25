@@ -180,6 +180,27 @@ public class SharedEvent implements Copier<SharedEvent> {
         }
     }
 
+    public void removeReadFrom(SharedEvent rf) {
+        assert readFrom == rf : "Trying to remove an incorrect rf event.";
+        OGNode rfNode = rf.getInNode();
+        rf.readBy.remove(this);
+        readFrom = null;
+        if (inNode.getRefCount("rf", rfNode) < 1) {
+            inNode.getReadFrom().remove(rfNode);
+            rfNode.getReadBy().remove(inNode);
+        }
+    }
+
+    public void setReadFrom0(SharedEvent rf) {
+        OGNode rfNode = rf.getInNode();
+        readFrom = rf;
+        rf.getReadBy().add(this);
+        if (!rfNode.getReadBy().contains(inNode))
+            rfNode.getReadBy().add(inNode);
+        if (!inNode.getReadFrom().contains(rfNode))
+            inNode.getReadFrom().add(rfNode);
+    }
+
     public enum AccessType { WRITE, READ, UNKNOWN; }
     private final Var var;
     private final AccessType aType;

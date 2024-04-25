@@ -392,15 +392,18 @@ public class OGAlgorithm implements Algorithm {
         assert edge != null;
         // NOTE: here edge should contain some write event, else, graph should not get
         //  blocked.
+        Map<Integer, List<SharedEvent>> edgeVarMap =
+                GlobalInfo.getInstance().getOgInfo().getEdgeVarMap();
         if (!lastAddedNode.getBlockEdges().contains(edge)) {
             // The edge hasn't been added to the graph yet.
-            Map<Integer, List<SharedEvent>> edgeVarMap =
-                    GlobalInfo.getInstance().getOgInfo().getEdgeVarMap();
             // FIXME: add events directly?
             lastAddedNode.addEdge(edge, edgeVarMap.get(edge.hashCode()));
+        } else { // LastAddedNode contains the edge, but we still may need to add some events
+            // FIXME: write events may get covered by the later ones.
+            lastAddedNode.addEvents(edgeVarMap.get(edge.hashCode()));
         }
 
-        assert lastAddedNode.shouldRevisit();
+        assert lastAddedNode.shouldRevisit() : "The node should be revisited: " + lastAddedNode;
         graph.setNeedToRevisit(lastAddedNode.shouldRevisit());
 //
 //        assert graph.getNodes().contains(lastAddedNode);
