@@ -390,42 +390,56 @@ public class OGRevisitor {
             // e is maximally added?
             List<SharedEvent> previous = new ArrayList<>();
             // Get previous for e.
+//            for (OGNode n : G.getNodes()) {
+//                // FIXME: when computing the previous, we consider events or nodes?
+//                if (n == w.getInNode()) break;
+//                for (SharedEvent ep : n.getRs()) {
+//                    if (G.lessThanOrEqual(ep, e) || G.porf(ep, w)) {
+//                        previous.add(ep);
+//                    }
+//                }
+//                for (SharedEvent ep : n.getWs()) {
+//                    if (G.lessThanOrEqual(ep, e) || G.porf(ep, w)) {
+//                        previous.add(ep);
+//                    }
+//                }
+//            }
+            // FIXME: correct previous?
             for (OGNode n : G.getNodes()) {
-                // FIXME: when computing the previous, we consider events or nodes?
-                if (n == w.getInNode()) break;
-                for (SharedEvent ep : n.getRs()) {
-                    if (G.lessThanOrEqual(ep, e) || G.porf(ep, w)) {
+                // e.getInNode() must added before w.getInNode()
+                for (SharedEvent ep : n.getEvents()) {
+                    if (G.lessThanOrEqual(ep, e) || G.porf(ep, w))
                         previous.add(ep);
-                    }
-                }
-                for (SharedEvent ep : n.getWs()) {
-                    if (G.lessThanOrEqual(ep, e) || G.porf(ep, w)) {
-                        previous.add(ep);
-                    }
                 }
             }
-            //
-            boolean eIsWrite = e.getAType() == WRITE;
-            SharedEvent ep = eIsWrite ? e : e.getReadFrom();
+            boolean maximallyAdded = checkMaximality(previous, e);
+            if (!maximallyAdded)
+                return false;
+        }
+        return true;
+    }
+
+    private boolean checkMaximality(List<SharedEvent> previous, SharedEvent e) {
+        boolean eIsWrite = e.getAType() == WRITE;
+        SharedEvent ep = eIsWrite ? e : e.getReadFrom();
 //            Preconditions.checkState(ep != null, "");
-            assert ep != null : "Cannot find ep for event: " + e;
-            for (int i = previous.size() - 1; i >= 0; i--) {
-                // Reverse search.
-                SharedEvent ee = previous.get(i);
-                if ((ee.getAType() == READ) && eIsWrite && (ee.getReadFrom() == e)) {
-                    // \exists r = ee \in previous /\ G.rf(r) = e.
+        assert ep != null : "Cannot find ep for event: " + e;
+        for (int i = previous.size() - 1; i >= 0; i--) {
+            // Reverse search.
+            SharedEvent ee = previous.get(i);
+            if ((ee.getAType() == READ) && eIsWrite && (ee.getReadFrom() == e)) {
+                // \exists r = ee \in previous /\ G.rf(r) = e.
+                return false;
+            }
+            if (!previous.contains(ep)) {
+                // e' \not\in previous.
+                return false;
+            }
+            for (SharedEvent epmo : ep.getAllMoBefore()) {
+                if (previous.contains(epmo) && (epmo.getInNode() != ep.getInNode())) {
+                    // ep \in previous /\ \exists epmo \in previous s.t. <ep, epmo>
+                    // \in G.mo /\ ep, epmo not in the same block.
                     return false;
-                }
-                if (!previous.contains(ep)) {
-                    // e' \not\in previous.
-                    return false;
-                }
-                for (SharedEvent epmo : ep.getAllMoBefore()) {
-                    if (previous.contains(epmo) && (epmo.getInNode() != ep.getInNode())) {
-                        // ep \in previous /\ \exists epmo \in previous s.t. <ep, epmo>
-                        // \in G.mo /\ ep, epmo not in the same block.
-                        return false;
-                    }
                 }
             }
         }
@@ -630,6 +644,7 @@ public class OGRevisitor {
                 return true;
         }
 
+        // FIXME: using fr or not?
 //        for (OGNode n : A.getFromRead()) {
 //            if (n == B || porf(n, B))
 //                return true;

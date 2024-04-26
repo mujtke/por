@@ -403,6 +403,9 @@ public class OGAlgorithm implements Algorithm {
             lastAddedNode.addEvents(edgeVarMap.get(edge.hashCode()));
         }
 
+        // FIXME: Not all lastAddedNode should be revisited.
+        if (!lastAddedNode.shouldRevisit())
+            return; // Not finished exploration.
         assert lastAddedNode.shouldRevisit() : "The node should be revisited: " + lastAddedNode;
         graph.setNeedToRevisit(lastAddedNode.shouldRevisit());
 //

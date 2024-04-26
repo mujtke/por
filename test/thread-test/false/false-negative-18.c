@@ -11,7 +11,6 @@ void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error(
 extern void __VERIFIER_atomic_begin();
 extern void __VERIFIER_atomic_end();
 
-
 typedef unsigned pthread_t;
 typedef unsigned pthread_mutex_t;
 #define NULL ((void *) 0)
@@ -22,10 +21,7 @@ extern void pthread_mutex_init(pthread_mutex_t *, int);
 extern void pthread_join(pthread_t , int);
 extern void pthread_mutex_destroy(pthread_mutex_t *);
 
-
 extern void abort(void);
-
-
 
 #ifndef TRUE
 #define TRUE (_Bool)1
@@ -45,7 +41,6 @@ extern void abort(void);
 #ifndef IEEE_FLOAT_NOTEQUAL
 #define IEEE_FLOAT_NOTEQUAL(x,y) (x!=y)
 #endif
-
 
 
 void * P0(void *arg);

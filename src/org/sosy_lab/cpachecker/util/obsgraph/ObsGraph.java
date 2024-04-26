@@ -8,6 +8,7 @@ import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
@@ -256,7 +257,9 @@ public class ObsGraph implements Copier<ObsGraph> {
     // FIXME.
     public List<SharedEvent> getSameLocationAs(SharedEvent a) {
 
-        List<SharedEvent> result = new ArrayList<>();
+        List<SharedEvent> result = new ArrayList<>(),
+                exclusiveReadEvents = null;
+        List<Pair<SharedEvent, SharedEvent>> removedRfs = null;
         List<OGNode> porfPres = new ArrayList<>();
         OGNode aNode = a.getInNode(), arfNode = null;
         if (a.isRead()) {
@@ -264,6 +267,17 @@ public class ObsGraph implements Copier<ObsGraph> {
             assert arf != null :
                     "ReadFrom must be not null When revisiting a read event.";
             arfNode = arf.getInNode();
+            // When event 'a' is a read, maybe we shouldn't consider rf relations coming
+            // from event 'a' and those after it in the aNode.
+            int aIndex = aNode.getEvents().indexOf(a);
+            exclusiveReadEvents = aNode.getRs().stream()
+                    .filter(r -> aNode.getEvents().indexOf(r) > aIndex)
+                    .collect(Collectors.toList());
+            // Storing rfs for exclusive read events.
+            removedRfs = exclusiveReadEvents.stream().map(exr -> Pair.of(exr,
+                    exr.getReadFrom())).collect(Collectors.toList());
+            // Remove rfs for exclusive read events.
+            exclusiveReadEvents.forEach(exr -> exr.removeReadFrom(exr.getReadFrom()));
         }
 
         for (int i = nodes.indexOf(a.getInNode()) - 1; i >= 0; i--) {
@@ -316,12 +330,24 @@ public class ObsGraph implements Copier<ObsGraph> {
             }
         }
 
+        if (a.isRead()) { // Restoring the rfs removed before if necessary.
+            if (removedRfs != null && !removedRfs.isEmpty()) {
+                removedRfs.forEach(rfpair -> {
+                    SharedEvent rf = rfpair.getSecondNotNull(),
+                            r = rfpair.getFirstNotNull();
+                    r.setReadFrom0(rf);
+                });
+            }
+        }
+
         return result;
     }
 
     // Compute whether nodei still porf aNode in the case where event 'a' reads from some
     // write event in nodei, but we will ignore the rf relation.
-    private boolean exclusivePorf(OGNode nodei, OGNode aNode, SharedEvent a) {
+    private boolean exclusivePorf(OGNode nodei,
+            OGNode aNode,
+            SharedEvent a) {
         SharedEvent arf = a.getReadFrom();
         assert arf != null;
         if (arf.getInNode() != nodei)
@@ -343,10 +369,11 @@ public class ObsGraph implements Copier<ObsGraph> {
         OGNode A = a.getInNode(), B = b.getInNode();
         // Case 1: A == B.
         if (A == B) {
-            // In the same node, we assume read events always po before write events.
-            // For the case that both a and b are read or write events, a po before b
-            // is always true.
-            return a.getAType() == READ || b.getAType() == WRITE;
+            if (a == b) return false;
+            int aEdgeIndex = A.getBlockEdges().indexOf(a.getInEdge()),
+                    bEdgeIndex = B.getBlockEdges().indexOf(b.getInEdge());
+            return aEdgeIndex < bEdgeIndex;
+//            return a.getAType() == READ || b.getAType() == WRITE;
         }
         // Case 2: A != B.
         // If A porf B, then we think a porf b too.
@@ -483,6 +510,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
 
     public boolean lessThan(SharedEvent e1, SharedEvent e2) {
+        // FIXME: define '<'.
         // Judge whether <e1, e2> in <.
         // Assume:
         //      | r1 |
@@ -495,12 +523,21 @@ public class ObsGraph implements Copier<ObsGraph> {
         // Same for the case in which both e1 and e2 are write.
         OGNode en1 = e1.getInNode(), en2 = e2.getInNode();
         if (en1 == en2) {
+            // FIXME
             // e1 and e2 in the same node.
-            if (e1.getAType() == e2.getAType()) {
-                // both e1 and e2 are read or write.
+//            if (e1.getAType() == e2.getAType()) {
+//                return true;
+//            }
+//            return e1.getAType() == READ;
+            int e1EdgeIndex = en1.getBlockEdges().indexOf(e1.getInEdge()),
+                     e2EdgeIndex = en2.getBlockEdges().indexOf(e2.getInEdge());
+            if (e1EdgeIndex < e2EdgeIndex) {
                 return true;
             }
-            return e1.getAType() == READ;
+            else if (e1EdgeIndex == e2EdgeIndex) {
+                return en1.getEvents().indexOf(e1) < en2.getEvents().indexOf(e2);
+            }
+            return false;
         } else {
             int en1idx = this.nodes.indexOf(en1), en2idx = this.nodes.indexOf(en2);
             return en1idx < en2idx;
