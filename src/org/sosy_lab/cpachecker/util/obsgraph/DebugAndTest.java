@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
+import jdd.bdd.BDD;
 import org.json.JSONObject;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
@@ -15,6 +16,8 @@ import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
+import org.sosy_lab.cpachecker.util.predicates.regions.NamedRegionManager;
+import org.sosy_lab.cpachecker.util.predicates.regions.Region;
 
 import java.io.FileWriter;
 import java.io.IOException;
@@ -50,6 +53,41 @@ public class DebugAndTest {
             return p.exitValue();
         } catch (IOException | InterruptedException e) {
             //
+        }
+
+        return 1;
+    }
+
+    public static int print(NamedRegionManager nrmgr, Region region) {
+        assert region != null && nrmgr != null;
+        return print(nrmgr.regionToDot(region));
+    }
+
+    public static int print(BDDState bddState) {
+        NamedRegionManager nrmgr = bddState.getManager();
+        Region region = bddState.getRegion();
+        assert region != null && nrmgr != null;
+        return print(nrmgr.regionToDot(region));
+    }
+    static int print(String bddDot) {
+        try {
+            String bddDotFile = "output/instantBDD.dot";
+            FileWriter fout = new FileWriter(bddDotFile);
+            fout.write(bddDot);
+            fout.close();
+
+            Process p = Runtime.getRuntime().exec(new String[] {
+                    "/bin/bash",
+                    "-c",
+                    "[[ -e output/instantBDD.pdf ]] " +
+                            "&& $(which mv) output/instantBDD.pdf " +
+                            "output/instantBDD.prev.pdf; " +
+                            "$(which dot) -Tpdf " + bddDotFile + " -o output/instantBDD.pdf"
+            });
+            p.waitFor();
+            return p.exitValue();
+        } catch (IOException | InterruptedException | NullPointerException e) {
+            System.out.println("Exception " + e.getMessage());
         }
 
         return 1;

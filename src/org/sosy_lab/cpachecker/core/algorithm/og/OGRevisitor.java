@@ -8,6 +8,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
@@ -50,17 +51,18 @@ public class OGRevisitor {
     }
 
     /**
-     * @param graphs The list of graphs on which revisit will be performed if needed.
-     * @param result All results produced by revisit process will be put into it.
+     * @param precision
+     * @param graphs    The list of graphs on which revisit will be performed if needed.
+     * @param result    All results produced by revisit process will be put into it.
      */
-    public void apply(ARGState parState, List<ObsGraph> graphs,
+    public void apply(ARGState parState, Precision precision, List<ObsGraph> graphs,
             List<Pair<AbstractState, ObsGraph>> result) {
         if (graphs.isEmpty()) return;
 
         for (ObsGraph graph : graphs) {
             if (!needToRevisit(graph)) continue;
             try {
-                result.addAll(revisit(parState, graph));
+                result.addAll(revisit(parState, precision, graph));
             } catch (Exception e) {
                 //
                 e.printStackTrace();
@@ -68,23 +70,14 @@ public class OGRevisitor {
         }
     }
 
-    // Localized revisiting for blocked graphs.
-    public void apply(ObsGraph graph, OGNode node, ARGState parState,
-            List<Pair<AbstractState, ObsGraph>> results) {
-        // TODO
-        assert graph.isNeedToRevisit();
-        assert graph.getNodes().contains(node);
-        graph.setLastNode(node);
-
-        results.addAll(revisit(parState, graph));
-    }
-
     private boolean needToRevisit(ObsGraph graph) {
         return graph.isNeedToRevisit();
     }
 
     // parState: indicating where the revisit takes place.
-    private List<Pair<AbstractState, ObsGraph>> revisit(ARGState parState, ObsGraph g) {
+    private List<Pair<AbstractState, ObsGraph>> revisit(ARGState parState,
+            Precision precision,
+            ObsGraph g) {
         // DEBUG.
         boolean debug = enableDebug;
 
@@ -116,7 +109,7 @@ public class OGRevisitor {
                             SharedEvent ap = (SharedEvent) memo.get(System.identityHashCode(a)),
                                     wp = (SharedEvent) memo.get(System.identityHashCode(w));
                             Pair<ObsGraph, ObsGraph> GrAndCoGr =
-                                    setReadFromAndFromRead(Gr, ap, wp, REVISIT_TYPE.READ);
+                                    setReadFromAndFromRead(Gr, ap, wp, REVISIT_TYPE.READ, precision);
 
                             // Gr must be not null.
                             Gr = GrAndCoGr.getFirstNotNull();
@@ -175,7 +168,7 @@ public class OGRevisitor {
                                 // rp.getInNode().removeEventAfter(rp);
                                 // <<<<<
                                 Pair<ObsGraph, ObsGraph> GwAndCoGw =
-                                        setReadFromAndFromRead(Gw, rp, ap, REVISIT_TYPE.WRITE);
+                                        setReadFromAndFromRead(Gw, rp, ap, REVISIT_TYPE.WRITE, precision);
 
                                 // Gw must be not null.
                                 Gw = GwAndCoGw.getFirstNotNull();
@@ -213,7 +206,8 @@ public class OGRevisitor {
     private Pair<ObsGraph, ObsGraph> setReadFromAndFromRead(ObsGraph G,
             SharedEvent r,
             SharedEvent w,
-            REVISIT_TYPE type) {
+            REVISIT_TYPE type,
+            Precision precision) {
         // When setting read-from relation, we may get a new graph because of the indeterminacy.
         ObsGraph coGraph = null;
         Pair<Boolean, Boolean> evaluation = null;
@@ -221,7 +215,7 @@ public class OGRevisitor {
             // evaluation = <A, B>
             // A = true if it leads to conflict that r reads from w.
             // B = true if the w is an indeterminate assignment.
-            evaluation = CSHandler.handleAssumeStatement(G, r, w);
+            evaluation = CSHandler.handleAssumeStatement(G, r, w, precision);
         } catch (UnsupportedCodeException e) {
 //            e.printStackTrace();
         }

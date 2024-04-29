@@ -306,7 +306,7 @@ public class OGAlgorithm implements Algorithm {
         // FIXME: there may be some graphs get blocked.
         if ((!successors.isEmpty() && withGraphs.isEmpty())
                 && (parGraphs != null && !parGraphs.isEmpty())) {
-            parGraphs.forEach(g -> performRevisitForBlockedGraph(g, parState,
+            parGraphs.forEach(g -> performRevisitForBlockedGraph(g, parState, precision,
                     successors, revisitResult));
         }
         // Remove transferred graphs.
@@ -338,7 +338,7 @@ public class OGAlgorithm implements Algorithm {
                 ARGState ch = (ARGState) apPair.getFirstNotNull();
                 List<ObsGraph> chGraphs = OGMap.get(ch.getStateId());
                 assert chGraphs != null;
-                revisitor.apply(parState, chGraphs, revisitResult);
+                revisitor.apply(parState, precision, chGraphs, revisitResult);
             }
 
             // Perform transfer for all graphs in 'revisitResult'.
@@ -374,7 +374,9 @@ public class OGAlgorithm implements Algorithm {
      * Perform revisit for the blocked graphs.
      */
     private void performRevisitForBlockedGraph(ObsGraph graph,
-            ARGState parState, Collection<? extends AbstractState> successors,
+            ARGState parState,
+            Precision precision,
+            Collection<? extends AbstractState> successors,
             List<Pair<AbstractState, ObsGraph>> revisitResult) {
         int nodeNum = graph.getNodes().size();
         assert nodeNum > 0;
@@ -416,7 +418,7 @@ public class OGAlgorithm implements Algorithm {
         transfer.visitNode(graph, lastAddedNode, AbstractStates.extractStateByType(suc,
                 OGPORState.class), false);
 
-        revisitor.apply(parState, List.of(graph), revisitResult);
+        revisitor.apply(parState, precision, List.of(graph), revisitResult);
     }
 
     /**

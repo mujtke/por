@@ -1,6 +1,7 @@
 package org.sosy_lab.cpachecker.cpa.bdd;
 
 import com.google.common.base.Preconditions;
+import jdd.bdd.BDD;
 import org.sosy_lab.common.configuration.Configuration;
 import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Option;
@@ -20,10 +21,13 @@ import org.sosy_lab.cpachecker.core.defaults.precision.VariableTrackingPrecision
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.interfaces.WrapperCPA;
+import org.sosy_lab.cpachecker.core.interfaces.WrapperPrecision;
 import org.sosy_lab.cpachecker.cpa.pointer2.PointerState;
+import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
@@ -34,8 +38,11 @@ import org.sosy_lab.cpachecker.util.predicates.regions.RegionManager;
 import org.sosy_lab.cpachecker.util.variableclassification.Partition;
 import org.sosy_lab.cpachecker.util.variableclassification.VariableClassification;
 
+import java.sql.Wrapper;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 
 @Options(prefix = "cpa.bdd.csh")
 public class ConditionalStatementHandler {
@@ -97,7 +104,8 @@ public class ConditionalStatementHandler {
     public Pair<Boolean, Boolean> handleAssumeStatement(
             ObsGraph G,
             SharedEvent r,
-            SharedEvent w) throws UnsupportedCodeException {
+            SharedEvent w,
+            Precision precision) throws UnsupportedCodeException {
 
         boolean hasConflict = false, hasIndeterminacy = false;
         OGNode rNode = r.getInNode(), wNode = w.getInNode();
@@ -428,7 +436,7 @@ public class ConditionalStatementHandler {
             // FIXME: neither false nor true, should we use BDDState rather than wEdge to
             //  compute the satisfiability?
 //            hasConflict = hasConflict(rEdge, wNode);
-            hasConflict = hasConflict2(assumption, wNode);
+            hasConflict = hasConflict2(assumption, wNode, precision);
         }
 
         if(hasIndeterminacy) {
@@ -440,7 +448,7 @@ public class ConditionalStatementHandler {
         return Pair.of(hasConflict, hasIndeterminacy);
     }
 
-    private boolean hasConflict2(AssumeEdge assumption, OGNode wNode) {
+    private boolean hasConflict2(AssumeEdge assumption, OGNode wNode, Precision precision) {
         BDDState wBDDState = AbstractStates.extractStateByType(wNode.getSucState(),
                         BDDState.class);
         assert wBDDState != null;
@@ -464,9 +472,29 @@ public class ConditionalStatementHandler {
             assumeRegionEvaluated = wBDDState.getManager().makeNot(assumeRegionEvaluated);
         }
 
-        Region region = wBDDState.getManager().makeAnd(wBDDState.getRegion(), assumeRegionEvaluated);
+        Collection<BDDState> tmpSuccessors;
+        { // Debug.
+            try {
+                BDDCPA bddCpa =
+                        retriveCPA(GlobalInfo.getInstance().getCPA().get(), BDDCPA.class);
+                BDDTransferRelation bddTransfer =
+                        (BDDTransferRelation) bddCpa.getTransferRelation();
+                VariableTrackingPrecision bddPrecision =
+                        retrivePrecision(precision, VariableTrackingPrecision.class);
+                tmpSuccessors =
+                        bddTransfer.getAbstractSuccessorsForEdge(wBDDState, bddPrecision, assumption);
+                if (tmpSuccessors.isEmpty())
+                    System.out.println("");
+            } catch (InvalidConfigurationException | CPATransferException
+                     | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        Region region =
+                wBDDState.getManager().makeAnd(wBDDState.getRegion(), assumeRegionEvaluated);
 
-        return region.isFalse();
+//        return region.isFalse();
+        return region.isFalse() || tmpSuccessors.isEmpty();
     }
 
     private boolean hasConflict(CFAEdge rEdge, OGNode wNode)
@@ -565,7 +593,21 @@ public class ConditionalStatementHandler {
                 return result;
             }
         }
-        throw new InvalidConfigurationException("could not find the CPA " + pClass + " from " + pCPA);
+        throw new InvalidConfigurationException("Could not find the CPA " + pClass + " from " + pCPA);
+    }
+
+    public <T extends Precision> T retrivePrecision(final Precision pPrecision,
+            Class<T> pClass) throws InvalidConfigurationException {
+        if (Objects.equals(pPrecision.getClass(), pClass)) {
+            return (T) pPrecision;
+        } else if (pPrecision instanceof WrapperPrecision) {
+            WrapperPrecision wrapperPrecision = (WrapperPrecision) pPrecision;
+            T result = wrapperPrecision.retrieveWrappedPrecision(pClass);
+            if (result != null)
+                return result;
+        }
+        throw new InvalidConfigurationException("Could not find the CPA " + pClass + " " +
+                "from " + pPrecision);
     }
 
     // Debug.
