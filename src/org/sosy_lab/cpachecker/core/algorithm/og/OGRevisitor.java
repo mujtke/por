@@ -495,8 +495,9 @@ public class OGRevisitor {
     /**
      * @implNote
      */
-    private List<SharedEvent> getDelete(ObsGraph G, SharedEvent r,
-                                        SharedEvent w) {
+    private List<SharedEvent> getDelete(ObsGraph G,
+            SharedEvent r,
+            SharedEvent w) {
         List<SharedEvent> delete = new ArrayList<>();
 
         // >>>>>
@@ -505,11 +506,6 @@ public class OGRevisitor {
                 "Edge: " + r.getInEdge() + " not in node: \n" + r.getInNode();
         List<CFAEdge> blockEdges = r.getInNode().getBlockEdges();
         for (SharedEvent e : r.getInNode().getEvents()) {
-//            assert r.getInNode().getBlockEdges().contains(e.getInEdge()) :
-//                    "Edge: " + r.getInEdge() + " not in node: \n" + r.getInNode();
-//            if (r.getInNode().getBlockEdges().indexOf(e.getInEdge()) >
-//                    r.getInNode().getBlockEdges().indexOf(r.getInEdge())) {
-//                delete.add(e);
             // FIXME: w and r locates in the same node, should we regard w as the event
             //  after the r?
             assert blockEdges.contains(e.getInEdge()) :

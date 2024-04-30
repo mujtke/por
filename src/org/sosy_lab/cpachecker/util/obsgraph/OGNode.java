@@ -728,8 +728,27 @@ public class OGNode implements Copier<OGNode> {
 
     public void getNewRs(@NonNull Set<SharedEvent> rFlag) {
         for (int i = LHEIndex + 1; i < events.size(); i++) {
-            if (events.get(i).getAType() == READ)
+            if (events.get(i).isRead())
                 rFlag.add(events.get(i));
+        }
+    }
+
+    public void getRWtoVisit(@NonNull Set<SharedEvent> rFlag, Set<SharedEvent> wFlag) {
+        SharedEvent lhe = getLastHandledEvent();
+        if (lhe == null) {
+            rFlag.addAll(Rs);
+            wFlag.addAll(Ws);
+        }
+        else {
+            for (int i = LHEIndex + 1; i < events.size(); i++) {
+                SharedEvent ei = events.get(i);
+                if (ei.isRead()) {
+                    rFlag.add(ei);
+                }
+                else {
+                    wFlag.add(ei);
+                }
+            }
         }
     }
 

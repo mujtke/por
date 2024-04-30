@@ -487,8 +487,8 @@ public class ObsGraph implements Copier<ObsGraph> {
                  if (w == null) continue;
                  // Deduce fr caused by r and w.
                  OGNode wNode = w.getInNode();
-                 Preconditions.checkState(wNode.getReadBy().contains(node)
-                         && node.getReadFrom().contains(wNode));
+                 assert wNode.getReadBy().contains(node)
+                         && node.getReadFrom().contains(wNode);
                  for (int m = 0; m < n; m++) {
                      if (porf[nodes.indexOf(wNode)][m] && m != nodes.indexOf(node)) {
                          // if wNode porf nodes[m] and nodes[m] != node (wNode must
