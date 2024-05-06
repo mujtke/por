@@ -115,16 +115,19 @@ public class OGRevisitor {
                             Gr = GrAndCoGr.getFirstNotNull();
                             // coGr may be null.
                             coGr = GrAndCoGr.getSecond();
+
+                            // Debug.
+                            if (debug && (!DebugAndTest.testMo(Gr) ||
+                                    (coGr != null && !DebugAndTest.testMo(coGr)))) {
+                                throw new UnsupportedOperationException("Mo test Failed.");
+                            }
+
                             if (coGr != null && consistent(coGr)) {
                                 assert coGr.getLastNode() != null;
                                 SharedEvent coAp = coGr.getLastNode().getLastHandledEvent();
                                 assert coAp != null && coAp.accessSameVarWith(ap);
                                 handleResultForReadRevisit(result, coGr, coAp, parState, debug);
                             } else if (coGr != null){
-//                                // FIXME: is it necessary to do this?
-//                                //  Remove fr relations?
-//                                coGr.clearFR();
-//                                RG.add(coGr);
                                 assert coGr.getLastNode() != null;
                                 SharedEvent coAp = coGr.getLastNode().getLastHandledEvent();
                                 assert coAp != null && coAp.accessSameVarWith(ap);
@@ -136,8 +139,6 @@ public class OGRevisitor {
                                 ap = Gr.getLastNode().getLastHandledEvent();
                                 handleResultForReadRevisit(result, Gr, ap, parState, debug);
                             } else {
-//                                Gr.clearFR();
-//                                RG.add(Gr);
                                 handleResultForReadRevisit(result, Gr, ap, parState, debug);
                             }
                         }
@@ -176,6 +177,12 @@ public class OGRevisitor {
 
                                 // coGw may be null.
                                 coGw = GwAndCoGw.getSecond();
+
+                                // Debug.
+                                if (debug && (!DebugAndTest.testMo(Gw) ||
+                                        (coGw != null && !DebugAndTest.testMo(coGw)))) {
+                                    throw new UnsupportedOperationException("Mo test Failed.");
+                                }
 
                                 // FIXME
                                 assert Gw.getNodes().contains(ap.getInNode());

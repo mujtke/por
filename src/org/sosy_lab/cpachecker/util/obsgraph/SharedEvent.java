@@ -84,22 +84,10 @@ public class SharedEvent implements Copier<SharedEvent> {
 
         // Mo.
         if (moAfter != null) {
-            tmp = moAfter.inNode;
-            moAfter.setMoBefore(null);
-            moAfter = null;
-            if (inNode.getRefCount("ma", tmp) < 1) {
-                inNode.getMoAfter().remove(tmp);
-                tmp.getMoBefore().remove(inNode);
-            }
+            removeMoAfter();
         }
         if (moBefore != null) {
-            tmp = moBefore.inNode;
-            moBefore.setMoAfter(null);
-            moBefore = null;
-            if (inNode.getRefCount("mb", tmp) < 1) {
-                inNode.getMoBefore().remove(tmp);
-                tmp.getMoAfter().remove(inNode);
-            }
+            removeMoBefore();
         }
     }
 
@@ -328,18 +316,21 @@ public class SharedEvent implements Copier<SharedEvent> {
         return moAfter;
     }
 
-    public void setMoAfter(SharedEvent moAfter) {
+    public void setMoAfter(SharedEvent moa) {
         SharedEvent oldMoAfter = this.moAfter;
-        if (moAfter == null) {
+        if (moa == oldMoAfter)
+            return;
+        if (moa == null) {
             this.moAfter = null;
         } else {
-            this.moAfter = moAfter;
+            this.moAfter = moa;
             moAfter.moBefore = this;
-            if (!this.inNode.getMoAfter().contains(moAfter.inNode))
-                inNode.getMoAfter().add(moAfter.inNode);
-            if (!moAfter.inNode.getMoBefore().contains(this.inNode))
-                moAfter.inNode.getMoBefore().add(this.inNode);
+            if (!this.inNode.getMoAfter().contains(moa.inNode))
+                inNode.getMoAfter().add(moa.inNode);
+            if (!moa.inNode.getMoBefore().contains(this.inNode))
+                moa.inNode.getMoBefore().add(this.inNode);
         }
+
         // Remove old mo for oldMoAfter.
         if (oldMoAfter != null) {
             oldMoAfter.removeMoBefore();

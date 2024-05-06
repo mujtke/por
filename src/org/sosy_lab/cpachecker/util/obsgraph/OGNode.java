@@ -569,9 +569,10 @@ public class OGNode implements Copier<OGNode> {
     }
 
      // Add new extracted events to the node.
-    public void addEvents(List<SharedEvent> sharedEvents) {
-        if (sharedEvents == null) return;
-        sharedEvents.forEach(e -> {
+    public void addEvents(List<SharedEvent> eList, boolean shouldKeepEList) {
+        if (eList == null) return;
+        List<SharedEvent> deepCopiedEvents = new ArrayList<>();
+        eList.forEach(e -> {
             switch (e.getAType()) {
                 case READ:
                     Set<SharedEvent> sameR = Rs.stream()
@@ -591,6 +592,8 @@ public class OGNode implements Copier<OGNode> {
                         events.add(++lastReadIndex, nE);
                         nE.setInNode(this);
                         Rs.add(nE);
+                        if (shouldKeepEList)
+                            deepCopiedEvents.add(nE);
                     }
                     break;
 
@@ -608,9 +611,16 @@ public class OGNode implements Copier<OGNode> {
                     events.add(nE);
                     nE.setInNode(this);
                     Ws.add(nE);
+                    if (shouldKeepEList)
+                        deepCopiedEvents.add(nE);
                 default:
             }
         });
+
+        if (shouldKeepEList) {
+            eList.clear();
+            eList.addAll(deepCopiedEvents);
+        }
     }
 
     // Replace coEdge nd with d.
@@ -782,7 +792,7 @@ public class OGNode implements Copier<OGNode> {
     public void addEdge(CFAEdge edge, List<SharedEvent> sharedEvents) {
         blockEdges.add(edge);
         if (sharedEvents != null)
-            addEvents(sharedEvents);
+            addEvents(sharedEvents, false);
     }
 
     public void setLheIndex(int pLheIndex) {
@@ -818,7 +828,7 @@ public class OGNode implements Copier<OGNode> {
 
         // FIXME: a strong assumption: the order of the events keeps unchanged when these
         //  events are added to the node.
-        addEvents(sharedEvents.subList(addedEventsNum, sharedEvents.size()));
+        addEvents(sharedEvents.subList(addedEventsNum, sharedEvents.size()), false);
     }
 
     public void addEdge(CFAEdge edge) {

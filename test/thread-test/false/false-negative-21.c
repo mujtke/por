@@ -151,21 +151,23 @@ void * P0(void *arg)
 //   r_buff1_thd1 = r_buff0_thd1;
 //   r_buff1_thd2 = r_buff0_thd2;
 //   r_buff0_thd1 = TRUE;
+  x = 1;
   __VERIFIER_atomic_end();
 
-  x = 1;
+//   x = 1;
 
   __VERIFIER_atomic_begin();
 //   z = w_buff0_used && r_buff0_thd1 ? w_buff0 : (w_buff1_used && r_buff1_thd1 ? w_buff1 : z);
 //   w_buff0_used = w_buff0_used && r_buff0_thd1 ? FALSE : w_buff0_used;
-  w_buff0_used = w_buff0_used;
+//   w_buff0_used = w_buff0_used;
 //   w_buff1_used = w_buff0_used && r_buff0_thd1 || w_buff1_used && r_buff1_thd1 ? FALSE : w_buff1_used;
   w_buff1_used = w_buff1_used;
 //   r_buff0_thd1 = w_buff0_used && r_buff0_thd1 ? FALSE : r_buff0_thd1;
 //   r_buff1_thd1 = w_buff0_used && r_buff0_thd1 || w_buff1_used && r_buff1_thd1 ? FALSE : r_buff1_thd1;
+  cnt = cnt + 1;
   __VERIFIER_atomic_end();
 
-  cnt = cnt + 1;
+//   cnt = cnt + 1;
 
   return 0;
 }
@@ -174,11 +176,14 @@ void * P0(void *arg)
 
 void * P1(void *arg)
 {
+//   x = 2;
+//   y = 1;
+//   p1_EAX = y;
+
+  __VERIFIER_atomic_begin();
   x = 2;
   y = 1;
   p1_EAX = y;
-
-  __VERIFIER_atomic_begin();
 //   weak$$choice0 = __VERIFIER_nondet_bool();
 //   weak$$choice2 = __VERIFIER_nondet_bool();
 //   flush_delayed = weak$$choice2;
@@ -229,21 +234,21 @@ int main()
   __VERIFIER_atomic_begin();
 //   z = w_buff0_used && r_buff0_thd0 ? w_buff0 : (w_buff1_used && r_buff1_thd0 ? w_buff1 : z);
 //   w_buff0_used = w_buff0_used && r_buff0_thd0 ? FALSE : w_buff0_used;
-  w_buff0_used = w_buff0_used ? FALSE : w_buff0_used;
+//   w_buff0_used = w_buff0_used ? FALSE : w_buff0_used;
 //   w_buff1_used = w_buff0_used && r_buff0_thd0 || w_buff1_used && r_buff1_thd0 ? FALSE : w_buff1_used;
   w_buff1_used = w_buff1_used;
 //   r_buff0_thd0 = w_buff0_used && r_buff0_thd0 ? FALSE : r_buff0_thd0;
-//   r_buff1_thd0 = w_buff0_used && r_buff0_thd0 || w_buff1_used && r_buff1_thd0 ? FALSE : r_buff1_thd0;
+  r_buff1_thd0 = w_buff0_used && r_buff0_thd0 || w_buff1_used && r_buff1_thd0 ? FALSE : r_buff1_thd0;
   __VERIFIER_atomic_end();
 
   __VERIFIER_atomic_begin();
-  main$tmp_guard1 = !(x == 2 && p1_EAX == 1 && p1_EBX == 0);
+//   main$tmp_guard1 = !(x == 2 && p1_EAX == 1 && p1_EBX == 0);
+  main$tmp_guard1 = !(x == 2 && p1_EAX == 1);
   __VERIFIER_atomic_end();
 
-  __VERIFIER_assert(main$tmp_guard1);
-//   if (main$tmp_guard1)
-// 	  ERROR: reach_error();
+//   __VERIFIER_assert(main$tmp_guard1);
+  if (!main$tmp_guard1)
+	  ERROR: reach_error();
 
   return 0;
 }
-

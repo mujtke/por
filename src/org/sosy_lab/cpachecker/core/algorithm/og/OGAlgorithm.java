@@ -402,7 +402,7 @@ public class OGAlgorithm implements Algorithm {
             lastAddedNode.addEdge(edge, edgeVarMap.get(edge.hashCode()));
         } else { // LastAddedNode contains the edge, but we still may need to add some events
             // FIXME: write events may get covered by the later ones.
-            lastAddedNode.addEvents(edgeVarMap.get(edge.hashCode()));
+            lastAddedNode.addEvents(edgeVarMap.get(edge.hashCode()), false);
         }
 
         // FIXME: Not all lastAddedNode should be revisited.
