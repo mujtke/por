@@ -166,8 +166,7 @@ public class OGTransfer {
 
         Pair<ObsGraph, ObsGraph> result = null;
 
-        if (__DEBUG__ && !DebugAndTest.testMo(graph))
-            System.out.println("Mo test failed!");
+        if (__DEBUG__)  assert DebugAndTest.testMo(graph);
 
         // CriticalAreaAction.
         switch (criticalAreaAction) {
@@ -235,8 +234,6 @@ public class OGTransfer {
         ObsGraph copiedGraph = null;
         OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class);
         assert chOgState != null;
-        List<SharedEvent> toAddEvents = new ArrayList<>(),
-                toCheckEvents = new ArrayList<>();
         if (edgeType == 0) { // Local non-assumption edge.
             graph.setNeedToRevisit(false);
             graphWrapper.clear();
@@ -266,8 +263,10 @@ public class OGTransfer {
         } else if (edgeType == 2) { // Shared non-assumption edge
             if (node != null) { // Node != null.
                 // Node should be simple.
+                List<SharedEvent> toAddEvents = new ArrayList<>(),
+                        toCheckEvents = new ArrayList<>();
                 // In this case, we must check the conflict.
-                getToAddToCheckEvents(node, edge, sharedEvents, toAddEvents, toCheckEvents);
+                shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
                 if (isConflict(graph, curThd, node, edge, toCheckEvents, true)) {
                     return Pair.of(null, null);
                 }
@@ -329,6 +328,7 @@ public class OGTransfer {
 
                 // Else, the node contains the edge.
                 node.addDeletedEvents(sharedEvents, edge);
+                assert chOgState != null;
                 updatePreSucState(edge, node, parState, chState);
                 visitNode(graph, node, chOgState, true);
                 graph.updateCurrentNodeTable(curThd, node);
@@ -355,6 +355,7 @@ public class OGTransfer {
                 newNode.addEvents(edgeVarMap.get(edge.hashCode()));
                 newNode.setThreadInfo(chState);
                 updatePreSucState(edge, newNode, parState, chState);
+                assert chOgState != null;
                 visitNode(graph, newNode, chOgState, false);
                 graph.updateCurrentNode(curThd, null); // NewNode is simple.
                 graph.setNeedToRevisit(true);
@@ -619,7 +620,6 @@ public class OGTransfer {
         ObsGraph copiedGraph = null;
         // Edge has been visited?
         boolean edgeInNode = node.getBlockEdges().contains(edge);
-        OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class);
         List<SharedEvent> toAddEvents = new ArrayList<>(),
                 toCheckEvents = new ArrayList<>();
         if (edgeType == 0) { // Local non-assumption edge.
@@ -699,6 +699,8 @@ public class OGTransfer {
                     result = Pair.of(graph, null);
                 } else if (!coCFAEdgeInNode) { // case (3), coARGEdge != null
                     // In this case indeterminacy exists.
+                    OGPORState chOgState = AbstractStates.extractStateByType(chState,
+                            OGPORState.class);
                     // FIXME: do we need to distinguish simple or multi-step transfer?
                     if (isSimpleTransfer) { // A simple transfer only.
                         // The node doesn't contain the edge, so add first.
@@ -711,7 +713,11 @@ public class OGTransfer {
                     } else { // A multi-step transfer.
                         // TODO: will this case happen?
                         throw new UnsupportedOperationException("Unhandled case: " +
-                                "indeterminacy exists inside node during a multi-step transfer");
+                                "indeterminacy exists inside node during a multi-step " +
+                                "transfer");
+//                        if (!graph.matchCachedEdge(curThd, edge, chOgState)) {
+//                            graph = null;
+//                        }
                     }
 
                     if (graph != null) {
@@ -733,6 +739,8 @@ public class OGTransfer {
 
                 // Copy the graph when indeterminacy exists.
                 CFAEdge coARGEdge = getCoEdgeFromARG(parState, edge);
+//                OGPORState chOgState = AbstractStates.extractStateByType(parState, OGPORState.class);
+                OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class);
                 if (coARGEdge != null) { // Indeterminacy exists.
                     copiedGraph = handleNonDet(graph, parState, curThd, edge, true);
                     graph.addVisitedAssumeEdge(curThd, edge, chOgState);
@@ -752,7 +760,7 @@ public class OGTransfer {
         } else if (edgeType == 2) { // Shared non-assumption edge.
             if (node.hasBeenAddedToGraph() && edgeInNode) {
                 // FIXME: judge whether conflict exists.
-                getToAddToCheckEvents(node, edge, sharedEvents, toAddEvents, toCheckEvents);
+                shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
                 if (isConflict(graph, curThd, node, edge, toCheckEvents, false)) {
                     return Pair.of(null, null);
                 }
@@ -760,7 +768,7 @@ public class OGTransfer {
                 //  We add them here?
                 node.addEvents(toAddEvents);
                 node.setLastVisitedEdge(edge);
-                visitEvents(graph, node, toAddEvents);
+//                graph.setNeedToRevisit(false);
                 graph.setNeedToRevisit(node.shouldRevisit());
                 graphWrapper.clear();
 
@@ -768,16 +776,16 @@ public class OGTransfer {
                 result = Pair.of(graph, null);
             } else if (node.hasBeenAddedToGraph() && !edgeInNode) {
                 // FIXME: we may need to replace the edge?
-                getToAddToCheckEvents(node, edge, sharedEvents, toAddEvents, toCheckEvents);
+                shouldCheckConflict(node, edge, sharedEvents, toAddEvents, toCheckEvents);
                 if (isConflict(graph, curThd, node, edge, toCheckEvents, false)) {
                     return Pair.of(null, null);
                 }
                 // The node should have removed some events after revisiting.
                 assert node.getLastHandledEvent() != null;
+//                graph.setNeedToRevisit(false);
                 graph.setNeedToRevisit(node.shouldRevisit());
                 node.addEvents(toAddEvents);
                 node.addEdge(edge);
-                visitEvents(graph, node, toAddEvents);
                 graphWrapper.clear();
 
                 if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -795,7 +803,7 @@ public class OGTransfer {
             // No write event exists, so we don't need to check the mo-deduced conflict
             // for the assumption edge.
             if (node.hasBeenAddedToGraph() && edgeInNode) {
-                visitEvents(graph, node, toAddEvents);
+//                graph.setNeedToRevisit(false);
                 graph.setNeedToRevisit(node.shouldRevisit());
                 graphWrapper.clear();
 
@@ -813,9 +821,7 @@ public class OGTransfer {
                             "s" + parState.getStateId());
                 } else if (!coCFAEdgeInNode && coARGEdge == null) { // case (2)
                     node.addEdge(edge, sharedEvents);
-                    // FIXME: toAddEvents is empty here, how to fill it?
-                    getToAddToCheckEvents(node, edge, sharedEvents, toAddEvents, null);
-                visitEvents(graph, node, toAddEvents);
+//                    graph.setNeedToRevisit(false);
                     graph.setNeedToRevisit(node.shouldRevisit());
                     graphWrapper.clear();
 
@@ -823,14 +829,13 @@ public class OGTransfer {
                     result = Pair.of(graph, null);
                 } else if (!coCFAEdgeInNode) { // case (3), coARGEdge != null.
                     node.addEdge(edge, sharedEvents);
-                    getToAddToCheckEvents(node, edge, sharedEvents, toAddEvents, null);
-                visitEvents(graph, node, toAddEvents);
                     // Indeterminacy exists.
                     copiedGraph = handleNonDet(graph, parState, curThd, edge, true);
+//                    graph.setNeedToRevisit(false);
+//                    if (copiedGraph != null) copiedGraph.setNeedToRevisit(false);
                     boolean shouldRevisit = node.shouldRevisit();
                     graph.setNeedToRevisit(shouldRevisit);
-                    if (copiedGraph != null)
-                        copiedGraph.setNeedToRevisit(shouldRevisit);
+                    if (copiedGraph != null) copiedGraph.setNeedToRevisit(shouldRevisit);
                     graphWrapper.clear();
 
                     if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -861,7 +866,7 @@ public class OGTransfer {
     // Check whether we need to check conflict caused by mo.
     // If we need to add some shared events to the node, then we put them into
     // toAddEvents. If we need to check conflict, we put some events into toCheckEvents.
-    private void getToAddToCheckEvents(OGNode node,
+    private void shouldCheckConflict(OGNode node,
             CFAEdge edge,
             List<SharedEvent> sharedEvents,
             List<SharedEvent> toAddEvents,
@@ -909,22 +914,20 @@ public class OGTransfer {
             }
         }
 
-        if (toCheckEvents != null) {
-            if (edgeStartIndex >= 0) { // Node has added some events in sharedEvents.
-                for (int j = edgeStartIndex; j < node.getEvents().size(); j++) {
-                    SharedEvent ej = node.getEvents().get(j);
-                    if (!Objects.equals(ej.getInEdge(), edge))
-                        break;
-                    if (ej.isWrite()) // Only check write events.
-                        toCheckEvents.add(ej);
-                }
+        if (edgeStartIndex >= 0) { // Node has added some events in sharedEvents.
+            for (int j = edgeStartIndex; j < node.getEvents().size(); j++) {
+                SharedEvent ej = node.getEvents().get(j);
+                if (!Objects.equals(ej.getInEdge(), edge))
+                    break;
+                if (ej.isWrite()) // Only check write events.
+                    toCheckEvents.add(ej);
             }
-            // Writes newly added should also be checked.
-            toAddEvents.forEach(e -> {
-                if (e.isWrite())
-                    toCheckEvents.add(e);
-            });
         }
+        // Writes newly added should also be checked.
+        toAddEvents.forEach(e -> {
+            if (e.isWrite())
+                toCheckEvents.add(e);
+        });
     }
 
     // Send the graph back to a certain state.
@@ -1320,15 +1323,12 @@ public class OGTransfer {
         // 1.1 Add rf, mo and fr relations for the events behind the last-handled event
         // of the node. At the same time, add corresponding relations for the node.
         // For the totally visited nodes (no events after lhe), just updating mo.
-//        Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>(node.getWs());
-//        if (!hasBeenVisited) {
-//            // FIXME: Not all but only Rs after the lastHandledEvent should be added?
-//            // rFlag.addAll(node.getRs());
-//            node.getNewRs(rFlag);
-//        }
-        Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>();
-        node.getRWtoVisit(rFlag, wFlag);
-
+        Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>(node.getWs());
+        if (!hasBeenVisited) {
+            // FIXME: Not all but only Rs after the lastHandledEvent should be added?
+            // rFlag.addAll(node.getRs());
+            node.getNewRs(rFlag);
+        }
         // Whether we have found the predecessor of the node.
         boolean preFlag = node.getPredecessor() != null;
         OGNode n = graph.getLastNode();
@@ -1379,31 +1379,10 @@ public class OGTransfer {
         graph.setTraceLen(graph.getTraceLen() + 1);
     }
 
-    // Add rf, mo relations for the given events.
-    void visitEvents(ObsGraph graph, OGNode node, List<SharedEvent> toAddEvents) {
-        Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>();
-        toAddEvents.forEach(e -> {
-            e.setInNode(node);
-            if (e.isRead())
-                rFlag.add(e);
-            else
-                wFlag.add(e);
-        });
-
-        OGNode n = graph.getLastNode();
-        while (n != null && (!rFlag.isEmpty() || !wFlag.isEmpty())) {
-            // FIXME: Add rf and mo only when n is in the graph?
-            if (n.isInGraph())
-                addRfMoForNewNode(graph, n, rFlag, wFlag);
-            n = n.getTrAfter();
-        }
-    }
-
     // Add rf and mo for the newly added node.
-    void addRfMoForNewNode(ObsGraph graph,
-            OGNode n,
-            Set<SharedEvent> rFlag,
-            Set<SharedEvent> wFlag) {
+    void addRfMoForNewNode(ObsGraph graph, OGNode n,
+                           Set<SharedEvent> rFlag,
+                           Set<SharedEvent> wFlag) {
         for (SharedEvent w : n.getWs()) {
             Set<SharedEvent> toRemove = new HashSet<>();
             // Rf.
