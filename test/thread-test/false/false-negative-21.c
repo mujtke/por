@@ -159,7 +159,7 @@ void * P0(void *arg)
   __VERIFIER_atomic_begin();
 //   z = w_buff0_used && r_buff0_thd1 ? w_buff0 : (w_buff1_used && r_buff1_thd1 ? w_buff1 : z);
 //   w_buff0_used = w_buff0_used && r_buff0_thd1 ? FALSE : w_buff0_used;
-  w_buff0_used = w_buff0_used;
+//   w_buff0_used = w_buff0_used;
 //   w_buff1_used = w_buff0_used && r_buff0_thd1 || w_buff1_used && r_buff1_thd1 ? FALSE : w_buff1_used;
   w_buff1_used = w_buff1_used;
 //   r_buff0_thd1 = w_buff0_used && r_buff0_thd1 ? FALSE : r_buff0_thd1;
@@ -234,11 +234,11 @@ int main()
   __VERIFIER_atomic_begin();
 //   z = w_buff0_used && r_buff0_thd0 ? w_buff0 : (w_buff1_used && r_buff1_thd0 ? w_buff1 : z);
 //   w_buff0_used = w_buff0_used && r_buff0_thd0 ? FALSE : w_buff0_used;
-  w_buff0_used = w_buff0_used ? FALSE : w_buff0_used;
+//   w_buff0_used = w_buff0_used ? FALSE : w_buff0_used;
 //   w_buff1_used = w_buff0_used && r_buff0_thd0 || w_buff1_used && r_buff1_thd0 ? FALSE : w_buff1_used;
   w_buff1_used = w_buff1_used;
 //   r_buff0_thd0 = w_buff0_used && r_buff0_thd0 ? FALSE : r_buff0_thd0;
-//   r_buff1_thd0 = w_buff0_used && r_buff0_thd0 || w_buff1_used && r_buff1_thd0 ? FALSE : r_buff1_thd0;
+  r_buff1_thd0 = w_buff0_used && r_buff0_thd0 || w_buff1_used && r_buff1_thd0 ? FALSE : r_buff1_thd0;
   __VERIFIER_atomic_end();
 
   __VERIFIER_atomic_begin();
@@ -252,4 +252,3 @@ int main()
 
   return 0;
 }
-
