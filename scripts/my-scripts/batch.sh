@@ -17,7 +17,7 @@ function runTask() {
 	TEST_FILE="$1"
 	printf "%-30s" "$(basename ${TEST_FILE})"
 	cd "$HOME/Code/Java/por"
-	RESULT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor.properties \
+	RESULT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
 	-spec default -preprocess \
 	"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')
 		if [[ "$RESULT" =~ FALSE.* || "$RESULT" == TRUE.* ]]; then

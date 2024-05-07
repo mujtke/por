@@ -181,7 +181,9 @@ public class OGNode implements Copier<OGNode> {
         this.moBefore.forEach(mb -> nNode.moBefore.add(mb.deepCopy(memo)));
         this.moAfter.forEach(ma -> nNode.moAfter.add(ma.deepCopy(memo)));
         /* Write before: no copy. */
-        /* From read: no copy. */
+        /* From read */
+        this.fromRead.forEach(fr -> nNode.fromRead.add(fr.deepCopy(memo)));
+        this.fromReadBy.forEach(frb -> nNode.fromReadBy.add(frb.deepCopy(memo)));
 
         /* Trace order */
         nNode.trBefore = this.trBefore != null ? this.trBefore.deepCopy(memo) : null;

@@ -1,6 +1,7 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Preconditions;
+import de.uni_freiburg.informatik.ultimate.lib.modelcheckerutils.smt.pqe.XjunctPartialQuantifierElimination;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -280,7 +281,7 @@ public class OGTransfer {
 
                 // Else, the node contains the edge.
                 node.addEvents(toAddEvents, true);
-                updatePreSucState(edge, node, parState, chState);
+//                updatePreSucState(edge, node, parState, chState);
                 visitNode(graph, node, chOgState, true);
                 graph.updateCurrentNodeTable(curThd, node);
                 graph.setNeedToRevisit(node.shouldRevisit());
@@ -298,7 +299,9 @@ public class OGTransfer {
                                 false);
                 newNode.addEvents(edgeVarMap.get(edge.hashCode()), false);
                 newNode.setThreadInfo(chState);
-                updatePreSucState(edge, newNode, parState, chState);
+//                node = newNode;
+                updatePreSucState(newNode, parState, chState);
+//                updatePreSucState(edge, newNode, parState, chState);
                 visitNode(graph, newNode, chOgState, false);
                 graph.updateCurrentNode(curThd, null); // NewNode is simple.
                 graph.setNeedToRevisit(true);
@@ -330,7 +333,7 @@ public class OGTransfer {
                 // Else, the node contains the edge.
                 node.addDeletedEvents(sharedEvents, edge);
                 assert chOgState != null;
-                updatePreSucState(edge, node, parState, chState);
+//                updatePreSucState(edge, node, parState, chState);
                 visitNode(graph, node, chOgState, true);
                 graph.updateCurrentNodeTable(curThd, node);
                 // FIXME: should we revisit for the substituted shared-assumption edge?
@@ -355,7 +358,9 @@ public class OGTransfer {
                         false);
                 newNode.addEvents(edgeVarMap.get(edge.hashCode()), false);
                 newNode.setThreadInfo(chState);
-                updatePreSucState(edge, newNode, parState, chState);
+//                node = newNode;
+                updatePreSucState(newNode, parState, chState);
+//                updatePreSucState(edge, newNode, parState, chState);
                 assert chOgState != null;
                 visitNode(graph, newNode, chOgState, false);
                 graph.updateCurrentNode(curThd, null); // NewNode is simple.
@@ -366,6 +371,9 @@ public class OGTransfer {
                 result = Pair.of(graph, copiedGraph);
             }
         }
+
+        if (result.getFirst() != null)
+            updatePreSucState(node, parState, chState);
 
         assert result != null;
         return result;
@@ -401,7 +409,7 @@ public class OGTransfer {
             visitNode(graph, node, chOgState, !node.shouldRevisit());
             graph.setNeedToRevisit(node.shouldRevisit());
             graph.updateCurrentNodeTable(curThd, node);
-            updatePreSucState(edge, node, parState, chState);
+//            updatePreSucState(edge, node, parState, chState);
             graphWrapper.clear();
 
             if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -416,7 +424,7 @@ public class OGTransfer {
             visitNode(graph, node, chOgState, !node.shouldRevisit());
             graph.setNeedToRevisit(node.shouldRevisit());
             graph.updateCurrentNodeTable(curThd, node);
-            updatePreSucState(edge, node, parState, chState);
+//            updatePreSucState(edge, node, parState, chState);
             graphWrapper.clear();
 
             if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -430,7 +438,7 @@ public class OGTransfer {
                     node.setLastVisitedEdge(edge);
                     visitNode(graph, node, chOgState, true);
                     graph.setNeedToRevisit(node.shouldRevisit());
-                    updatePreSucState(edge, node, parState, chState);
+//                    updatePreSucState(edge, node, parState, chState);
                     graphWrapper.clear();
 
                     if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -448,7 +456,7 @@ public class OGTransfer {
                         // node.setLastVisitedEge(edge);
                         visitNode(graph, node, chOgState, true);
                         graph.setNeedToRevisit(node.shouldRevisit());
-                        updatePreSucState(edge, node, parState, chState);
+//                        updatePreSucState(edge, node, parState, chState);
                         graphWrapper.clear();
 
                         if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -460,7 +468,7 @@ public class OGTransfer {
                         // Update last visited edge?
                         visitNode(graph, node, chOgState, true);
                         graph.setNeedToRevisit(node.shouldRevisit());
-                        updatePreSucState(edge, node, parState, chState);
+//                        updatePreSucState(edge, node, parState, chState);
                         graphWrapper.clear();
 
                         if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -489,7 +497,7 @@ public class OGTransfer {
                         if (graph != null) {
                             visitNode(graph, node, chOgState, true);
                             graph.setNeedToRevisit(node.shouldRevisit());
-                            updatePreSucState(edge, node, parState, chState);
+//                            updatePreSucState(edge, node, parState, chState);
                             graphWrapper.clear();
                             if (__DEBUG__) debugActions(graph, parState, chState, edge);
                         }
@@ -520,7 +528,7 @@ public class OGTransfer {
 
                     visitNode(graph, node, chOgState, false);
                     graph.setNeedToRevisit(node.shouldRevisit());
-                    updatePreSucState(edge, node, parState, chState);
+//                    updatePreSucState(edge, node, parState, chState);
                     if (copiedGraph != null) {
                         // TODO.
 //                        copiedGraph.setNeedToRevisit(node.shouldRevisit());
@@ -535,7 +543,7 @@ public class OGTransfer {
                 if (node.hasBeenAddedToGraph() && edgeInNode) {
                     visitNode(graph, node, chOgState, true);
                     graph.setNeedToRevisit(node.shouldRevisit());
-                    updatePreSucState(edge, node, parState, chState);
+//                    updatePreSucState(edge, node, parState, chState);
                     graphWrapper.clear();
 
                     if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -552,7 +560,7 @@ public class OGTransfer {
                         node.addEdge(edge, sharedEvents);
                         visitNode(graph, node, chOgState, true);
                         graph.setNeedToRevisit(node.shouldRevisit());
-                        updatePreSucState(edge, node, parState, chState);
+//                        updatePreSucState(edge, node, parState, chState);
                         graphWrapper.clear();
 
                         if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -565,7 +573,7 @@ public class OGTransfer {
                         visitNode(graph, node, chOgState, true);
                         boolean shouldRevisit = node.shouldRevisit();
                         graph.setNeedToRevisit(shouldRevisit);
-                        updatePreSucState(edge, node, parState, chState);
+//                        updatePreSucState(edge, node, parState, chState);
                         if (copiedGraph != null) {
                             // TODO
 //                            copiedGraph.setNeedToRevisit(true);
@@ -587,7 +595,7 @@ public class OGTransfer {
                     }
                     visitNode(graph, node, chOgState, false);
                     graph.setNeedToRevisit(true);
-                    updatePreSucState(edge, node, parState, chState);
+//                    updatePreSucState(edge, node, parState, chState);
                     if (copiedGraph != null) {
                         // TODO
                         copiedGraph.setNeedToRevisit(true);
@@ -599,6 +607,9 @@ public class OGTransfer {
                 }
             }
         }
+
+        if (result.getFirst() != null)
+            updatePreSucState(node, null, chState);
 
         assert result != null;
         return result;
@@ -863,6 +874,9 @@ public class OGTransfer {
             }
         }
 
+        if (result.getFirst() != null)
+            updatePreSucState(node, null, chState);
+
         assert result != null;
         return result;
     }
@@ -1025,7 +1039,7 @@ public class OGTransfer {
                 if (isConflict(graph, curThd, node, edge, null, true)) {
                     return Pair.of(null, null);
                 }
-                updatePreSucState(edge, node, parState, chState);
+//                updatePreSucState(edge, node, parState, chState);
                 graph.setNeedToRevisit(false);
                 graphWrapper.clear();
                 if (__DEBUG__) debugActions(graph, parState, chState, edge);
@@ -1042,7 +1056,9 @@ public class OGTransfer {
                         false,
                         false);
                 newNode.setThreadInfo(chState);
-                updatePreSucState(edge, newNode, parState, chState);
+//                node = newNode;
+                updatePreSucState(newNode, parState, null);
+//                updatePreSucState(edge, newNode, parState, chState);
                 graph.setNeedToRevisit(false);
                 graph.updateCurrentNode(curThd, newNode);
                 graphWrapper.clear();
@@ -1061,7 +1077,7 @@ public class OGTransfer {
                     return Pair.of(null, null);
                 }
 
-                updatePreSucState(edge, node, parState, chState);
+//                updatePreSucState(edge, node, parState, chState);
 //                graph.setNeedToRevisit(false);
                 graph.setNeedToRevisit(node.shouldRevisit());
                 graphWrapper.clear();
@@ -1079,7 +1095,9 @@ public class OGTransfer {
                         false,
                         false);
                 newNode.setThreadInfo(chState);
-                updatePreSucState(edge, newNode, parState, chState);
+//                node = newNode;
+                updatePreSucState(newNode, parState, null);
+//                updatePreSucState(edge, newNode, parState, chState);
                 graph.updateCurrentNode(curThd, newNode);
                 graph.setNeedToRevisit(false);
                 graphWrapper.clear();
@@ -1092,6 +1110,10 @@ public class OGTransfer {
             throw new UnsupportedOperationException("Incorrect edge type: "
                     + edgeType + ", 0 or 2 allowed.");
         }
+
+        // Before returning, update the pre/suc state.
+        if (result.getFirst() != null)
+            updatePreSucState(node, parState, null);
 
         return result;
     }
@@ -1136,6 +1158,15 @@ public class OGTransfer {
         addGraphToFull(graph, chState.getStateId());
         System.out.println("Transferring from s" + parState.getStateId()
                 + " -> s" + chState.getStateId() + ": " + edge);
+    }
+
+    private void updatePreSucState(OGNode node, ARGState preState, ARGState sucState) {
+        if (node == null)
+            return;
+        if (preState != null)
+            node.setPreState(preState);
+        if (sucState != null)
+            node.setSucState(sucState);
     }
 
     private void updatePreSucState(CFAEdge edge, OGNode node, ARGState parState,

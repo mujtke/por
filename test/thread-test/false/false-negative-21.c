@@ -17,22 +17,26 @@ extern void reach_error();
 // Atomic block.
 extern void __VERIFIER_atomic_begin();
 extern void __VERIFIER_atomic_end();
-
-
 extern void abort(void);
 void assume_abort_if_not(int cond) {
   if(!cond) {abort();}
 }
-extern _Bool __VERIFIER_nondet_bool(void);
+
+extern int __VERIFIER_nondet_bool(void);
 extern void abort(void);
+// #include <assert.h>
 void reach_error() { assert(0); }
 void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; return; }
+extern void __VERIFIER_atomic_begin();
+extern void __VERIFIER_atomic_end();
 
+// #include <assert.h>
+// #include <pthread.h>
 #ifndef TRUE
-#define TRUE (_Bool)1
+#define TRUE (int)1
 #endif
 #ifndef FALSE
-#define FALSE (_Bool)0
+#define FALSE (int)0
 #endif
 #ifndef NULL
 #define NULL ((void*)0)
@@ -48,174 +52,161 @@ void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error(
 #endif
 
 
+
 void * P0(void *arg);
 
 
 void * P1(void *arg);
 
 
-int cnt;
+int __unbuffered_cnt;
 
 
-int cnt = 0;
+int __unbuffered_cnt = 0;
 
 
-int p1_EAX;
+int __unbuffered_p1_EAX = 0;
 
 
-int p1_EAX = 0;
+int __unbuffered_p1_EBX = 0;
 
 
-int p1_EBX;
+int main$tmp_guard0;
 
 
-int p1_EBX = 0;
-
-
-_Bool main$tmp_guard0;
-
-
-_Bool main$tmp_guard1;
-
-
-int x;
+int main$tmp_guard1;
 
 
 int x = 0;
 
 
-int y;
-
-
 int y = 0;
-
-
-int z;
 
 
 int z = 0;
 
 
-_Bool flush_delayed;
+int z$flush_delayed;
 
 
-int mem_tmp;
+int z$mem_tmp;
 
 
-_Bool r_buff0_thd0;
+int z$r_buff0_thd0;
 
 
-_Bool r_buff0_thd1;
+int z$r_buff0_thd1;
 
 
-_Bool r_buff0_thd2;
+int z$r_buff0_thd2;
 
 
-_Bool r_buff1_thd0;
+int z$r_buff1_thd0;
 
 
-_Bool r_buff1_thd1;
+int z$r_buff1_thd1;
 
 
-_Bool r_buff1_thd2;
+int z$r_buff1_thd2;
 
 
-int w_buff0;
+int z$read_delayed;
 
 
-_Bool w_buff0_used;
+int *z$read_delayed_var;
 
 
-int w_buff1;
+int z$w_buff0;
 
 
-_Bool w_buff1_used;
+int z$w_buff0_used;
 
 
-_Bool weak$$choice0;
+int z$w_buff1;
 
 
-_Bool weak$$choice2;
+int z$w_buff1_used;
 
+
+int weak$$choice0;
+
+
+int weak$$choice2;
 
 
 void * P0(void *arg)
 {
   __VERIFIER_atomic_begin();
-  w_buff1 = w_buff0;
-  w_buff0 = 1;
-  w_buff1_used = w_buff0_used;
-  w_buff0_used = TRUE;
-//   __VERIFIER_assert(!(w_buff1_used && w_buff0_used));
-//   r_buff1_thd0 = r_buff0_thd0;
-//   r_buff1_thd1 = r_buff0_thd1;
-//   r_buff1_thd2 = r_buff0_thd2;
-//   r_buff0_thd1 = TRUE;
-  x = 1;
+  z$w_buff1 = z$w_buff0;
+  z$w_buff0 = 1;
+  z$w_buff1_used = z$w_buff0_used;
+  z$w_buff0_used = TRUE;
+//   __VERIFIER_assert(!(z$w_buff1_used && z$w_buff0_used));
+//   z$r_buff1_thd0 = z$r_buff0_thd0;
+//   z$r_buff1_thd1 = z$r_buff0_thd1;
+//   z$r_buff1_thd2 = z$r_buff0_thd2;
+  z$r_buff0_thd1 = TRUE;
   __VERIFIER_atomic_end();
 
 //   x = 1;
 
   __VERIFIER_atomic_begin();
-//   z = w_buff0_used && r_buff0_thd1 ? w_buff0 : (w_buff1_used && r_buff1_thd1 ? w_buff1 : z);
-//   w_buff0_used = w_buff0_used && r_buff0_thd1 ? FALSE : w_buff0_used;
-//   w_buff0_used = w_buff0_used;
-//   w_buff1_used = w_buff0_used && r_buff0_thd1 || w_buff1_used && r_buff1_thd1 ? FALSE : w_buff1_used;
-  w_buff1_used = w_buff1_used;
-//   r_buff0_thd1 = w_buff0_used && r_buff0_thd1 ? FALSE : r_buff0_thd1;
-//   r_buff1_thd1 = w_buff0_used && r_buff0_thd1 || w_buff1_used && r_buff1_thd1 ? FALSE : r_buff1_thd1;
-  cnt = cnt + 1;
+  z = z$w_buff0_used && z$r_buff0_thd1 ? z$w_buff0 : (z$w_buff1_used && z$r_buff1_thd1 ? z$w_buff1 : z);
+  z$w_buff0_used = z$w_buff0_used && z$r_buff0_thd1 ? FALSE : z$w_buff0_used;
+//   z$w_buff1_used = z$w_buff0_used && z$r_buff0_thd1 || z$w_buff1_used && z$r_buff1_thd1 ? FALSE : z$w_buff1_used;
+//   z$r_buff0_thd1 = z$w_buff0_used && z$r_buff0_thd1 ? FALSE : z$r_buff0_thd1;
+//   z$r_buff1_thd1 = z$w_buff0_used && z$r_buff0_thd1 || z$w_buff1_used && z$r_buff1_thd1 ? FALSE : z$r_buff1_thd1;
   __VERIFIER_atomic_end();
 
-//   cnt = cnt + 1;
+  __VERIFIER_atomic_begin();
+  __unbuffered_cnt = __unbuffered_cnt + 1;
+  __VERIFIER_atomic_end();
 
   return 0;
 }
-
 
 
 void * P1(void *arg)
 {
+  __VERIFIER_atomic_begin();
 //   x = 2;
-//   y = 1;
-//   p1_EAX = y;
+
+  y = 1;
+
+  __unbuffered_p1_EAX = y;
+  __VERIFIER_atomic_end();
 
   __VERIFIER_atomic_begin();
-  x = 2;
-  y = 1;
-  p1_EAX = y;
 //   weak$$choice0 = __VERIFIER_nondet_bool();
 //   weak$$choice2 = __VERIFIER_nondet_bool();
-//   flush_delayed = weak$$choice2;
-//   mem_tmp = z;
-//   z = !w_buff0_used || !r_buff0_thd2 && !w_buff1_used || !r_buff0_thd2 && !r_buff1_thd2 ? z : (w_buff0_used && r_buff0_thd2 ? w_buff0 : w_buff1);
-//   w_buff0 = weak$$choice2 ? w_buff0 : (!w_buff0_used || !r_buff0_thd2 && !w_buff1_used || !r_buff0_thd2 && !r_buff1_thd2 ? w_buff0 : (w_buff0_used && r_buff0_thd2 ? w_buff0 : w_buff0));
-  w_buff0 = w_buff0;
-//   w_buff1 = weak$$choice2 ? w_buff1 : (!w_buff0_used || !r_buff0_thd2 && !w_buff1_used || !r_buff0_thd2 && !r_buff1_thd2 ? w_buff1 : (w_buff0_used && r_buff0_thd2 ? w_buff1 : w_buff1));
-//   w_buff0_used = weak$$choice2 ? w_buff0_used : (!w_buff0_used || !r_buff0_thd2 && !w_buff1_used || !r_buff0_thd2 && !r_buff1_thd2 ? w_buff0_used : (w_buff0_used && r_buff0_thd2 ? FALSE : w_buff0_used));
-//   w_buff1_used = weak$$choice2 ? w_buff1_used : (!w_buff0_used || !r_buff0_thd2 && !w_buff1_used || !r_buff0_thd2 && !r_buff1_thd2 ? w_buff1_used : (w_buff0_used && r_buff0_thd2 ? FALSE : FALSE));
-//   r_buff0_thd2 = weak$$choice2 ? r_buff0_thd2 : (!w_buff0_used || !r_buff0_thd2 && !w_buff1_used || !r_buff0_thd2 && !r_buff1_thd2 ? r_buff0_thd2 : (w_buff0_used && r_buff0_thd2 ? FALSE : r_buff0_thd2));
-//   r_buff1_thd2 = weak$$choice2 ? r_buff1_thd2 : (!w_buff0_used || !r_buff0_thd2 && !w_buff1_used || !r_buff0_thd2 && !r_buff1_thd2 ? r_buff1_thd2 : (w_buff0_used && r_buff0_thd2 ? FALSE : FALSE));
-  p1_EBX = z;
-//   z = flush_delayed ? mem_tmp : z;
-//   flush_delayed = FALSE;
+//   z$flush_delayed = weak$$choice2;
+//   z$mem_tmp = z;
+//   z = !z$w_buff0_used || !z$r_buff0_thd2 && !z$w_buff1_used || !z$r_buff0_thd2 && !z$r_buff1_thd2 ? z : (z$w_buff0_used && z$r_buff0_thd2 ? z$w_buff0 : z$w_buff1);
+//   z$w_buff0 = weak$$choice2 ? z$w_buff0 : (!z$w_buff0_used || !z$r_buff0_thd2 && !z$w_buff1_used || !z$r_buff0_thd2 && !z$r_buff1_thd2 ? z$w_buff0 : (z$w_buff0_used && z$r_buff0_thd2 ? z$w_buff0 : z$w_buff0));
+//   z$w_buff1 = weak$$choice2 ? z$w_buff1 : (!z$w_buff0_used || !z$r_buff0_thd2 && !z$w_buff1_used || !z$r_buff0_thd2 && !z$r_buff1_thd2 ? z$w_buff1 : (z$w_buff0_used && z$r_buff0_thd2 ? z$w_buff1 : z$w_buff1));
+  z$w_buff0_used = weak$$choice2 ? z$w_buff0_used : (!z$w_buff0_used || !z$r_buff0_thd2 && !z$w_buff1_used || !z$r_buff0_thd2 && !z$r_buff1_thd2 ? z$w_buff0_used : (z$w_buff0_used && z$r_buff0_thd2 ? FALSE : z$w_buff0_used));
+//   z$w_buff1_used = weak$$choice2 ? z$w_buff1_used : (!z$w_buff0_used || !z$r_buff0_thd2 && !z$w_buff1_used || !z$r_buff0_thd2 && !z$r_buff1_thd2 ? z$w_buff1_used : (z$w_buff0_used && z$r_buff0_thd2 ? FALSE : FALSE));
+//   z$r_buff0_thd2 = weak$$choice2 ? z$r_buff0_thd2 : (!z$w_buff0_used || !z$r_buff0_thd2 && !z$w_buff1_used || !z$r_buff0_thd2 && !z$r_buff1_thd2 ? z$r_buff0_thd2 : (z$w_buff0_used && z$r_buff0_thd2 ? FALSE : z$r_buff0_thd2));
+//   z$r_buff1_thd2 = weak$$choice2 ? z$r_buff1_thd2 : (!z$w_buff0_used || !z$r_buff0_thd2 && !z$w_buff1_used || !z$r_buff0_thd2 && !z$r_buff1_thd2 ? z$r_buff1_thd2 : (z$w_buff0_used && z$r_buff0_thd2 ? FALSE : FALSE));
+  __unbuffered_p1_EBX = z;
+//   z = z$flush_delayed ? z$mem_tmp : z;
+//   z$flush_delayed = FALSE;
   __VERIFIER_atomic_end();
 
 //   __VERIFIER_atomic_begin();
-//   z = w_buff0_used && r_buff0_thd2 ? w_buff0 : (w_buff1_used && r_buff1_thd2 ? w_buff1 : z);
-//   w_buff0_used = w_buff0_used && r_buff0_thd2 ? FALSE : w_buff0_used;
-//   w_buff1_used = w_buff0_used && r_buff0_thd2 || w_buff1_used && r_buff1_thd2 ? FALSE : w_buff1_used;
-//   r_buff0_thd2 = w_buff0_used && r_buff0_thd2 ? FALSE : r_buff0_thd2;
-//   r_buff1_thd2 = w_buff0_used && r_buff0_thd2 || w_buff1_used && r_buff1_thd2 ? FALSE : r_buff1_thd2;
+//   z = z$w_buff0_used && z$r_buff0_thd2 ? z$w_buff0 : (z$w_buff1_used && z$r_buff1_thd2 ? z$w_buff1 : z);
+//   z$w_buff0_used = z$w_buff0_used && z$r_buff0_thd2 ? FALSE : z$w_buff0_used;
+//   z$w_buff1_used = z$w_buff0_used && z$r_buff0_thd2 || z$w_buff1_used && z$r_buff1_thd2 ? FALSE : z$w_buff1_used;
+//   z$r_buff0_thd2 = z$w_buff0_used && z$r_buff0_thd2 ? FALSE : z$r_buff0_thd2;
+//   z$r_buff1_thd2 = z$w_buff0_used && z$r_buff0_thd2 || z$w_buff1_used && z$r_buff1_thd2 ? FALSE : z$r_buff1_thd2;
 //   __VERIFIER_atomic_end();
 
-//   __VERIFIER_atomic_begin();
-  cnt = cnt + 1;
-//   __VERIFIER_atomic_end();
+  __VERIFIER_atomic_begin();
+  __unbuffered_cnt = __unbuffered_cnt + 1;
+  __VERIFIER_atomic_end();
 
   return 0;
 }
-
 
 int main()
 {
@@ -225,30 +216,28 @@ int main()
   pthread_create(&t1090, NULL, P1, NULL);
 
   __VERIFIER_atomic_begin();
-  main$tmp_guard0 = cnt == 2;
+  main$tmp_guard0 = __unbuffered_cnt == 2;
   __VERIFIER_atomic_end();
-//   assume_abort_if_not(main$tmp_guard0);
-  if (main$tmp_guard0)
-	  abort();
+
+  assume_abort_if_not(main$tmp_guard0);
 
   __VERIFIER_atomic_begin();
-//   z = w_buff0_used && r_buff0_thd0 ? w_buff0 : (w_buff1_used && r_buff1_thd0 ? w_buff1 : z);
-//   w_buff0_used = w_buff0_used && r_buff0_thd0 ? FALSE : w_buff0_used;
-//   w_buff0_used = w_buff0_used ? FALSE : w_buff0_used;
-//   w_buff1_used = w_buff0_used && r_buff0_thd0 || w_buff1_used && r_buff1_thd0 ? FALSE : w_buff1_used;
-  w_buff1_used = w_buff1_used;
-//   r_buff0_thd0 = w_buff0_used && r_buff0_thd0 ? FALSE : r_buff0_thd0;
-  r_buff1_thd0 = w_buff0_used && r_buff0_thd0 || w_buff1_used && r_buff1_thd0 ? FALSE : r_buff1_thd0;
+//   z = z$w_buff0_used && z$r_buff0_thd0 ? z$w_buff0 : (z$w_buff1_used && z$r_buff1_thd0 ? z$w_buff1 : z);
+  z$w_buff0_used = z$w_buff0_used && z$r_buff0_thd0 ? FALSE : z$w_buff0_used;
+//   z$w_buff1_used = z$w_buff0_used && z$r_buff0_thd0 || z$w_buff1_used && z$r_buff1_thd0 ? FALSE : z$w_buff1_used;
+//   z$r_buff0_thd0 = z$w_buff0_used && z$r_buff0_thd0 ? FALSE : z$r_buff0_thd0;
+//   z$r_buff1_thd0 = z$w_buff0_used && z$r_buff0_thd0 || z$w_buff1_used && z$r_buff1_thd0 ? FALSE : z$r_buff1_thd0;
   __VERIFIER_atomic_end();
 
   __VERIFIER_atomic_begin();
-//   main$tmp_guard1 = !(x == 2 && p1_EAX == 1 && p1_EBX == 0);
-  main$tmp_guard1 = !(x == 2 && p1_EAX == 1);
+  /* Program proven to be relaxed for X86, model checker says YES. */
+//   main$tmp_guard1 = !(x == 2 && __unbuffered_p1_EAX == 1 && __unbuffered_p1_EBX == 0);
+  main$tmp_guard1 = !(__unbuffered_p1_EAX == 1 && __unbuffered_p1_EBX == 0);
   __VERIFIER_atomic_end();
-
+  /* Program proven to be relaxed for X86, model checker says YES. */
 //   __VERIFIER_assert(main$tmp_guard1);
   if (!main$tmp_guard1)
 	  ERROR: reach_error();
-
   return 0;
 }
+
