@@ -378,6 +378,7 @@ public class OGAlgorithm implements Algorithm {
             Precision precision,
             Collection<? extends AbstractState> successors,
             List<Pair<AbstractState, ObsGraph>> revisitResult) {
+//        if (true) return;
         int nodeNum = graph.getNodes().size();
         assert nodeNum > 0;
         OGNode lastAddedNode = graph.getNodes().get(nodeNum - 1);

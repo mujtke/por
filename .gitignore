@@ -101,3 +101,6 @@ build.xml
 .idea/vcs.xml
 
 /results
+
+# macos files
+/.DS_Store
