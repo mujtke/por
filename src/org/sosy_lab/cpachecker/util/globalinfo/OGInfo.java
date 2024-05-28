@@ -15,25 +15,19 @@ import org.sosy_lab.cpachecker.util.obsgraph.OGNodeBuilder;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Options(prefix = "utils.globalInfo.OGInfo")
 public class OGInfo {
 
     /**
-     * biOGMap :: store the states num and list<og>. One state may own more than one og,
+     * Store the states num and list<og>. One state may own more than one og,
      * so we use list to store them.
      */
     private static Map<Integer, List<ObsGraph>> OGMap;
 
     private static Map<Integer, OGNode> nodeMap;
 
-    // For debugging.
-//    private static Map<Integer, List<String>> fullOGMap;
-    // StateId -> (graphId -> graph_str)
-//    private static Map<Integer, Map<Integer, String>> fullOGMap;
     private static Map<Integer, List<Pair<Integer, String>>> fullOGMap;
 
     private static OGTransfer transfer;
@@ -76,6 +70,8 @@ public class OGInfo {
         pConfig.inject(this);
         if (useOG) {
             OGMap = new HashMap<>();
+            // Put an empty graph into the first state.
+            OGMap.put(0, new ArrayList<>(Collections.singleton(new ObsGraph())));
 
             if (useNodeMap) {
                 nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
