@@ -10,8 +10,6 @@ import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
 import org.sosy_lab.cpachecker.core.interfaces.ConfigurableProgramAnalysis;
 import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
-import org.sosy_lab.cpachecker.util.obsgraph.OGNodeBuilder;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
@@ -26,15 +24,11 @@ public class OGInfo {
      */
     private static Map<Integer, List<ObsGraph>> OGMap;
 
-    private static Map<Integer, OGNode> nodeMap;
-
     private static Map<Integer, List<Pair<Integer, String>>> fullOGMap;
 
     private static OGTransfer transfer;
 
     private static OGRevisitor revisitor;
-
-    private OGNodeBuilder nodeBuilder;
 
     // <next table.
     private final HashMap<Integer, Integer> nlt;
@@ -51,14 +45,6 @@ public class OGInfo {
     private boolean useOG = false;
 
     @Option(secure = true,
-            description = "this option is enabled when we use nodeMap.")
-    private boolean useNodeMap = false;
-
-    @Option(secure = true,
-            description = "extract shared variables for every cfa edge.")
-    private boolean extractVarsForCFAEdge = true;
-
-    @Option(secure = true,
     description = "switch for debugging.")
     private boolean enableDebug = false;
 
@@ -72,35 +58,19 @@ public class OGInfo {
             OGMap = new HashMap<>();
             // Put an empty graph into the first state.
             OGMap.put(0, new ArrayList<>(Collections.singleton(new ObsGraph())));
-
-            if (useNodeMap) {
-                nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
-                nodeMap = nodeBuilder.build();
-            }
-
-            if (extractVarsForCFAEdge) {
-                nodeBuilder = new OGNodeBuilder(pConfig, pCfa);
-                edgeVarMap = new HashMap<>();
-                nodeBuilder.buildEdgeVarMap(edgeVarMap);
-            }
-
+            edgeVarMap = new HashMap<>();
             fullOGMap = new HashMap<>();
-            transfer = new OGTransfer(OGMap, nodeMap, edgeVarMap, enableDebug);
-            revisitor = new OGRevisitor(OGMap, nodeMap, pConfig, pCfa, pLogger, enableDebug);
+            transfer = new OGTransfer(OGMap, edgeVarMap, enableDebug);
+            revisitor = new OGRevisitor(OGMap, pConfig, pCfa, pLogger, enableDebug);
             nlt = new HashMap<>();
         } else {
             OGMap = null;
-            nodeMap = null;
             nlt = null;
         }
     }
 
     public Map<Integer, List<ObsGraph>> getOGMap() {
         return OGMap;
-    }
-
-    public Map<Integer, OGNode> getNodeMap() {
-        return nodeMap;
     }
 
     public OGTransfer getTransfer() {

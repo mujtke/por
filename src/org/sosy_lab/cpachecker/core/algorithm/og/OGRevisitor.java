@@ -28,7 +28,6 @@ import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE
 public class OGRevisitor {
 
     private final Map<Integer, List<ObsGraph>> OGMap;
-    private final Map<Integer, OGNode> nodeMap;
     private boolean enableDebug;
     public enum REVISIT_TYPE {
         READ, WRITE
@@ -39,13 +38,11 @@ public class OGRevisitor {
 
     public OGRevisitor(
             Map<Integer, List<ObsGraph>> pOGMap,
-            Map<Integer, OGNode> nodeMap,
             Configuration config,
             CFA cfa,
             LogManager logger,
             boolean pEnableDebug) throws InvalidConfigurationException {
         this.OGMap = pOGMap;
-        this.nodeMap = nodeMap;
         CSHandler = new ConditionalStatementHandler(config, cfa, logger);
         this.enableDebug = pEnableDebug;
     }

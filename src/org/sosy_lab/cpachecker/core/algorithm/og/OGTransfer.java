@@ -1,7 +1,6 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Preconditions;
-import de.uni_freiburg.informatik.ultimate.lib.modelcheckerutils.smt.pqe.XjunctPartialQuantifierElimination;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -28,18 +27,15 @@ import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 public class OGTransfer {
 
     private final Map<Integer, List<ObsGraph>> OGMap;
-    private final Map<Integer, OGNode> nodeMap;
-    private final Map<Integer, List<SharedEvent>> edgeVarMap;
+    private final Map<Integer, List<SharedEvent>> edgeVarMap,
     private final NLTComparator nltcmp = new NLTComparator();
-    private boolean enableDebug;
+    private final boolean enableDebug;
 
     public OGTransfer(
             Map<Integer, List<ObsGraph>> pOGMap,
-            Map<Integer, OGNode> pNodeMap,
-            Map<Integer, List<SharedEvent>> pEdgeVarMap,
+            HashMap<Integer, List<SharedEvent>> pEdgeVarMap,
             boolean pEnableDebug) {
         this.OGMap = pOGMap;
-        this.nodeMap = pNodeMap;
         this.edgeVarMap = pEdgeVarMap;
         this.enableDebug = pEnableDebug;
     }
@@ -118,25 +114,28 @@ public class OGTransfer {
 
 
     /**
-     * FIXME: modify the description.
-     * This method transfers a given graph from a parent state parState to its child
-     * State chState.
-     * If the node conflicts with the graph, then transfer stops and returns null.
-     * Else, return the transferred graph.
-     * When no conflict exists, there are still two possible cases need to be considered:
-     * 1) The graph has contained the node. In this case, we update the new last node of
-     * the graph (also update the necessary relations like mo, etc.).
-     * 2) The graph meets the node first time. In this case, we add the node to the graph
-     * and add all necessary relations, like rf, fr, wb and so on.
-     * @param graphWrapper indicates whether the given graph has been transferred.
-     * @param edge current CFA edge.
+     *                          SingleStepTransfer Framework.
+     * This method transfers a given graph from {@param parState} to {@param chState}.
+     * For the given {@param edge}, there must be some node corresponds it. If the node
+     * conflicts with the graph, then transfer stops and returns <null, null> as result.
+     * If no conflict exists, then there are two possible cases need to be considered:
+     * 1) The graph has contained the node.
+     * 2) The graph meets the node first time.
+     * For both cases, we need to handle the edge and events according to the types of the
+     * edge and critical area.
+     * @param graphWrapper Indicates whether the given graph has been transferred.
+     * @param edge Current CFA edge.
      * @param parState Initial ARGState where the transferring begin.
      * @param chState Final ARGState where the transferring stop.
-     * @return <graph, copiedGraph> copiedGraph is used for the case in which
-     * indeterminacy exists.
-     * @implNote When add the node to the graph, we add its deep copy.
+     * @param isSimpleTransfer Indicate whether the current call of this method is direct
+     *                         or indirect, for the latter, the method is called by
+     *                         {@link #multiStepTransfer(Vector, ARGState, List)}.
+     * @return <graph, copiedGraph> CopiedGraph is used for the case where the indeterminacy
+     * exists.
+     * @implNote When adding events to the node, we use deep copies of the events in
+     * {{@link #edgeVarMap}. Similarly, copiedGraph also comes from the deep copying of
+     * the graph in {@param graphWrapper}.
      */
-	///// singleStepTransfer framework.
 	public Pair<ObsGraph, ObsGraph> singleStepTransfer(
 			List<ObsGraph> graphWrapper, 
 			CFAEdge edge,
@@ -145,33 +144,26 @@ public class OGTransfer {
 			boolean isSimpleTransfer) {
 
         // Debug.
-        boolean __DEBUG__ = enableDebug;
         int parId = parState.getStateId(), chId = chState.getStateId();
 
-        Preconditions.checkArgument(graphWrapper.size() == 1);
+        assert graphWrapper.size() == 1;
         ObsGraph graph = graphWrapper.iterator().next(), copiedGraph = null;
         OGPORState chOgState = AbstractStates.extractStateByType(chState, OGPORState.class),
                 parOgState = AbstractStates.extractStateByType(parState, OGPORState.class);
         assert chOgState != null && parOgState != null;
         String curThread = chOgState.getInThread();
-
 		OGNode node = graph.getCurrentNode(curThread);
         List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
-        CriticalAreaAction criticalAreaAction = chOgState.getInCaa();
-        boolean isNormalEdge = chOgState.enteringEdgeIsNormal(),
-                hasSharedVars = !(sharedEvents == null || sharedEvents.isEmpty()),
-                isAssumeEdge = edge instanceof AssumeEdge,
-                hasNonDet = isAssumeEdge && hasNonDet(parState, edge);
-
-        int edgeType = getEdgeType(hasSharedVars, isAssumeEdge);
-
+        CriticalAreaAction caa = chOgState.getInCaa();
+        int edgeType = getEdgeType(sharedEvents, edge);
         Pair<ObsGraph, ObsGraph> result = null;
 
-        if (__DEBUG__ && !DebugAndTest.testMo(graph))
-            throw new UnsupportedOperationException("Mo test failed.");
+        if (enableDebug && !DebugAndTest.testMo(graph))
+            throw new UnsupportedOperationException(
+                    "Mo test failed for graph: " + System.identityHashCode(graph) + ".");
 
         // CriticalAreaAction.
-        switch (criticalAreaAction) {
+        switch (caa) {
             case START:
                 result = handleBlockStart(graph, edge, edgeType, node, curThread,
                         parState, chState, graphWrapper, __DEBUG__);
@@ -196,7 +188,9 @@ public class OGTransfer {
         return result;
 	}
 
-    private int getEdgeType(boolean hasSharedVars, boolean isAssumeEdge) {
+    private int getEdgeType(List<SharedEvent> sharedEvents, CFAEdge edge) {
+        boolean hasSharedVars = !(sharedEvents == null || sharedEvents.isEmpty()),
+                isAssumeEdge = edge instanceof AssumeEdge;
         if (!hasSharedVars && !isAssumeEdge) {
             return 0;
         } else if (!hasSharedVars) { // !hasSharedVars && isAssumeEdge.
@@ -1167,21 +1161,6 @@ public class OGTransfer {
             node.setPreState(preState);
         if (sucState != null)
             node.setSucState(sucState);
-    }
-
-    private void updatePreSucState(CFAEdge edge, OGNode node, ARGState parState,
-                                ARGState chState) {
-        if (node.isSimpleNode() /* Simple node. */) {
-            // Update the preState and SucStat for the node if it's not null;
-            node.setPreState(parState);
-            node.setSucState(chState);
-        } else { // Not a simple node.
-            if (edge.equals(node.getBlockStartEdge())) {
-                node.setPreState(parState);
-            } else if (edge.equals(node.getLastBlockEdge())) {
-                node.setSucState(chState);
-            }
-        }
     }
 
     private boolean hasUnmetNode(ObsGraph graph) {

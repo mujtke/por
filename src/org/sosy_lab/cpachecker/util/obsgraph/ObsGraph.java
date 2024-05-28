@@ -25,35 +25,37 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     private final List<OGNode> nodes = new ArrayList<>();
 
+    // FIXME: We need a specified definition for this var.
+    // I.e., last added or to-max node?
+    // Now, use the to-max one.
     private OGNode lastNode = null;
 
     private boolean needToRevisit = false;
 
-    private int traceLen;
+    // The number of the nodes whose inGraph is set as true.
+    private int traceLen = 0;
 
-    private final List<SharedEvent> RE;
+    private final List<SharedEvent> RE = new ArrayList<>();
 
+    // Record the current hold node for each thread: tid -> node.
     private final Map<String, OGNode> nodeTable = new HashMap<>();
 
+    // FIXME
     // thread -> <assumeEdge, loopDepthHash, pathLengthHash>
     private final Map<String, List<Triple<CFAEdge, Integer, Integer>>>
             cachedAssumeEdges = new HashMap<>();
 
+    // FIXME
     // Recording the next assumption edge we should visit.
     private final Map<String, Integer> assumeEdgeTable = new HashMap<>();
-    // Recording the deduced from-read relations during when revisiting temporarily.
-    // Do not copy this when copying deeply.
-    // private final Map<SharedEvent, SharedEvent> cachedTempFR = new HashMap<>();
 
-    // Based object's memory address, so this should be different for every graph object.
+    // Based on object's memory address, so this should be different for every graph object.
     private final int identityHash = System.identityHashCode(this);
 
-    // Debug: indicating when the graph created.
+    // Debug: indicating where the graph is created.
     ARGState creationState = null;
 
     public ObsGraph() {
-        traceLen = 0;
-        RE = new ArrayList<>();
     }
 
     public int getIdentityHash() { return this.identityHash; }
@@ -69,6 +71,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         return nodeTable;
     }
 
+    // FIXME
     public List<SharedEvent> getRE() {
         if (lastNode != null) {
             List<SharedEvent> events = lastNode.getEvents();
@@ -141,85 +144,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         this.traceLen = traceLen;
     }
 
-
-    /**
-     * Given a graph and a OGNode A, judge whether the graph contains a node B that
-     * is equal to A.
-     * @return A non-negative integer if the graph contains the node, -1 if not.
-     * @implNote We assign loopDepth to A temporarily for finding the target node B
-     * that is equal to A after we assign a certain loop depth.
-     */
-    public int contain(OGNode node, int loopDepth) {
-        // Set the loopDepth for the node temporarily so that we can judge whether the
-        // graph contains the node. Before returning the result, we reset the loopDepth
-        // to the default value 0.
-        int oldLoopDepth = node.getLoopDepth();
-        node.setLoopDepth(loopDepth);
-        for (int i = 0; i < nodes.size(); i++) {
-            if (nodes.get(i).equals(node)) {
-                node.setLoopDepth(oldLoopDepth);
-                return i;
-            }
-        }
-
-        node.setLoopDepth(oldLoopDepth);
-        return -1;
-    }
-
-    public int contain(OGNode node, int loopDepth, CFANode cfaNode) {
-
-        int oldLoopDepth = node.getLoopDepth();
-        node.setLoopDepth(loopDepth);
-        OGNode tmp;
-        for (int i = 0; i < nodes.size(); i++) {
-            tmp = nodes.get(i);
-            if (tmp.equals(node)) {
-                node.setLoopDepth(oldLoopDepth);
-                return i;
-            }
-            // If tmp isn't equal to node, then it may be equal to node's some coNode.
-            if (!node.getCoNodes().isEmpty()) {
-                for (CFANode cfaN : node.getCoNodes().keySet()) {
-                    if (!cfaN.equals(cfaNode)) {
-                        // We need to skip the cfaNode, because the coNode it
-                        // corresponds to conjugates with the node. For example, if e1 and
-                        // e2 are two edges stem from the cfaNode, and e2.inNode is the
-                        // coNode of e1.inNode, then when we judge if e1.inNode is in
-                        // the graph, we need to skip the e2.inNode. Because if a graph
-                        // could be transferred along the e1, then it wouldn't be
-                        // along the e2.
-                        if (tmp.equals(node.getCoNodes().get(cfaN))) {
-                            node.setLoopDepth(oldLoopDepth);
-                            return i;
-                        }
-                    }
-                }
-            }
-        }
-
-        node.setLoopDepth(oldLoopDepth);
-        return -1;
-    }
-
-    public OGNode get(OGNode node, int loopDepth) {
-        node.setLoopDepth(loopDepth);
-        for (OGNode n : nodes) {
-            if (n.equals(node)) {
-                node.setLoopDepth(0);
-                return n;
-            }
-        }
-
-        node.setLoopDepth(0);
-        return null;
-    }
-
     @Override
     public ObsGraph deepCopy(Map<Object, Object> memo) {
-//        if (memo.containsKey(this)) {
-//            assert memo.get(this) instanceof ObsGraph;
-//            return (ObsGraph) memo.get(this);
-//        }
         if (memo.containsKey(System.identityHashCode(this))) {
             assert memo.get(System.identityHashCode(this)) instanceof ObsGraph;
             return (ObsGraph) memo.get(System.identityHashCode(this));
@@ -227,7 +153,6 @@ public class ObsGraph implements Copier<ObsGraph> {
 
         ObsGraph nGraph = new ObsGraph();
         // Put the copy into memo.
-//        memo.put(this, nGraph);
         memo.put(System.identityHashCode(this), nGraph);
         // Copy nodes.
         this.nodes.forEach(n -> nGraph.nodes.add(n.deepCopy(memo)));
@@ -246,7 +171,6 @@ public class ObsGraph implements Copier<ObsGraph> {
         // AssumeEdgeTable.
         nGraph.assumeEdgeTable.putAll(this.assumeEdgeTable);
 
-//        assert this.lastNode != null;
         nGraph.lastNode = this.lastNode == null ? null : this.lastNode.deepCopy(memo);
         nGraph.needToRevisit = this.needToRevisit;
         nGraph.traceLen = this.traceLen;
@@ -277,7 +201,7 @@ public class ObsGraph implements Copier<ObsGraph> {
             removedRfs = exclusiveReadEvents.stream().map(exr -> Pair.of(exr,
                     exr.getReadFrom())).collect(Collectors.toList());
             // Remove rfs for exclusive read events.
-            exclusiveReadEvents.forEach(exr -> exr.removeReadFrom(exr.getReadFrom()));
+            exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
         }
 
         for (int i = nodes.indexOf(a.getInNode()) - 1; i >= 0; i--) {
@@ -335,7 +259,7 @@ public class ObsGraph implements Copier<ObsGraph> {
                 removedRfs.forEach(rfpair -> {
                     SharedEvent rf = rfpair.getSecondNotNull(),
                             r = rfpair.getFirstNotNull();
-                    r.setReadFrom0(rf);
+                    r.setReadFrom(rf);
                 });
             }
         }
@@ -343,6 +267,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         return result;
     }
 
+    // FIXME
     // Compute whether nodei still porf aNode in the case where event 'a' reads from some
     // write event in nodei, but we will ignore the rf relation.
     private boolean exclusivePorf(OGNode nodei,
@@ -353,18 +278,18 @@ public class ObsGraph implements Copier<ObsGraph> {
         if (arf.getInNode() != nodei)
             return OGRevisitor.porf(nodei, aNode);
         // Else, arf.inNode == nodei.
-        a.removeReadFrom(arf);
+        a.removeReadFrom();
         if (OGRevisitor.porf(nodei, aNode)) {
-            a.setReadFrom0(arf);
+            a.setReadFrom(arf);
             return true;
         }
 
-        a.setReadFrom0(arf);
+        a.setReadFrom(arf);
         return false;
     }
 
+    // FIXME: This method may be not correct.
     public boolean porf(SharedEvent a, SharedEvent b) {
-        // FIXME: This method may be not correct.
         // Assume a in node A, and b in node B.
         OGNode A = a.getInNode(), B = b.getInNode();
         // Case 1: A == B.
@@ -380,6 +305,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         return OGRevisitor.porf(A, B);
     }
 
+    // FIXME
      public void removeDelete(List<SharedEvent> delete, SharedEvent rp) {
          // remove the relations before remove the nodes.
          delete.forEach(e -> {
@@ -389,7 +315,7 @@ public class ObsGraph implements Copier<ObsGraph> {
              // For e.inNode.
              OGNode en = e.getInNode();
              if (!Objects.equals(rp.getInNode(), en)) {
-                 removeAllRelations(e.getInNode());
+                 en.removeAllRelations();
                  // Remove node en.
                  nodes.remove(en);
              }
@@ -398,60 +324,7 @@ public class ObsGraph implements Copier<ObsGraph> {
          rp.getInNode().removeEventAfter(rp);
      }
 
-     private void removeAllRelations(Object o) {
-        Preconditions.checkArgument(o instanceof SharedEvent || o instanceof OGNode);
-        if (o instanceof SharedEvent) {
-            SharedEvent e = (SharedEvent) o, tmp;
-            // Remove rf, fr and mo for e.
-            // rf.
-            tmp = e.getReadFrom();
-            if (tmp != null) {
-                tmp.getReadBy().remove(e);
-                e.setReadFrom(null);
-            }
-            // fr.
-            e.getFromRead().forEach(fr -> fr.getFromReadBy().remove(e));
-            e.getFromRead().clear();
-            // mo.
-            tmp = e.getMoAfter();
-            if (tmp != null) {
-                tmp.setMoBefore(null);
-                e.setMoAfter(null);
-            }
-            tmp = e.getMoBefore();
-            if (tmp != null) {
-                tmp.setMoAfter(null);
-                e.setMoBefore(null);
-            }
-        } else {
-            OGNode n = (OGNode) o, tmp;
-            // Remove po, rf, fr, to and mo for n.
-            // po.
-            tmp = n.getPredecessor();
-            if (tmp != null) {
-                n.setPredecessor(null);
-                tmp.getSuccessors().remove(n);
-            }
-            n.getSuccessors().forEach(suc -> suc.setPredecessor(null));
-            n.getSuccessors().clear();
-            // rf.
-            n.getReadFrom().forEach(rfn -> rfn.getReadBy().remove(n));
-            n.getReadFrom().clear();
-            n.getReadBy().forEach(rbn -> rbn.getReadFrom().remove(n));
-            n.getReadBy().clear();
-            // fr.
-            n.getFromRead().forEach(frn -> frn.getFromReadBy().remove(n));
-            n.getFromRead().clear();
-            n.getFromReadBy().forEach(frbn -> frbn.getFromRead().remove(n));
-            n.getFromReadBy().clear();
-            // mo.
-            n.getMoBefore().forEach(mb -> mb.getMoAfter().remove(n));
-            n.getMoBefore().clear();
-            n.getMoAfter().forEach(ma -> ma.getMoBefore().remove(n));
-            n.getMoAfter().clear();
-        }
-     }
-
+     // FIXME
     public void deduceFromRead() {
          // Deduce the fr according the po and rf in the graph.
          // Use adjacency matrix and Floyd Warshall Algorithm to compute the transitive
@@ -504,11 +377,13 @@ public class ObsGraph implements Copier<ObsGraph> {
          }
      }
 
+     // FIXME
     public boolean lessThanOrEqual(SharedEvent e1, SharedEvent e2) {
         Preconditions.checkArgument(e1 != null && e2 != null);
         return e1 == e2 || this.lessThan(e1, e2);
     }
 
+    // FIXME
     public boolean lessThan(SharedEvent e1, SharedEvent e2) {
         // FIXME: define '<'.
         // Judge whether <e1, e2> in <.
@@ -542,12 +417,6 @@ public class ObsGraph implements Copier<ObsGraph> {
             int en1idx = this.nodes.indexOf(en1), en2idx = this.nodes.indexOf(en2);
             return en1idx < en2idx;
         }
-    }
-
-    public void setRE() {
-        if (!RE.isEmpty()) RE.clear();
-        RE.addAll(lastNode.getRs());
-        RE.addAll(lastNode.getWs());
     }
 
     /**

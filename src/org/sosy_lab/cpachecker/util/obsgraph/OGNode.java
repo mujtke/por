@@ -26,8 +26,7 @@ public class OGNode implements Copier<OGNode> {
     private final Map<CFANode, OGNode> coNodes = new HashMap<>();
     private final CFAEdge blockStartEdge;
     private final List<CFAEdge> blockEdges;
-    private final boolean simpleNode;
-    private final boolean containNonDetVar;
+    private final boolean simpleNode; /* contains only one edge */
     private final Set<SharedEvent> Rs;
     private final Set<SharedEvent> Ws;
     private final List<SharedEvent> events = new ArrayList<>();
@@ -40,8 +39,6 @@ public class OGNode implements Copier<OGNode> {
     // Use 'threadLoc' to recognize the OGNodes that have the same edges
     // but belong to different program locations.
     private Map<String, String> threadLoc = new HashMap<>();
-
-    private boolean isFirstNodeInThread = false;
 
     // the predecessor and successor in OG.
     private OGNode predecessor;
@@ -89,13 +86,11 @@ public class OGNode implements Copier<OGNode> {
     public OGNode(final CFAEdge pBlockStartEdge,
                   final List<CFAEdge> pBlockEdges,
                   boolean pSimpleNode,
-                  boolean pContainNonDetVar,
                   Set<SharedEvent> pRs,
                   Set<SharedEvent> pWs) {
         blockStartEdge = pBlockStartEdge;
         blockEdges = pBlockEdges;
         simpleNode = pSimpleNode;
-        containNonDetVar = pContainNonDetVar;
         Rs = pRs;
         Ws = pWs;
         hasBeenAddedToGraph = false;
@@ -103,12 +98,10 @@ public class OGNode implements Copier<OGNode> {
 
     public OGNode(final CFAEdge pBlockStartEdge,
                    final List<CFAEdge> pBlockEdges,
-                   boolean pSimpleNode,
-                   boolean pContainNonDetVar) {
+                   boolean pSimpleNode) {
         blockStartEdge = pBlockStartEdge;
         blockEdges = pBlockEdges;
         simpleNode = pSimpleNode;
-        containNonDetVar = pContainNonDetVar;
         Rs = new HashSet<>();
         Ws = new HashSet<>();
 //        lastVisitedEdge = pBlockStartEdge;
@@ -131,7 +124,6 @@ public class OGNode implements Copier<OGNode> {
                 new ArrayList<>(),
 //                this.blockEdges,        /* Shallow copy. */
                 this.simpleNode,        /* Shallow copy. */
-                this.containNonDetVar,  /* Shallow copy. */
                 new HashSet<>(),
                 new HashSet<>());
         nNode.blockEdges.addAll(this.blockEdges);
@@ -148,7 +140,6 @@ public class OGNode implements Copier<OGNode> {
         nNode.inThread = String.valueOf(this.inThread);
         nNode.threadLoc.putAll(this.threadLoc); /* Deep copy */
         // This variable is not in use now.
-        nNode.isFirstNodeInThread = this.isFirstNodeInThread;
         nNode.inGraph = this.inGraph;
         nNode.LHEIndex = this.LHEIndex;
         nNode.lastVisitedEdge = this.lastVisitedEdge;
@@ -197,7 +188,7 @@ public class OGNode implements Copier<OGNode> {
     }
 
     @Override
-    public boolean equals(Object o) { // Handle this carefully.
+    public boolean equals(Object o) { // Note: handle this carefully.
         if (this == o) return true;
         if (o == null || this.getClass() != o.getClass()) return false;
         OGNode oNode = (OGNode) o;
@@ -288,20 +279,8 @@ public class OGNode implements Copier<OGNode> {
         this.inThread = inThread;
     }
 
-    public boolean isIsFirstNodeInThread() {
-        return this.isFirstNodeInThread;
-    }
-
-    public void setIsFirstNodeInThread(boolean isFirstNodeInThread) {
-        this.isFirstNodeInThread = isFirstNodeInThread;
-    }
-
     public OGNode getPredecessor() {
         return this.predecessor;
-    }
-
-    public void setPredecessor(OGNode predecessor) {
-        this.predecessor = predecessor;
     }
 
     public List<OGNode> getSuccessors() {
@@ -344,16 +323,8 @@ public class OGNode implements Copier<OGNode> {
         return this.trBefore;
     }
 
-    public void setTrBefore(OGNode trBefore) {
-        this.trBefore = trBefore;
-    }
-
     public OGNode getTrAfter() {
         return this.trAfter;
-    }
-
-    public void setTrAfter(OGNode trAfter) {
-        this.trAfter = trAfter;
     }
 
     public Map<String, String> getThreadLoc() {
@@ -373,13 +344,6 @@ public class OGNode implements Copier<OGNode> {
         // When set this value as true, it also means the node has been added to the graph.
         if (pInGraph)
             this.hasBeenAddedToGraph = true;
-    }
-
-    public CFAEdge getLastBlockEdge() {
-        if (simpleNode) return blockStartEdge;
-        int edgeNum = blockEdges.size();
-        assert edgeNum > 1:"Non simple block OG node should have more than one edge";
-        return blockEdges.get(edgeNum - 1);
     }
 
     public boolean containWriteToSameVar(SharedEvent w) {
@@ -405,8 +369,8 @@ public class OGNode implements Copier<OGNode> {
 
     public void setThreadInfo(ARGState chState) {
         OGPORState ogporState = AbstractStates.extractStateByType(chState, OGPORState.class);
-        Preconditions.checkArgument(ogporState != null);
-        Preconditions.checkArgument(ogporState.getThreads() != null);
+        assert ogporState != null;
+        assert ogporState.getThreads() != null;
         this.inThread = ogporState.getInThread();
         this.threadLoc.putAll(ogporState.getThreads());
     }
@@ -419,6 +383,7 @@ public class OGNode implements Copier<OGNode> {
         return events;
     }
 
+    // TODO
     public void addEvent(SharedEvent event) {
         // FIXME: update lastReadIndex?
         // Because of the existence of the coNode, we should insert the event into some
@@ -466,6 +431,7 @@ public class OGNode implements Copier<OGNode> {
         }
     }
 
+    // FIXME
     public void removeEvent(SharedEvent event) {
         // FIXME: update lastReadIndex?
         SharedEvent lastHandledEvent = LHEIndex < 0 ? null : events.get(LHEIndex);
@@ -490,69 +456,9 @@ public class OGNode implements Copier<OGNode> {
     }
 
     public void setLastHandledEvent(SharedEvent lastHandledEvent) {
-        Preconditions.checkArgument(events.contains(lastHandledEvent),
-                "Cannot set the event that is not in the node as the " +
-                        "lastHandledEvent");
+        assert events.contains(lastHandledEvent) :
+                "Cannot set the event not in the node as the lastHandledEvent";
         this.LHEIndex = events.indexOf(lastHandledEvent);
-    }
-
-    /**
-     * When we are building the nodeMap and reach a branch d, whose coEdge !d has been
-     * handled before, we should update the lastHandledEvent because d may lead some
-     * new edges we haven't seen yet. We reset the lastHandledEvent as the original last
-     * event handled before coEdge.
-     * @param coEdge the coEdge that belongs to the coNode of this node.
-     */
-    public void updateLastHandledEvent(CFAEdge coEdge) {
-        SharedEvent lastHandledEvent = (LHEIndex < events.size() && LHEIndex >= 0) ?
-                events.get(LHEIndex) : null;
-        if (lastHandledEvent == null) {
-            // We have set lastHandledEvent to be null in coEdge.inNode.
-            // We just get this node by deep copy, so events should contain all events
-            // in coEdge.inNode.
-            // FIXME: we assume all atomic block access global vars, which means events
-            //  must be not empty.
-            Preconditions.checkArgument(!events.isEmpty(),
-                    "Encountering the node has no shared events.");
-            LHEIndex = events.size() - 1;
-            lastHandledEvent = events.get(LHEIndex);
-        }
-
-        Preconditions.checkArgument(blockEdges.contains(coEdge));
-        // Reset lastHandledEvent's inEdge should happen before coEdge.
-        int i = blockEdges.indexOf(coEdge),
-                j = blockEdges.indexOf(lastHandledEvent.getInEdge()),
-                k = LHEIndex;
-        SharedEvent resetLastHandledE = lastHandledEvent;
-        while (i <= j) {
-            k = events.indexOf(resetLastHandledE) - 1;
-            if (k < 0) break;
-            resetLastHandledE = events.get(k);
-            j = blockEdges.indexOf(resetLastHandledE.getInEdge());
-        }
-        Preconditions.checkArgument(i > j,
-                "Update lastHandledEvent failed.");
-        LHEIndex = k;
-    }
-
-    /**
-     * If the edge we are visiting has a coEdge that has been visited, then we should
-     * delete the edges after coEdge (including coEdge) because we are now in a new
-     * branch and may meet some new edges.
-     */
-    public void removeCoEdge(CFAEdge coEdge) {
-        Iterator<CFAEdge> it = blockEdges.iterator(), ite = blockEdges.iterator();
-        CFAEdge tmp = it.next();
-        while (tmp != coEdge && it.hasNext()) {
-            ite.next();
-            tmp = it.next();
-        }
-        Preconditions.checkState(tmp == coEdge,
-                "coEdge not in node: " + this);
-        while (ite.hasNext()) {
-            ite.next();
-            ite.remove();
-        }
     }
 
     public int contains(CFAEdge edge) {
@@ -570,7 +476,8 @@ public class OGNode implements Copier<OGNode> {
         lastVisitedEdge = cfaEdge;
     }
 
-     // Add new extracted events to the node.
+    // FIXME
+    // Add new extracted events to the node.
     public void addEvents(List<SharedEvent> eList, boolean shouldKeepEList) {
         if (eList == null) return;
         List<SharedEvent> deepCopiedEvents = new ArrayList<>();
@@ -625,6 +532,7 @@ public class OGNode implements Copier<OGNode> {
         }
     }
 
+    // FIXME
     // Replace coEdge nd with d.
     // d: the edge we meet in ARG.
     // nd: the coEdge of d that inside the node.
@@ -641,9 +549,6 @@ public class OGNode implements Copier<OGNode> {
 
         // Before removing these events, clear their relations firstly.
         toRemove.forEach(SharedEvent::removeAllRelations);
-//        events.removeAll(toRemove);
-//        toRemove.forEach(Rs::remove);
-//        toRemove.forEach(Ws::remove);
         // FIXME: update the lastReadIndex.
         toRemove.forEach(this::removeEvent);
         // Remove assumeEdge and all edges after it.
@@ -657,8 +562,8 @@ public class OGNode implements Copier<OGNode> {
         //  And what if nd contains more than one sharedEvent?
     }
 
+    // FIXME
     public boolean shouldRevisit() {
-        // FIXME
         return LHEIndex < 0 || LHEIndex < events.size() - 1;
     }
 
@@ -745,6 +650,7 @@ public class OGNode implements Copier<OGNode> {
         }
     }
 
+    // FIXME
     // Remove the events after e0.
     // Used in revisiting.
     // FIXME: remove events that locates in the same node with e0?
@@ -776,13 +682,11 @@ public class OGNode implements Copier<OGNode> {
         blockEdges.removeAll(rmEdges);
     }
 
+    // FIXME
     // Remove events that come from the edge.
     public void removeEvent(CFAEdge edge) {
         // FIXME: update lastReadIndex.
         Predicate<SharedEvent> filter = e -> Objects.equals(edge, e.getInEdge());
-//        events.removeIf(filter);
-//        Rs.removeIf(filter);
-//        Ws.removeIf(filter);
         List<SharedEvent> toRemove = events.stream().filter(filter).collect(Collectors.toList());
         toRemove.forEach(this::removeEvent);
     }
@@ -791,6 +695,7 @@ public class OGNode implements Copier<OGNode> {
         return hasBeenAddedToGraph;
     }
 
+    // FIXME
     public void addEdge(CFAEdge edge, List<SharedEvent> sharedEvents) {
         blockEdges.add(edge);
         if (sharedEvents != null)
@@ -801,6 +706,7 @@ public class OGNode implements Copier<OGNode> {
         LHEIndex = pLheIndex;
     }
 
+    // FIXME
     // Some events get deleted during the revisit, for example: in X = Y1,
     // Write(X) gets deleted because X reads from a new location.
     // We need to re-add Write(X) when it should be done.
@@ -840,4 +746,181 @@ public class OGNode implements Copier<OGNode> {
     public List<OGNode> getHappenBefore() { return happenBefore; }
 
     public List<OGNode> getHappenAfter() { return happenAfter; }
+
+    /**
+     * For rf, mo, fr and other relations that could be defined on shared events, we update
+     * the relations between nodes accordingly when relations between events changed.
+     */
+    public void removeMoAfter(OGNode maInNode) {
+        assert maInNode != null
+                && moAfter.contains(maInNode) && maInNode.moBefore.contains(this);
+        moAfter.remove(maInNode);
+    }
+
+    public void removeMoBefore(OGNode mbInNode) {
+        assert mbInNode != null && moBefore.contains(mbInNode);
+        moBefore.remove(mbInNode);
+    }
+
+    public void removeReadFrom(OGNode rfNode) {
+        assert rfNode != null && readFrom.contains(rfNode);
+        readFrom.remove(rfNode);
+    }
+
+    public void removeReadBy(OGNode rbNode) {
+        assert rbNode != null && readBy.contains(rbNode);
+        readBy.remove(rbNode);
+    }
+
+    public void removeFromRead(OGNode frNode) {
+        assert frNode != null && fromRead.contains(frNode);
+        fromRead.remove(frNode);
+    }
+
+    public void removeFromReadBy(OGNode frbNode) {
+        assert frbNode != null && fromReadBy.contains(frbNode);
+        fromReadBy.remove(frbNode);
+    }
+
+    public boolean readBy(OGNode node) {
+        assert node != null;
+        return readBy.contains(node) && node.readFrom.contains(this);
+    }
+
+    public boolean readFrom(OGNode node) {
+        assert node != null;
+        return readFrom.contains(node) && node.readBy.contains(this);
+    }
+
+    public void setReadBy(OGNode rbNode) {
+        assert rbNode != null;
+        readBy.add(rbNode);
+    }
+
+    public void setReadFrom(OGNode rfNode) {
+        assert rfNode != null;
+        readFrom.add(rfNode);
+    }
+
+    public boolean moBefore(OGNode node) {
+        assert node != null;
+        return moBefore.contains(node) && node.moAfter.contains(this);
+    }
+
+    public boolean moAfter(OGNode node) {
+        assert node != null;
+        return moAfter.contains(node) && node.moBefore.contains(this);
+    }
+
+    public void setMoBefore(OGNode mbNode) {
+        assert mbNode != null;
+        moBefore.add(mbNode);
+    }
+
+    public void setMoAfter(OGNode maNode) {
+        assert maNode != null;
+        moAfter.add(maNode);
+    }
+
+    public boolean fromRead(OGNode node) {
+        assert node != null;
+        return fromRead.contains(node) && node.fromReadBy.contains(this);
+    }
+
+    public boolean fromReadBy(OGNode node) {
+        assert node != null;
+        return fromReadBy.contains(node) && node.fromRead.contains(this);
+    }
+
+    public void setFromRead(OGNode frNode) {
+        assert frNode != null;
+        fromRead.add(frNode);
+    }
+
+    public void setFromReadBy(OGNode frbNode) {
+        assert frbNode != null;
+        fromReadBy.add(frbNode);
+    }
+
+    public void setPredecessor(OGNode pre) {
+        assert pre != null;
+        predecessor = pre;
+    }
+    public void removePredecessor() {
+        assert predecessor != null;
+        predecessor = null;
+    }
+
+    public void setSuccessor(OGNode suc) {
+        assert suc != null;
+        successors.add(suc);
+    }
+
+    public void removeSuccessor(OGNode suc) {
+        assert suc != null && successors.contains(suc);
+        successors.remove(suc);
+    }
+
+    public void setTrBefore(OGNode tbNode) {
+        assert tbNode != null;
+        trBefore = tbNode;
+    }
+
+    public void removeTrBefore() {
+        assert trBefore != null;
+        trBefore = null;
+    }
+
+    public void setTrAfter(OGNode taNode) {
+        assert taNode != null;
+        trAfter = taNode;
+    }
+
+    public void removeTrAfter() {
+        assert trAfter != null;
+        trAfter = null;
+    }
+
+    // Note: here is a strong assumption: before removing all relations for this,
+    // we should have remove all relations for all events that belongs to this node.
+    public void removeAllRelations() {
+        // Remove po, rf, fr, to and mo.
+        OGNode tmp;
+        // po.
+        if (predecessor != null) {
+            predecessor.removeSuccessor(this);
+            removePredecessor();
+        }
+        successors.forEach(suc -> {
+            suc.removePredecessor();
+            removeSuccessor(suc);
+        });
+        // rf.
+        readFrom.forEach(rf -> {
+            rf.removeReadBy(this);
+            removeReadFrom(rf);
+        });
+        readBy.forEach(rb -> {
+            rb.removeReadFrom(this);
+            removeReadBy(rb);
+        });
+        // fr.
+        fromRead.forEach(fr -> {
+            fr.removeFromReadBy(this);
+            removeFromRead(fr);
+        });
+        fromReadBy.forEach(frb -> {
+            frb.removeFromRead(this);
+            removeFromReadBy(frb);
+        });
+        // mo.
+        moBefore.forEach(mb -> {
+            mb.removeMoAfter(this);
+            removeMoBefore(mb);
+        });
+        moAfter.forEach(ma -> {
+            ma.removeMoBefore(this);
+            removeMoAfter(ma);
+        });
+    }
 }

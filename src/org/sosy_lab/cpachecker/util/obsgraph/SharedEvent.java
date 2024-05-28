@@ -8,6 +8,34 @@ import java.util.*;
 
 public class SharedEvent implements Copier<SharedEvent> {
 
+    public enum AccessType { WRITE, READ, UNKNOWN; }
+    private final Var var;
+    private final AccessType aType;
+
+    /* Read form and read by. */
+    // An event can read from one event at most.
+    private SharedEvent readFrom;
+    // An event may read by many events.
+    private final List<SharedEvent> readBy = new ArrayList<>();
+
+    /* TODO: Modification order. Just record one event? */
+    private SharedEvent moBefore;
+    private SharedEvent moAfter;
+
+    /* Write before. */
+    private final List<SharedEvent> wBefore = new ArrayList<>();
+    private final List<SharedEvent> wAfter = new ArrayList<>();
+
+    /* From read. */
+    private final List<SharedEvent> fromRead = new ArrayList<>();
+    private final List<SharedEvent> fromReadBy = new ArrayList<>();
+
+    // ogNode this event in.
+    private OGNode inNode;
+    // CFAEdge this event in.
+    private CFAEdge inEdge;
+
+    // FIXME
     public List<SharedEvent> getAllMoBefore() {
         List<SharedEvent> allMoBefore = new ArrayList<>();
         SharedEvent next = this.getMoBefore();
@@ -21,76 +49,7 @@ public class SharedEvent implements Copier<SharedEvent> {
         return allMoBefore;
     }
 
-    // A function for each part.
-    public void removeAllRelations() {
-        // Remove rf, fr and mo for this event.
-        // Rf.
-        OGNode tmp;
-        if (readFrom != null) {
-            tmp = readFrom.inNode;
-            readFrom.getReadBy().remove(this);
-            readFrom = null;
-            if (inNode.getRefCount("rf", tmp) < 1) {
-                inNode.getReadFrom().remove(tmp);
-                tmp.getReadBy().remove(inNode);
-            }
-        }
-        // Rb.
-        if (!readBy.isEmpty()) {
-            Set<OGNode> rbns = new HashSet<>();
-            readBy.forEach(rb -> {
-                rbns.add(rb.inNode);
-                rb.setReadFrom(null);
-            });
-            readBy.clear();
-            rbns.forEach(rbn -> {
-                if (inNode.getRefCount("rb", rbn) < 1) {
-                    inNode.getReadBy().remove(rbn);
-                    rbn.getReadFrom().remove(inNode);
-                }
-            });
-        }
-
-        // Fr.
-        if (!fromRead.isEmpty()) {
-            Set<OGNode> frns = new HashSet<>();
-            fromRead.forEach(fr -> {
-                frns.add(fr.inNode);
-                fr.getFromReadBy().remove(this);
-            });
-            fromRead.clear();
-            frns.forEach(frn -> {
-                if (inNode.getRefCount("fr", frn) < 1) {
-                    inNode.getFromRead().remove(frn);
-                    frn.getFromReadBy().remove(inNode);
-                }
-            });
-        }
-        // Frb.
-        if (!fromReadBy.isEmpty()) {
-            Set<OGNode> frbns = new HashSet<>();
-            fromRead.forEach(fr -> {
-                frbns.add(fr.inNode);
-                fr.getFromReadBy().remove(this);
-            });
-            fromRead.clear();
-            frbns.forEach(frbn -> {
-                if (inNode.getRefCount("frb", frbn) < 1) {
-                    inNode.getFromRead().remove(frbn);
-                    frbn.getFromReadBy().remove(inNode);
-                }
-            });
-        }
-
-        // Mo.
-        if (moAfter != null) {
-            removeMoAfter();
-        }
-        if (moBefore != null) {
-            removeMoBefore();
-        }
-    }
-
+    // FIXME
     public SharedEvent getCoEvent(List<SharedEvent> coEvents) {
         for (SharedEvent co : coEvents)
             if (co.accessSameVarWith(this)) return co.deepCopy(new HashMap<>());
@@ -98,6 +57,25 @@ public class SharedEvent implements Copier<SharedEvent> {
         return null;
     }
 
+    // Remove rf, fr and mo for this event.
+    public void removeAllRelations() {
+        // Rf
+        if (readFrom != null)
+            removeReadFrom();
+        readBy.forEach(this::removeReadBy);
+
+        // Fr.
+        fromRead.forEach(this::removeFromRead);
+        fromReadBy.forEach(this::removeFromReadBy);
+
+        // Mo.
+        if (moAfter != null)
+            removeMoAfter();
+        if (moBefore != null)
+            removeMoBefore();
+    }
+
+    // FIXME
     public void copyRelations(SharedEvent coEvent) {
         // InNode.
         coEvent.inNode = inNode;
@@ -148,73 +126,121 @@ public class SharedEvent implements Copier<SharedEvent> {
         }
     }
 
+    /**
+     * If (a, b) \in mo and we want to remove (a, b) from mo, then we just need
+     * to call a.removeBefore() or b.removeMoAfter() once, not both.
+     * Similarly, if (a, b) \in rf and we want to remove (a, b), then
+     * just call a.removeReadRy(b) or b.removeReadFrom() once.
+     * Note: we will follow the way above when handling other relations like fr,
+     * and any possible new relations. Besides, for each method defined on
+     * {@link SharedEvent}, we will also define a method with the same name on the
+     * {@link OGNode}.
+     */
     public void removeMoAfter() {
-        OGNode moAfterInNode = moAfter.inNode;
-        moAfter.setMoBefore(null);
+        assert moAfter != null && moAfter.moBefore == this :
+                "Trying to remove a relation not exists!";
+        OGNode maInNode = moAfter.inNode;
+        moAfter.moBefore = null;
         moAfter = null;
-        if (inNode.getRefCount("ma", moAfterInNode) < 1) {
-            inNode.getMoAfter().remove(moAfterInNode);
-            moAfterInNode.getMoBefore().remove(inNode);
+        if (inNode.getRefCount("ma", maInNode) < 1) {
+            inNode.removeMoAfter(maInNode);
+            maInNode.removeMoBefore(inNode);
         }
     }
 
     public void removeMoBefore() {
-        OGNode moBeforeInNode = moBefore.inNode;
-        moBefore.setMoAfter(null);
+        assert moBefore != null && moBefore.moAfter == this :
+                "Trying to remove a relation not exists!";
+        OGNode mbInNode = moBefore.inNode;
+        moBefore.moAfter = null;
         moBefore = null;
-        if (inNode.getRefCount("mb", moBeforeInNode) < 1) {
-            inNode.getMoBefore().remove(moBeforeInNode);
-            moBeforeInNode.getMoAfter().remove(inNode);
+        if (inNode.getRefCount("mb", mbInNode) < 1) {
+            inNode.removeMoBefore(mbInNode);
+            mbInNode.removeMoAfter(inNode);
         }
     }
 
-    public void removeReadFrom(SharedEvent rf) {
-        assert readFrom == rf : "Trying to remove an incorrect rf event.";
-        OGNode rfNode = rf.getInNode();
-        rf.readBy.remove(this);
+    public void removeReadFrom() {
+        assert readFrom != null && readFrom.readBy.contains(this) :
+                "Trying to remove a relation not exists!";
+        OGNode rfNode = readFrom.getInNode();
+        readFrom.readBy.remove(this);
         readFrom = null;
         if (inNode.getRefCount("rf", rfNode) < 1) {
-            inNode.getReadFrom().remove(rfNode);
-            rfNode.getReadBy().remove(inNode);
+            inNode.removeReadFrom(rfNode);
+            rfNode.removeReadBy(inNode);
         }
     }
 
-    public void setReadFrom0(SharedEvent rf) {
-        OGNode rfNode = rf.getInNode();
-        readFrom = rf;
-        rf.getReadBy().add(this);
-        if (!rfNode.getReadBy().contains(inNode))
-            rfNode.getReadBy().add(inNode);
-        if (!inNode.getReadFrom().contains(rfNode))
-            inNode.getReadFrom().add(rfNode);
+    public void removeReadBy(SharedEvent rb) {
+        assert rb != null && readBy.contains(rb) && rb.readFrom == this :
+                "Trying to remove a relation not exists!";
+        readBy.remove(rb);
+        rb.readFrom = null;
+        OGNode rbNode = rb.getInNode();
+        if (inNode.getRefCount("rb", rbNode) < 1) {
+            inNode.removeReadBy(rbNode);
+            rbNode.removeReadFrom(inNode);
+        }
     }
 
-    public enum AccessType { WRITE, READ, UNKNOWN; }
-    private final Var var;
-    private final AccessType aType;
+    public void removeFromRead(SharedEvent fr) {
+        assert fr != null && fromRead.contains(fr)
+                && fr.getFromReadBy().contains(this) :
+                "Trying to remove a relation not exists!";
+        fromRead.remove(fr);
+        fr.fromReadBy.remove(this);
+        OGNode frNode = fr.getInNode();
+        if (inNode.getRefCount("fr", frNode) < 1) {
+            inNode.removeFromRead(frNode);
+            frNode.removeFromReadBy(inNode);
+        }
+    }
 
-    /* Read form and read by. */
-    // An event can read from one event at most.
-    private SharedEvent readFrom;
-    // An event may read by many events.
-    private final List<SharedEvent> readBy = new ArrayList<>();
+    public void removeFromReadBy(SharedEvent frb) {
+        assert frb != null && fromReadBy.contains(frb)
+                && frb.getFromRead().contains(this) :
+                "Trying to remove a relation not exists!";
+        fromReadBy.remove(frb);
+        frb.fromRead.remove(this);
+        OGNode frbNode = frb.getInNode();
+        if (inNode.getRefCount("frb", frbNode) < 1) {
+            inNode.removeFromReadBy(frbNode);
+            frbNode.removeFromRead(inNode);
+        }
+    }
 
-    /* TODO: Modification order. Just record one event? */
-    private SharedEvent moBefore;
-    private SharedEvent moAfter;
+    /**
+     * Similarly, when add (a, b) to rf, fr or mo, just call a.setReadFrom(b) or
+     * b.setReadBy(a) once. And all method defined on {@link SharedEvent} will
+     * also be defined on {@link OGNode}.
+     */
+    public void setReadFrom(SharedEvent rf) {
+        assert rf != null;
+        assert readFrom == null && !rf.readBy.contains(this) :
+                "It's not allowed to add a new rf relation when there has been one!";
+        readFrom = rf;
+        rf.getReadBy().add(this);
+        OGNode rfNode = rf.getInNode();
+        if (!rfNode.readBy(inNode))
+            rfNode.setReadBy(inNode);
+        if (!inNode.readFrom(rfNode))
+            inNode.setReadFrom(rfNode);
+    }
 
-    /* Write before. */
-    private final List<SharedEvent> wBefore = new ArrayList<>();
-    private final List<SharedEvent> wAfter = new ArrayList<>();
+    public void setReadBy(SharedEvent rb) {
+        assert rb != null;
+        assert rb.readFrom != this && !readBy.contains(this) :
+                "It's not allowed to add a new rf relation when there has been one!";
+        readBy.add(rb);
+        rb.readFrom = this;
+        OGNode rbNode = rb.getInNode();
+        if (!inNode.readBy(rbNode))
+            inNode.setReadBy(rbNode);
+        if (!rbNode.readFrom(inNode))
+            rbNode.setReadFrom(inNode);
+    }
 
-    /* From read. */
-    private final List<SharedEvent> fromRead = new ArrayList<>();
-    private final List<SharedEvent> fromReadBy = new ArrayList<>();
-
-    // ogNode this event in.
-    private OGNode inNode;
-    // CFAEdge this event in.
-    private CFAEdge inEdge;
 
     @Override
     public String toString() {
@@ -230,26 +256,17 @@ public class SharedEvent implements Copier<SharedEvent> {
     }
 
     public SharedEvent deepCopy(Map<Object, Object> memo) {
-//        if (memo.containsKey(this)) {
-//            assert memo.get(this) instanceof SharedEvent;
-//            return (SharedEvent) memo.get(this);
-//        }
         if (memo.containsKey(System.identityHashCode(this))) {
             assert memo.get(System.identityHashCode(this)) instanceof SharedEvent;
             return (SharedEvent) memo.get(System.identityHashCode(this));
         }
 
         SharedEvent nEvent = new SharedEvent(this.var, this.aType, this.inEdge);
-//        memo.put(this, nEvent);
         memo.put(System.identityHashCode(this), nEvent);
 
         /* Read from & read by. */
         nEvent.readFrom = this.readFrom != null ? this.readFrom.deepCopy(memo) : null;
-//        this.readBy.forEach(rb -> nEvent.readBy.add(rb.deepCopy(memo)));
-        for (SharedEvent rb : readBy) {
-            SharedEvent nrb = rb.deepCopy(memo);
-            nEvent.readBy.add(nrb);
-        }
+        this.readBy.forEach(rb -> nEvent.readBy.add(rb.deepCopy(memo)));
 
         /* Modification order. */
         nEvent.moAfter = this.moAfter != null ? this.moAfter.deepCopy(memo) : null;
@@ -266,12 +283,6 @@ public class SharedEvent implements Copier<SharedEvent> {
 
     public SharedEvent getReadFrom() {
         return readFrom;
-    }
-
-    // FIXME: rewrite this method.
-    public void setReadFrom(SharedEvent readFrom) {
-        // TODO
-        this.readFrom = readFrom;
     }
 
     public SharedEvent getMoBefore() {
@@ -294,47 +305,60 @@ public class SharedEvent implements Copier<SharedEvent> {
         return this.inNode;
     }
 
-    public void setMoBefore(SharedEvent moBefore) {
-        SharedEvent oldMoBefore = this.moBefore;
-        if (moBefore == null) {
-            this.moBefore = null;
-        } else {
-            this.moBefore = moBefore;
-            moBefore.moAfter = this;
-            if (!this.inNode.getMoBefore().contains(moBefore.inNode))
-                inNode.getMoBefore().add(moBefore.inNode);
-            if (!moBefore.inNode.getMoAfter().contains(this.inNode))
-                moBefore.inNode.getMoAfter().add(this.inNode);
-        }
-        // Remove old mo for oldMoBefore.
-        if (oldMoBefore != null) {
-            oldMoBefore.removeMoAfter();
-        }
+    public void setMoBefore(SharedEvent mb) {
+        assert mb != null;
+        assert moBefore != mb && mb.moAfter != this :
+                "It's not allowed to add a new mo relation when there has been one!";
+        moBefore = mb;
+        mb.moAfter = this;
+        OGNode mbNode = mb.getInNode();
+        if (!inNode.moBefore(mbNode))
+            inNode.setMoBefore(mbNode);
+        if (!mbNode.moAfter(inNode))
+            mbNode.setMoAfter(inNode);
     }
 
     public SharedEvent getMoAfter() {
         return moAfter;
     }
 
-    public void setMoAfter(SharedEvent moa) {
-        SharedEvent oldMoAfter = this.moAfter;
-        if (moa == oldMoAfter)
-            return;
-        if (moa == null) {
-            this.moAfter = null;
-        } else {
-            this.moAfter = moa;
-            moAfter.moBefore = this;
-            if (!this.inNode.getMoAfter().contains(moa.inNode))
-                inNode.getMoAfter().add(moa.inNode);
-            if (!moa.inNode.getMoBefore().contains(this.inNode))
-                moa.inNode.getMoBefore().add(this.inNode);
-        }
+    public void setMoAfter(SharedEvent ma) {
+        assert ma != null;
+        assert moAfter != ma && ma.moBefore != this :
+                "It's not allowed to add a new mo relation when there has been one!";
+        moAfter = ma;
+        ma.moBefore = this;
+        OGNode maNode = ma.getInNode();
+        if (!inNode.moAfter(maNode))
+            inNode.setMoAfter(maNode);
+        if (!maNode.moBefore(inNode))
+            maNode.setMoBefore(inNode);
+    }
 
-        // Remove old mo for oldMoAfter.
-        if (oldMoAfter != null) {
-            oldMoAfter.removeMoBefore();
-        }
+    public void setFromRead(SharedEvent fr) {
+        assert fr != null;
+        assert !fr.fromReadBy.contains(this) && !fromRead.contains(fr) :
+                "It's not allowed to add a new fr relation when there has been one!";
+        fromRead.add(fr);
+        fr.fromReadBy.add(this);
+        OGNode frNode = fr.getInNode();
+        if (!inNode.fromRead(frNode))
+            inNode.setFromRead(frNode);
+        if (!frNode.fromReadBy(inNode))
+            frNode.setFromReadBy(inNode);
+    }
+
+    public void setFromReadBy(SharedEvent frb) {
+        assert frb != null;
+        assert !frb.fromRead.contains(this) && !fromReadBy.contains(frb) :
+                "It's not allowed to add a new fr relation when there has been one!";
+        fromReadBy.add(frb);
+        frb.fromRead.add(this);
+        OGNode frbNode = frb.getInNode();
+        if (!inNode.fromReadBy(frbNode))
+            inNode.setFromReadBy(frbNode);
+        if (!frbNode.fromRead(inNode))
+            frbNode.setFromRead(inNode);
     }
 
     public List<SharedEvent> getReadBy() {
