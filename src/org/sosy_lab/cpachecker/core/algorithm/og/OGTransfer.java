@@ -27,7 +27,7 @@ import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 public class OGTransfer {
 
     private final Map<Integer, List<ObsGraph>> OGMap;
-    private final Map<Integer, List<SharedEvent>> edgeVarMap,
+    private final Map<Integer, List<SharedEvent>> edgeVarMap;
     private final NLTComparator nltcmp = new NLTComparator();
     private final boolean enableDebug;
 
@@ -42,7 +42,7 @@ public class OGTransfer {
 
     public NLTComparator getNltcmp() { return nltcmp; }
 
-
+    // FIXME
     public ObsGraph handleNonDet(ObsGraph graph,
             ARGState parState,
             // OGPORState chOgState,
@@ -63,7 +63,7 @@ public class OGTransfer {
                         OGNode currentNode = copiedGraph.getCurrentNode(chThd);
                         // Copied graph is used for another conditional branch.
                         if (currentNode != null) {
-                            currentNode.removeEvent(edge);
+                            currentNode.removeEventsFromEdge(edge);
                             currentNode.getBlockEdges().remove(edge);
                         }
                         // <<<<<<
@@ -77,6 +77,7 @@ public class OGTransfer {
         return null;
     }
 
+    // FIXME
     public boolean hasNonDet(ARGState parState, CFAEdge edge) {
         // Check whether parState has indeterminate successors.
         List<ARGState> coSuccessors = new ArrayList<>();
@@ -166,7 +167,7 @@ public class OGTransfer {
         switch (caa) {
             case START:
                 result = handleBlockStart(graph, edge, edgeType, node, curThread,
-                        parState, chState, graphWrapper, __DEBUG__);
+                        parState, chState, graphWrapper);
                 break;
             case CONTINUE:
                 result = handleBlockContinue(graph, edge, edgeType, node, curThread,
@@ -1018,17 +1019,16 @@ public class OGTransfer {
             String curThd,
             ARGState parState,
             ARGState chState,
-            List<ObsGraph> graphWrapper,
-            boolean __DEBUG__) {
+            List<ObsGraph> graphWrapper) {
         // Caa = START. This means edge should be a funCall and we will enter a node.
         Pair<ObsGraph, ObsGraph> result;
         if (edgeType == 0) { // Local non-assumption edge.
             if (node != null) {
-                // A simple node contains only one edge. Besides, the node should contain
-                // the edge at this time.
+                // Only complex node can contain a block start edge. Besides, the node should contain
+                // the edge when node != null, this means we have created the node before.
                 assert !node.isSimpleNode() && node.getBlockEdges().contains(edge);
+                // FIXME: here is an implicit strong assumption: block start edge contains no writes.
                 // We will enter the node if no conflicts exist.
-                // FIXME: strong assumption: block start edge contains no writes.
                 //  I.e., toCheckEvents = null.
                 if (isConflict(graph, curThd, node, edge, null, true)) {
                     return Pair.of(null, null);

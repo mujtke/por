@@ -367,9 +367,8 @@ public class ObsGraph implements Copier<ObsGraph> {
                          // if wNode porf nodes[m] and nodes[m] != node (wNode must
                          // porf node, and a node cannot fr itself.
                          OGNode frn = nodes.get(m);
-                         if (!frn.containWriteToSameVar(w)) continue;
                          SharedEvent frnw = frn.getWriteToSameVar(r);
-                         Preconditions.checkState(frnw != null);
+                         if (frnw == null) continue;
                          setRelation("fr", this, r, frnw);
                      }
                  }
