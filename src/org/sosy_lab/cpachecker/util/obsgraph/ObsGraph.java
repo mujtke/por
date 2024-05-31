@@ -25,9 +25,11 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     private final List<OGNode> nodes = new ArrayList<>();
 
-    // FIXME: We need a specified definition for this var.
-    // I.e., last added or to-max node?
-    // Now, use the to-max one.
+    /**
+     * This variable tracks the node that visible and to-max.
+     * NOTE: to-max doesn't means that the node is always added last. I.e., the lastNode
+     * isn't always the last one of the {@link #nodes}
+     */
     private OGNode lastNode = null;
 
     private boolean needToRevisit = false;
@@ -69,6 +71,26 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     public Map<String, OGNode> getNodeTable() {
         return nodeTable;
+    }
+
+    /**
+     * Judge whether the graph contains the node, this requires the correct
+     * implementation of {@link OGNode#equals(Object)}.
+     */
+    public boolean contains(OGNode node) {
+        return nodes.contains(node);
+    }
+
+    public void addNode(OGNode node) {
+        assert !nodes.contains(node) :
+                "Trying to add a node that has been added before!";
+        nodes.add(node);
+    }
+
+    public void removeNode(OGNode node) {
+        assert nodes.contains(node) :
+                "Trying to remove a node that not in the graph!";
+        nodes.remove(node);
     }
 
     // FIXME
@@ -667,5 +689,57 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     public void deduceFromRead(SharedEvent w, SharedEvent r) {
         // TODO
+    }
+
+    /**
+     * @param n provide write events that we used to set rf relations for events in
+     * {@param rFlag} and update/set mo relations for events in {@param wFlag}.
+     * @param rFlag the set of read events that we need to set rf relations for.
+     * @param wFlag the set of write events that we need to update/set mo relations for.
+     * @implNote For mo, if we keep mo relations after revisiting, then what we do here
+     * is to update it. Otherwise, we set it here.
+     */
+    public void setRelations(OGNode n, Set<SharedEvent> rFlag, Set<SharedEvent> wFlag) {
+        for (SharedEvent nw : n.getWs()) {
+            Set<SharedEvent> toRemove = new HashSet<>();
+            // Rf.
+            for (SharedEvent r : rFlag) {
+                if (r.accessSameVarWith(nw)) {
+                    // let r read from w.
+                    r.setReadFrom(nw);
+                    toRemove.add(r);
+                }
+            }
+            rFlag.removeAll(toRemove);
+            toRemove.clear();
+
+            // Mo.
+            // NOTE: we don't remove previous mo relations.
+            // We use rules follow:
+            // rule1:
+            //      Old mo: nw --> nwmb
+            //      New mo: nw --> w --> nwmb
+            // rule2:
+            //      Old mo: nw --> null
+            //      new mo: nw --> w
+            //
+            // rule3: (nw, w) have been in the mo.
+            //      Old mo: nw --> w
+            //      new mo: nw --> w
+            for (SharedEvent w : wFlag) {
+                if (w.accessSameVarWith(nw)) {
+                    SharedEvent nwmb = nw.getMoBefore();
+                    if (nwmb == null) {      // nwmb == null
+                        w.setMoAfter(nw);    // Add new mo for j.
+                    } else if (nwmb != w) {
+                        nwmb.setMoAfter(w);
+                        w.setMoAfter(nw);
+                    }
+                    toRemove.add(w);
+                }
+            }
+            wFlag.removeAll(toRemove);
+            toRemove.clear();
+        }
     }
 }

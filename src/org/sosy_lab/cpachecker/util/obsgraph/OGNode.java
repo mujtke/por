@@ -2,10 +2,12 @@ package org.sosy_lab.cpachecker.util.obsgraph;
 
 import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
+import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.SMTHeapReadAndWriteTest;
 
 import java.util.*;
 import java.util.function.Predicate;
@@ -20,7 +22,7 @@ public class OGNode implements Copier<OGNode> {
     // loopDepth = 0 means the node is not in a loop.
     private int loopDepth = 0;
     private final List<CFAEdge> blockEdges = new ArrayList<>();
-    private final boolean simpleNode; /* contains only one edge */
+    private boolean simpleNode; /* contains only one edge */
     private final Set<SharedEvent> Rs = new HashSet<>();
     private final Set<SharedEvent> Ws = new HashSet<>();
     // We add events in the order we meet them.
@@ -78,11 +80,27 @@ public class OGNode implements Copier<OGNode> {
     private CFAEdge lastVisitedEdge;
 
     public OGNode(List<CFAEdge> pBlockEdges,
-                  boolean pSimpleNode) {
+            boolean pSimpleNode,
+            ARGState preState,
+            ARGState sucState) {
         blockEdges.addAll(pBlockEdges);
         simpleNode = pSimpleNode;
+        if (sucState != null)
+            setThreadInfo(sucState);
+        setPreState(preState);
+        setSucState(sucState);
     }
 
+    public OGNode() {
+
+    }
+
+    public void updatePreAndSucState(ARGState pPreState, ARGState pSucState) {
+        if (pPreState != null)
+            setPreState(pPreState);
+        if (pSucState != null)
+            setSucState(pSucState);
+    }
     /**
      * @param memo Store the original object and its copied object.
      * @return The deep copy of this OGNode.
@@ -94,10 +112,7 @@ public class OGNode implements Copier<OGNode> {
             return (OGNode) memo.get(System.identityHashCode(this));
         }
         // Else, try to copy 'this' to a new object.
-        OGNode nNode = new OGNode(
-                this.blockEdges,    /* Shallow copy. */
-                this.simpleNode     /* Shallow copy. */
-                );
+        OGNode nNode = new OGNode();
         nNode.blockEdges.addAll(this.blockEdges);
         // Put the copy into memo.
 //        memo.put(this, nNode);
@@ -440,8 +455,8 @@ public class OGNode implements Copier<OGNode> {
         this.LHEIndex = newLHEIndex;
     }
 
-    public int contains(CFAEdge edge) {
-        return blockEdges.indexOf(edge);
+    public boolean contains(CFAEdge edge) {
+        return blockEdges.contains(edge);
     }
 
     public void setLastVisitedEdge(CFAEdge cfaEdge) {
@@ -449,17 +464,23 @@ public class OGNode implements Copier<OGNode> {
     }
 
     /**
-     * @param eList Events we need to add.
-     *              NOTE: It should be guaranteed that all events in eList are deep
-     *              copies of the corresponding events stored in {@link OGInfo#getEdgeVarMap()}.
-     *              So that, we can add events in eList directly without doing any deep copy.
+     * @param eList source of the events that we are going to add.
+     * @implNote It should be guaranteed that all events we will add are deep copies of
+     * the corresponding events stored in {@link OGInfo#getEdgeVarMap()}. To do so,
+     * we copy the events in {@param eList} before we add events to the node.
      */
     public void addEvents(List<SharedEvent> eList) {
         if (eList == null) return;
+        List<SharedEvent> eventCopies = new ArrayList<>();
         eList.forEach(e -> {
+            Map<Object, Object> memo = new HashMap<>();
+            eventCopies.add(e.deepCopy(memo));
+        });
+        eventCopies.forEach(e -> {
             switch (e.getAType()) {
                 case READ:
-                    SharedEvent sameR = getReadToSameVar(e), sameW = getWriteToSameVar(e);
+                    SharedEvent sameR = getReadToSameVar(e),
+                            sameW = getWriteToSameVar(e);
                     if (sameR != null || sameW != null) {
                         // For the reads to the same var, only the first will be added.
                         // If there is a write that accesses the same var with r, then r could be
@@ -485,38 +506,35 @@ public class OGNode implements Copier<OGNode> {
         });
     }
 
-    // FIXME
-    // Replace coEdge nd with d.
-    // d: the edge we meet in ARG.
-    // nd: the coEdge of d that inside the node.
-    public void replaceCoEdge(
-            final Map<Integer, List<SharedEvent>> edgeVarMap, CFAEdge d, CFAEdge nd) {
-
+    /**
+     * Replace oldEdge with newEdge.
+     * @param oldEdge the edge that is inside the node and coEdge of the edge we meet in ARG.
+     * @param newEdge the edge we met in ARG.
+     */
+    public void replaceCoEdge(CFAEdge oldEdge, CFAEdge newEdge) {
+        assert blockEdges.contains(oldEdge) :
+                "Cannot replace an edge not in the node: " + oldEdge;
         // Replace.
-        int assumeEdgeIdx = blockEdges.indexOf(nd);
+        int assumeEdgeIdx = blockEdges.indexOf(oldEdge);
 
-        // Remove all shared events in or after the nd.
+        // Remove all shared events in and after the oldEdge.
         List<SharedEvent> toRemove = events.stream()
                 .filter(e -> blockEdges.indexOf(e.getInEdge()) >= assumeEdgeIdx)
                 .collect(Collectors.toList());
 
         // Before removing these events, clear their relations firstly.
         toRemove.forEach(SharedEvent::removeAllRelations);
-        // FIXME: update the lastReadIndex.
         toRemove.forEach(this::removeEvent);
         // Remove assumeEdge and all edges after it.
         blockEdges.removeIf(e -> blockEdges.indexOf(e) >= assumeEdgeIdx);
-        blockEdges.add(d);
-
-        // Update the last-visited edge.
-        setLastVisitedEdge(d);
+        blockEdges.add(newEdge);
 
         // FIXME: Does last-visited event get updated only when revisiting?
         //  And what if nd contains more than one sharedEvent?
     }
 
     public boolean shouldRevisit() {
-        return (events.size() > 0) && (LHEIndex < events.size() - 1);
+        return !events.isEmpty() && (LHEIndex < events.size() - 1);
     }
 
     public int getRefCount(String type, OGNode other) {
@@ -601,12 +619,17 @@ public class OGNode implements Copier<OGNode> {
                 && !threadLoc.containsKey(pNode.getInThread());
     }
 
-    // FIXME
-    public void getNewRs(@NonNull Set<SharedEvent> rFlag) {
-        for (int i = LHEIndex + 1; i < events.size(); i++) {
-            if (events.get(i).getAType() == READ)
-                rFlag.add(events.get(i));
-        }
+    // Get the read events that need to visit when we are visiting the corresponding node.
+    public void getRsNeedToVisit(@NonNull Set<SharedEvent> rFlag) {
+        Rs.forEach(e -> {
+            if (events.indexOf(e) > LHEIndex)
+                rFlag.add(e);
+        });
+    }
+
+    // Get the write events that need to visit.
+    public void getWsNeedToVisit(@NonNull Set<SharedEvent> wFlag) {
+        wFlag.addAll(Ws);
     }
 
     // FIXME
@@ -804,7 +827,7 @@ public class OGNode implements Copier<OGNode> {
     }
 
     public void setSuccessor(OGNode suc) {
-        assert suc != null;
+        assert suc != null && !successors.contains(suc);
         successors.add(suc);
     }
 
