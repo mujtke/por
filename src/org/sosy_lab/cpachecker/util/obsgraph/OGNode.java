@@ -131,7 +131,6 @@ public class OGNode implements Copier<OGNode> {
         nNode.LHEIndex = this.LHEIndex;
         nNode.lastVisitedEdge = this.lastVisitedEdge;
         nNode.hasBeenAddedToGraph = this.hasBeenAddedToGraph;
-        nNode.lastReadIndex = this.lastReadIndex;
 
         /* preState & sucState */
         nNode.preState = this.preState; /* Shallow copy. */
@@ -419,7 +418,6 @@ public class OGNode implements Copier<OGNode> {
         }
     }
 
-    // FIXME
     public void removeEvent(SharedEvent e) {
         assert events.contains(e) && (Rs.contains(e) || Ws.contains(e)) :
                 "Trying to remove a event not in the node!";
@@ -435,6 +433,16 @@ public class OGNode implements Copier<OGNode> {
         } else {
             Ws.remove(e);
         }
+    }
+
+    public void removeEdges(Collection<CFAEdge> toRemove) {
+        // Debug, check the legality to remove all edges in toRemove.
+        List<CFAEdge> shouldKeep =
+                events.stream().map(SharedEvent::getInEdge).collect(Collectors.toList());
+        assert toRemove.stream().noneMatch(shouldKeep::contains) :
+                "Cannot remove an edge some of whose corresponding events are still in the node";
+
+        blockEdges.removeAll(toRemove);
     }
 
     public SharedEvent getLastHandledEvent() {
@@ -897,5 +905,19 @@ public class OGNode implements Copier<OGNode> {
             ma.removeMoBefore(this);
             removeMoAfter(ma);
         });
+    }
+
+    /**
+     * @return list of the events that need to revisit.
+     * @implNote When calling this method, the node should be re-visitable, i.e.,
+     * shouldRevisit() return true.
+     */
+    public List<SharedEvent> getRE() {
+        assert shouldRevisit() :
+                "Trying to get re-visitable events in a node that not re-visitable.";
+        List<SharedEvent> RE = events.stream().filter(e -> events.indexOf(e) > LHEIndex)
+                .collect(Collectors.toList());
+        assert !RE.isEmpty();
+        return RE;
     }
 }

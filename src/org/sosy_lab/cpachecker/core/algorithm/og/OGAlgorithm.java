@@ -41,7 +41,6 @@ public class OGAlgorithm implements Algorithm {
     private final PrecisionAdjustment precisionAdjustment;
 
     private final Map<Integer, List<ObsGraph>> OGMap;
-    private final Map<Integer, OGNode> nodeMap;
     private final OGRevisitor revisitor;
     private final OGTransfer transfer;
 
@@ -54,7 +53,7 @@ public class OGAlgorithm implements Algorithm {
     // operation on a state, e.g., pop a state from 'waitlist', and then we
     // should perform the same or similar operation on the waitlist in
     // reachedSet.
-    private final Vector<AbstractState> waitlist = new Vector<>();
+    private Vector<AbstractState> waitlist = new Vector<>();
 
     // Debug.
     private boolean enableDebug = false;
@@ -69,8 +68,6 @@ public class OGAlgorithm implements Algorithm {
         this.precisionAdjustment = cpa.getPrecisionAdjustment();
         OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
         this.OGMap = ogInfo.getOGMap();
-        this.nodeMap = ogInfo.getNodeMap();
-//        assert OGMap != null && nodeMap != null;
         assert OGMap != null;
         this.revisitor = ogInfo.getRevisitor();
         this.transfer = ogInfo.getTransfer();

@@ -575,26 +575,6 @@ public class OGTransfer {
         }
     }
 
-    // Add rf, mo relations for the given events.
-    void visitEvents(ObsGraph graph, OGNode node, List<SharedEvent> toAddEvents) {
-        Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>();
-        toAddEvents.forEach(e -> {
-            e.setInNode(node);
-            if (e.isRead())
-                rFlag.add(e);
-            else
-                wFlag.add(e);
-        });
-
-        OGNode n = graph.getLastNode();
-        while (n != null && (!rFlag.isEmpty() || !wFlag.isEmpty())) {
-            // FIXME: Add rf and mo only when n is in the graph?
-            if (n.isInGraph())
-                addRfMoForNewNode(graph, n, rFlag, wFlag);
-            n = n.getTrAfter();
-        }
-    }
-
     // Send the graph back to a certain state.
     private void transferRollback(ObsGraph graph,
             OGNode curNode,

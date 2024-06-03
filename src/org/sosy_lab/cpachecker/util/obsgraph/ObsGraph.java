@@ -37,8 +37,6 @@ public class ObsGraph implements Copier<ObsGraph> {
     // The number of the nodes whose inGraph is set as true.
     private int traceLen = 0;
 
-    private final List<SharedEvent> RE = new ArrayList<>();
-
     // Record the current hold node for each thread: tid -> node.
     private final Map<String, OGNode> nodeTable = new HashMap<>();
 
@@ -93,32 +91,14 @@ public class ObsGraph implements Copier<ObsGraph> {
         nodes.remove(node);
     }
 
-    // FIXME
+    /**
+     * @return a list of the events that we need to revisit.
+     * @implNote find re-visitable events in the last node.
+     */
     public List<SharedEvent> getRE() {
-        if (lastNode != null) {
-            List<SharedEvent> events = lastNode.getEvents();
-            SharedEvent lastHandledE = lastNode.getLastHandledEvent();
-            if (!RE.isEmpty()) RE.clear();
-            // NOTE: In RE, a read event should always be front of a write?
-            int i, lheIndex = lastHandledE == null ? -1 : lastNode.getLheIndex(),
-                    lastReadIndex = lheIndex;
-            for (i = lheIndex + 1; i < events.size(); i++) {
-                if (events.get(i).isRead()) { // Read.
-                    assert lastReadIndex + 1 == i :
-                            "Some write events added before the read " + events.get(i);
-                    RE.add(events.get(i));
-                    lastReadIndex++;
-                } else { // Write.
-                    RE.add(events.get(i));
-                }
-            }
-        }
-        // FIXME
-        else if (!RE.isEmpty()) {
-            RE.clear();
-        }
-
-        return RE;
+        assert lastNode != null :
+                "Try to revisit a graph which has no last node specified.";
+        return lastNode.getRE();
     }
 
     @Override
@@ -146,7 +126,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         return lastNode;
     }
 
-    public boolean isNeedToRevisit() {
+    public boolean needToRevisit() {
         return needToRevisit;
     }
 
@@ -178,7 +158,6 @@ public class ObsGraph implements Copier<ObsGraph> {
         memo.put(System.identityHashCode(this), nGraph);
         // Copy nodes.
         this.nodes.forEach(n -> nGraph.nodes.add(n.deepCopy(memo)));
-        this.RE.forEach(re -> nGraph.RE.add(re.deepCopy(memo)));
         // Node table.
         this.nodeTable.forEach((k, v) ->
                 nGraph.nodeTable.put(k, v == null ? null : v.deepCopy(memo)));
@@ -200,11 +179,16 @@ public class ObsGraph implements Copier<ObsGraph> {
         return nGraph;
     }
 
-    // FIXME.
+    /**
+     * FIXME
+     * @param a Based on this we find the events that access the same var with it.
+     * @return A restrictive list of the events that access the same var with {@param a}.
+     * NOTE: this method matters, if we don't return all but a part of the target
+     * events that has the same location with {@param a}.
+     */
     public List<SharedEvent> getSameLocationAs(SharedEvent a) {
 
-        List<SharedEvent> result = new ArrayList<>(),
-                exclusiveReadEvents = null;
+        List<SharedEvent> result = new ArrayList<>(), exclusiveReadEvents = null;
         List<Pair<SharedEvent, SharedEvent>> removedRfs = null;
         List<OGNode> porfPres = new ArrayList<>();
         OGNode aNode = a.getInNode(), arfNode = null;
@@ -327,23 +311,39 @@ public class ObsGraph implements Copier<ObsGraph> {
         return OGRevisitor.porf(A, B);
     }
 
-    // FIXME
+    /**
+     * @param delete events to remove.
+     * @param rp the upper bound of the deleted events (not including {@param rp}).
+     * FIXME: remove cached assumption edges here?
+     */
      public void removeDelete(List<SharedEvent> delete, SharedEvent rp) {
-         // remove the relations before remove the nodes.
+         OGNode rpn = rp.getInNode();
+         // In rpn, some events may get delete, and we need to remove corresponding
+         // edges, too.
+         Set<CFAEdge> toRemove = new HashSet<>();
+         // remove relations before removing nodes.
          delete.forEach(e -> {
              // For e.
              e.removeAllRelations();
 
              // For e.inNode.
              OGNode en = e.getInNode();
-             if (!Objects.equals(rp.getInNode(), en)) {
+             if (!Objects.equals(rpn, en)) {
                  en.removeAllRelations();
                  // Remove node en.
                  nodes.remove(en);
+             } else {
+                 // Don't remove node rpn, just remove event e.
+                 rpn.removeEvent(e);
+                 toRemove.add(e.getInEdge());
              }
          });
-         // FIXME: remove events after rp?
-         rp.getInNode().removeEventAfter(rp);
+
+         rpn.removeEdges(toRemove);
+
+         // Remove the corresponding cached assumption edges because of the removal of
+         // deleted events.
+         removeAssumeEdges(delete, rp);
      }
 
      // FIXME
@@ -613,7 +613,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         }
     }
 
-    public void removeAssumeEdges(SharedEvent r, List<SharedEvent> delete) {
+    // FIXME
+    public void removeAssumeEdges(List<SharedEvent> delete, SharedEvent r) {
         // Remove the corresponding cached assume edges after having removed the events in
         // revisiting.
         if (cachedAssumeEdges.isEmpty()) return;

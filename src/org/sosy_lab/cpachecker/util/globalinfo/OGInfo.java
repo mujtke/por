@@ -61,7 +61,7 @@ public class OGInfo {
             edgeVarMap = new HashMap<>();
             fullOGMap = new HashMap<>();
             transfer = new OGTransfer(OGMap, edgeVarMap, enableDebug);
-            revisitor = new OGRevisitor(OGMap, pConfig, pCfa, pLogger, enableDebug);
+            revisitor = new OGRevisitor(pConfig, pCfa, pLogger, enableDebug);
             nlt = new HashMap<>();
         } else {
             OGMap = null;

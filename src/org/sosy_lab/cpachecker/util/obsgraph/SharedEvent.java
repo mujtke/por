@@ -8,7 +8,7 @@ import java.util.*;
 
 public class SharedEvent implements Copier<SharedEvent> {
 
-    public enum AccessType { WRITE, READ, UNKNOWN; }
+    public enum AccessType { WRITE, READ }
     private final Var var;
     private final AccessType aType;
 
@@ -393,5 +393,10 @@ public class SharedEvent implements Copier<SharedEvent> {
 
     public boolean isWrite() {
         return aType == AccessType.WRITE;
+    }
+
+    public boolean inSameEdgeWith(SharedEvent e) {
+        if (e == null) return false;
+        return Objects.equals(inEdge, e.inEdge);
     }
 }
