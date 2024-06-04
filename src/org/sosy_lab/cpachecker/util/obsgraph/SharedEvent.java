@@ -382,6 +382,8 @@ public class SharedEvent implements Copier<SharedEvent> {
     }
 
     public CFAEdge getInEdge() { return inEdge; }
+    public void setInEdge(CFAEdge pEdge) { this.inEdge = pEdge; }
+
 
     public boolean accessSameVarWith(SharedEvent other) {
         return this.var.getName().equals(other.var.getName());

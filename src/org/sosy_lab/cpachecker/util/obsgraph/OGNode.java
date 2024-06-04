@@ -370,54 +370,6 @@ public class OGNode implements Copier<OGNode> {
         return events;
     }
 
-    // TODO
-    public void addEvent(SharedEvent event) {
-        // FIXME: update lastReadIndex?
-        // Because of the existence of the coNode, we should insert the event into some
-        // proper location in events.
-        if (LHEIndex == -1) {
-            if (event.isRead()) {
-                events.add(++lastReadIndex, event);
-            } else {
-                events.add(event);
-            }
-            // events.add(event);
-        } else {
-            int i = LHEIndex;
-            if (i < events.size() - 1) {
-                // If lastHandledEvent is not the last event, then we insert the event after it.
-//                events.add(i + 1, event);
-                if (event.isRead()) {
-                    assert LHEIndex <= lastReadIndex :
-                            "Read event should always be handled before write.";
-                    lastReadIndex++;
-                } else {
-                    assert LHEIndex >= lastReadIndex :
-                            "Write event should always be handled after read.";
-                }
-                events.add(i + 1, event);
-            } else {
-                // Else we just append the event to the end of the events.
-//                events.add(event);
-                if (event.isRead()) {
-                    events.add(++lastReadIndex, event);
-                } else {
-                    events.add(event);
-                }
-            }
-        }
-        LHEIndex++;
-        event.setInNode(this);
-        if (event.isRead()) {
-            Rs.add(event);
-        } else if (event.isWrite()) {
-            Ws.add(event);
-        } else {
-            throw new UnsupportedOperationException("Unknown access type in edge: "
-                    + event.getInEdge() + ".");
-        }
-    }
-
     public void removeEvent(SharedEvent e) {
         assert events.contains(e) && (Rs.contains(e) || Ws.contains(e)) :
                 "Trying to remove a event not in the node!";
@@ -693,39 +645,6 @@ public class OGNode implements Copier<OGNode> {
         LHEIndex = pLHEIndex;
     }
 
-    // FIXME
-    // Some events get deleted during the revisit, for example: in X = Y1,
-    // Write(X) gets deleted because X reads from a new location.
-    // We need to re-add Write(X) when it should be done.
-    public void addDeletedEvents(List<SharedEvent> sharedEvents, CFAEdge edge) {
-        // Precondition: this node contains the edge.
-        SharedEvent lastEvent = events.get(events.size() - 1);
-        assert lastEvent != null;
-        if (!Objects.equals(edge, lastEvent.getInEdge())) {
-            // If the last event's inEdge != edge, then we don't need to add the sharedEvents.
-            return;
-        }
-
-        // Else, we need to add the events.
-        // At least, one event from the edge is in events. So, we add events of
-        // sharedEvents form index 1 at least.
-        int addedEventsNum = 0;
-        for (int i = 0; i < sharedEvents.size(); i++) {
-            SharedEvent e = events.get(i);
-            addedEventsNum++;
-            // FIXME: Assumption: in an edge, there is a read or write to the same var at
-            //  most.
-            if (e.getAType() == lastEvent.getAType()
-                    && Objects.equals(e.getVar().getName(), lastEvent.getVar().getName())) {
-                break;
-            }
-        }
-
-        // FIXME: a strong assumption: the order of the events keeps unchanged when these
-        //  events are added to the node.
-        addEvents(sharedEvents.subList(addedEventsNum, sharedEvents.size()), false);
-    }
-
     public List<OGNode> getHappenBefore() { return happenBefore; }
 
     public List<OGNode> getHappenAfter() { return happenAfter; }
@@ -821,12 +740,10 @@ public class OGNode implements Copier<OGNode> {
     }
 
     public void setFromReadBy(OGNode frbNode) {
-        assert frbNode != null;
         fromReadBy.add(frbNode);
     }
 
     public void setPredecessor(OGNode pre) {
-        assert pre != null;
         predecessor = pre;
     }
     public void removePredecessor() {
@@ -862,6 +779,26 @@ public class OGNode implements Copier<OGNode> {
     public void removeTrAfter() {
         assert trAfter != null;
         trAfter = null;
+    }
+
+    public void setHappenBefore(OGNode hbNode) {
+        assert hbNode != null && !happenBefore.contains(hbNode);
+        happenBefore.add(hbNode);
+    }
+
+    public void setHappenAfter(OGNode haNode) {
+        assert haNode != null && !happenAfter.contains(haNode);
+        happenAfter.add(haNode);
+    }
+
+    public void removeHappenBefore(OGNode hbNode) {
+        assert hbNode != null && happenBefore.contains(hbNode);
+        happenBefore.remove(hbNode);
+    }
+
+    public void removeHappenAfter(OGNode haNode) {
+        assert haNode != null && happenAfter.contains(haNode);
+        happenBefore.remove(haNode);
     }
 
     // Note: here is a strong assumption: before removing all relations for this,
@@ -919,5 +856,10 @@ public class OGNode implements Copier<OGNode> {
                 .collect(Collectors.toList());
         assert !RE.isEmpty();
         return RE;
+    }
+
+    // Tests.
+    public void checkLHE(SharedEvent e) {
+        assert getLastHandledEvent() == e : "Last-handled event is not set correctly!";
     }
 }

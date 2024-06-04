@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.porf;
-import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
 import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
@@ -572,52 +571,6 @@ public class OGTransfer {
                 if (e.isWrite())
                     toCheckEvents.add(e);
             });
-        }
-    }
-
-    // Send the graph back to a certain state.
-    private void transferRollback(ObsGraph graph,
-            OGNode curNode,
-            ARGState parState,
-            boolean __DEBUG__) {
-        // TODO
-//        throw new UnsupportedOperationException(
-//                "Rollback of transfer is not implemented.");
-        // Move the graph to curNode.preState.
-        ARGState preState = curNode.getPreState();
-        assert preState != null;
-        assert OGMap.get(parState.getStateId()).contains(graph) : "The graph should " +
-                "locate in state s" + parState.getStateId();
-        if (parState.getStateId() != preState.getStateId()) {
-            // If equal, we don't need to roll back.
-            // Before rolling back, we need to reset the curNode because we may have
-            // added some events before.
-            SharedEvent lastHandledEvent = curNode.getLastHandledEvent();
-            if (lastHandledEvent != null)
-                curNode.removeEventAfter(lastHandledEvent);
-
-            OGMap.get(parState.getStateId()).remove(graph);
-            assert OGMap.get(preState.getStateId()) == null ||
-                    !OGMap.get(preState.getStateId()).contains(graph) :
-                    "Trying to add an existing graph at s" + preState.getStateId();
-            List<ObsGraph> preOgs = OGMap.computeIfAbsent(preState.getStateId(),
-                    k -> new ArrayList<>());
-            preOgs.add(graph);
-
-            // FIXME
-            assert !OGAlgorithm.getWaitlist().isEmpty();
-            List<ObsGraph> graphWrapper = new ArrayList<>();
-            graphWrapper.add(graph);
-            multiStepTransfer(OGAlgorithm.getWaitlist(), preState, graphWrapper);
-        }
-
-        // When set __DEBUG__ on, clear the incorrect transfer information.
-        if (__DEBUG__) {
-            ARGState pre = parState;
-            while (pre.getStateId() != preState.getStateId()) {
-                removeGraphFromFull(graph, pre.getStateId());
-                pre = pre.getParents().iterator().next(); // One parent assumed.
-            }
         }
     }
 

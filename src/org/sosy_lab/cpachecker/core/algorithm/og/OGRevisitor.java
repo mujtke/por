@@ -45,7 +45,8 @@ public class OGRevisitor {
     }
 
     /**
-     * @param precision
+     * @param precision useful when computing the satisfiability for reading from an
+     *                  indeterminate assignment.
      * @param graphs The list of graphs on which revisit will be performed if needed.
      * @param result All results produced by revisit process.
      */
@@ -97,7 +98,13 @@ public class OGRevisitor {
                                     && memo.containsKey(System.identityHashCode(w));
                             SharedEvent ap = (SharedEvent) memo.get(System.identityHashCode(a)),
                                     wp = (SharedEvent) memo.get(System.identityHashCode(w));
-                            // TODO: remove cached assumption edges when needed.
+                            // There are also some events we need to delete when performing
+                            // a revisit for a read event, i.e., those in the same node
+                            // with and behind 'ap'.
+                            List<SharedEvent> delete =
+                                    getDelete(REVISIT_TYPE.READ, Gr, wp, ap);
+                            // Maximality should always hold when revisiting a read.
+                            Gr.removeDelete(delete, ap);
                             Pair<ObsGraph, ObsGraph> GrAndcoGr =
                                     setReadFrom(Gr, ap, wp, REVISIT_TYPE.READ, precision);
 
@@ -112,14 +119,14 @@ public class OGRevisitor {
                     case WRITE:
                         sameLocationA = G0.getSameLocationAs(a);
                         for (SharedEvent r : sameLocationA) {
-                            Map<Object, Object> memo = new HashMap<>();
-                            ObsGraph Gw = G0.deepCopy(memo), coGw;
+                            Map<Object, Object> memo = new HashMap<>(); ObsGraph Gw = G0.deepCopy(memo), coGw;
                             assert memo.containsKey(System.identityHashCode(a))
                                     && memo.containsKey(System.identityHashCode(r));
                             SharedEvent ap = (SharedEvent) memo.get(System.identityHashCode(a)),
                                     rp = (SharedEvent) memo.get(System.identityHashCode(r));
 
-                            List<SharedEvent> delete = getDelete(Gw, rp, ap);
+                            List<SharedEvent> delete =
+                                    getDelete(REVISIT_TYPE.WRITE, Gw, rp, ap);
                             List<SharedEvent> deletePlusR = getDeletePlusR(delete, rp);
                             if (!allMaximallyAdded(Gw, deletePlusR, ap))
                                 continue;
@@ -175,7 +182,6 @@ public class OGRevisitor {
     }
 
     /**
-     * FIXME
      * By letting {@param r} read from {@param w}, we get a new rf.
      * NOTE: When {@param w} contains indeterminacy, we may get two graphs as the
      * result, one of them is G and the other is coG.
@@ -193,15 +199,16 @@ public class OGRevisitor {
             REVISIT_TYPE type,
             Precision precision) {
         // When setting read-from relation, we may get a new graph because of the indeterminacy.
-        ObsGraph coGraph = null;
+        ObsGraph coG = null;
+        SharedEvent corp = null;
         Pair<Boolean, Boolean> evaluation = null;
         try {
             // evaluation = <A, B>
             // A = true if it leads to conflict that r reads from w.
             // B = true if the w is an indeterminate assignment.
-            evaluation = CSHandler.handleAssumeStatement(G, r, w, precision);
+            evaluation = CSHandler.handleAssumeStatement(r, w, precision);
         } catch (UnsupportedCodeException e) {
-//            e.printStackTrace();
+            //
         }
 
         assert evaluation != null;
@@ -209,59 +216,40 @@ public class OGRevisitor {
                 hasIndeterminacy = evaluation.getSecondNotNull();
         // hasIndeterminacy => !hasConflict
         if (hasIndeterminacy) {
-            // We get a new graph because r reads from a indeterminate value.
+            // We will get a new graph because r reads from an indeterminate value.
             Map<Object, Object> memo = new HashMap<>();
-            coGraph = G.deepCopy(memo);
+            coG = G.deepCopy(memo);
             assert memo.containsKey(System.identityHashCode(r))
-                    && memo.containsKey(System.identityHashCode(w)) : "Wrong copy result.";
+                    && memo.containsKey(System.identityHashCode(w));
             SharedEvent rp = (SharedEvent) memo.get(System.identityHashCode(r)),
                     wp = (SharedEvent) memo.get(System.identityHashCode(w));
 
-            SharedEvent corp = coGraph.changeAssumeNode(rp);
-            setRelation("rf", coGraph, wp, corp);
-            if (type == REVISIT_TYPE.READ) {
-                // FIXME: remove cached assume edges?
-                corp.getInNode().removeEventAfter(corp);
-            }
-            coGraph.deduceFromRead();
-            // FIXME: Have we set corp as the last-handled event already?
-            OGNode corpNode = corp.getInNode();
-            assert  corpNode != null;
-            corpNode.setLastHandledEvent(corp);
-            setRelation("rf", G, w, r);
-            if (type == REVISIT_TYPE.READ) {
-                // FIXME: remove cached assume edges?
-                r.getInNode().removeEventAfter(r);
-            }
-            G.deduceFromRead();
+            corp = coG.changeAssumeEdge(rp);
+            corp.setReadFrom(wp);
+
+            // Handle G.
+            r.setReadFrom(w);
         }
 
         if (hasConflict) {
-            // We don't need to create a new graph despite the conflict.
-            // Instead, we replace r with the event co-r ('co' means conjugate) that
-            // comes from the assume statement [!(x > 1)].
-            SharedEvent cor = G.changeAssumeNode(r);
-            setRelation("rf", G, w, cor);
-            if (type == REVISIT_TYPE.READ) {
-                // FIXME: remove cached assume edges?
-                cor.getInNode().removeEventAfter(cor);
-            }
-            G.deduceFromRead();
-            // FIXME: Have we set corp as the last-handled event already?
-            OGNode corNode = cor.getInNode();
-            assert corNode != null;
-            corNode.setLastHandledEvent(cor);
-        } else {
-            // No conflict.
-            setRelation("rf", G, w, r);
-            if (type == REVISIT_TYPE.READ) {
-                // FIXME: remove cached assume edges?
-                r.getInNode().removeEventAfter(r);
-            }
-            G.deduceFromRead();
+            // We don't need to create a new graph despite the conflict. Instead, we
+            // replace r with the event co-r.
+            SharedEvent cor = G.changeAssumeEdge(r);
+            cor.setReadFrom(w);
+        } else { // No conflict.
+            r.setReadFrom(w);
         }
 
-        return Pair.of(G, coGraph);
+        G.deduceFromRead();
+        if (coG != null)
+            coG.deduceFromRead();
+
+        // Debug, r and corp should be the last-handled events in their nodes.
+        r.getInNode().checkLHE(r);
+        if (corp != null)
+            corp.getInNode().checkLHE(corp);
+
+        return Pair.of(G, coG);
     }
 
     private AbstractState getPivotState(ObsGraph G) {
@@ -270,51 +258,29 @@ public class OGRevisitor {
         // Use the preState of the first node, for the simplicity.
         targetNode = G.getNodes().get(0);
         G.setLastNode(null);
-        // Before return, clear the trace order and modify the order for nodes that
-        // trace after the target node. At the same time, set those nodes invisible in
-        // the graph.
+        // Before returning, clear the trace order and modify the order for nodes that
+        // trace after the target node. At the same time, set them invisible in the graph.
         for (OGNode next = targetNode; next != null;) {
             OGNode tmp = next.getTrBefore();
             // Trace order.
-            next.setTrAfter(null);
-            next.setTrBefore(null);
+            if (next.getTrBefore() != null)
+                next.removeTrBefore();
+            if (next.getTrAfter() != null)
+                next.removeTrAfter();
+//            next.setTrAfter(null);
+//            next.setTrBefore(null);
 
-            // FIXME: don't remove mo relations here?
-            // Modify order.
-            // Events.
-//            next.getWs().forEach(w -> {
-//                if (w.getMoAfter() != null) {
-//                    w.getMoAfter().setMoBefore(null);
-//                    w.setMoAfter(null);
-//                }
-//                if (w.getMoBefore() != null) {
-//                    w.getMoBefore().setMoAfter(null);
-//                    w.setMoBefore(null);
-//                }
-//            });
-            // Nodes.
-            OGNode finalNext = next;
-//            next.getMoAfter().forEach(n -> n.getMoBefore().remove(finalNext));
-//            next.getMoAfter().clear();
-//            next.getMoBefore().forEach(n -> n.getMoAfter().remove(finalNext));
-//            next.getMoBefore().clear();
+            // NOTE: don't remove mo relations here.
+            next.getHappenBefore().forEach(next::removeHappenBefore);
+            next.getHappenAfter().forEach(next::removeHappenAfter);
 
-            // FIXME: happen-before relation for nodes.
-            next.getHappenBefore().forEach(n -> n.getHappenAfter().remove(finalNext));
-            next.getHappenBefore().clear();
-            next.getHappenAfter().forEach(n -> n.getHappenBefore().remove(finalNext));
-            next.getHappenAfter().clear();
-
-            // Set node invisible.
+            // Set the node invisible.
             next.setInGraph(false);
-            // Set lastVisitedEdge null.
-            next.setLastVisitedEdge(null);
             G.setTraceLen(G.getTraceLen() - 1);
             next = tmp;
         }
 
-        Preconditions.checkState(targetNode != null);
-        Preconditions.checkState(targetNode.getPreState() != null);
+        assert targetNode != null && targetNode.getPreState() != null;
 
         G.setInitialCurrentNodeTable(targetNode.getPreState());
         // Reset the cachedAssumeEdges.
@@ -449,7 +415,11 @@ public class OGRevisitor {
      * 2. e shouldn't porf {@param w}.
      * FIXME: the rules above matters.
      */
-    private List<SharedEvent> getDelete(ObsGraph G, SharedEvent r, SharedEvent w) {
+    private List<SharedEvent> getDelete(
+            REVISIT_TYPE type,
+            ObsGraph G,
+            SharedEvent r,
+            SharedEvent w) {
         List<SharedEvent> delete = new ArrayList<>();
 
         // Handle the node that r in.
@@ -466,12 +436,14 @@ public class OGRevisitor {
         }
 
         // Handle other nodes that added after rNode.
-        int rNodeIdx = G.getNodes().indexOf(r.getInNode()),
-                wNodeIdx = G.getNodes().indexOf(w.getInNode());
-        for (int i = rNodeIdx + 1; i < wNodeIdx; i++) {
-            OGNode ni = G.getNodes().get(i), nw = G.getNodes().get(wNodeIdx);
-            if (!porf(ni, nw)) {
-                delete.addAll(ni.getEvents());
+        if (type == REVISIT_TYPE.WRITE) {
+            int rNodeIdx = G.getNodes().indexOf(r.getInNode()),
+                    wNodeIdx = G.getNodes().indexOf(w.getInNode());
+            for (int i = rNodeIdx + 1; i < wNodeIdx; i++) {
+                OGNode ni = G.getNodes().get(i), nw = G.getNodes().get(wNodeIdx);
+                if (!porf(ni, nw)) {
+                    delete.addAll(ni.getEvents());
+                }
             }
         }
 
@@ -485,74 +457,6 @@ public class OGRevisitor {
                 .filter(r::inSameEdgeWith).collect(Collectors.toList()));
 
         return deletePlusR;
-    }
-
-    public static void setRelation(String type,
-                                   ObsGraph G,
-                                   SharedEvent e1,
-                                   SharedEvent e2) {
-        // set relation: <e1, e2> \in <_{type}
-        OGNode e1n = e1.getInNode(), e2n = e2.getInNode();
-        switch (type) {
-            case "rf":
-                // e1 <_rf e2, e2 reads from e1.
-//                Preconditions.checkArgument(e2.getReadFrom() != e1);
-                SharedEvent e2rf = e2.getReadFrom();
-                e2.setReadFrom(e1);
-                if (e2rf != null) {
-                    e2rf.getReadBy().remove(e2);
-                    OGNode e2rfn = e2rf.getInNode();
-                    // Remove e2rfn from e2n's read-from set if there is no event in
-                    // other nodes reading from e2n.
-                    List<OGNode> re2rfn =
-                            e2n.getRs().stream().map(SharedEvent::getReadFrom)
-                                    .filter(Objects::nonNull)
-                                    .map(SharedEvent::getInNode)
-                                    .filter(n0 -> n0 == e2rfn).collect(Collectors.toList());
-                    if (re2rfn.isEmpty()) {
-                        e2n.getReadFrom().remove(e2rfn);
-                        e2rfn.getReadBy().remove(e2n);
-                    }
-                }
-                e1.getReadBy().add(e2);
-                if (!e2n.getReadFrom().contains(e1n)) e2n.getReadFrom().add(e1n);
-                if (!e1n.getReadBy().contains(e2n)) e1n.getReadBy().add(e2n);
-                break;
-
-            case "fr":
-                // from read.
-//                Preconditions.checkArgument(!e1.getFromRead().contains(e2));
-                e1.getFromRead().add(e2);
-                e2.getFromReadBy().add(e1);
-                if (!e1n.getFromRead().contains(e2n)) e1n.getFromRead().add(e2n);
-                if (!e2n.getFromReadBy().contains(e1n)) e2n.getFromReadBy().add(e1n);
-                break;
-
-            case "mo":
-//                Preconditions.checkArgument(e1.getMoBefore() != e2);
-                e1.setMoBefore(e2);
-                e2.setMoAfter(e1);
-                if (!e1n.getMoBefore().contains(e2n)) e1n.getMoBefore().add(e2n);
-                if (!e2n.getMoAfter().contains(e1n)) e2n.getMoAfter().add(e1n);
-                break;
-            default:
-        }
-    }
-
-    // FIXME: replace this method, get value from the map used in deep copy.
-    private SharedEvent getCopyEvent(ObsGraph G, ObsGraph G0, SharedEvent e) {
-        // e is in the graph G0, and G is the copy of G0.
-        // Try to get the e's copy in G.
-        int eidx = G0.getNodes().indexOf(e.getInNode());
-        OGNode epn = G.getNodes().get(eidx);
-        List<SharedEvent> eps = e.getAType() == READ
-                ? epn.getRs().stream()
-                .filter(e::accessSameVarWith).collect(Collectors.toList())
-                : epn.getWs().stream()
-                .filter(e::accessSameVarWith).collect(Collectors.toList());
-        assert eps.size() == 1;
-
-        return eps.iterator().next();
     }
 
     /**

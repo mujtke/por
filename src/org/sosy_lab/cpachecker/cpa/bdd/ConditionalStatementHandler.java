@@ -39,10 +39,7 @@ import org.sosy_lab.cpachecker.util.variableclassification.Partition;
 import org.sosy_lab.cpachecker.util.variableclassification.VariableClassification;
 
 import java.sql.Wrapper;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 @Options(prefix = "cpa.bdd.csh")
 public class ConditionalStatementHandler {
@@ -93,51 +90,41 @@ public class ConditionalStatementHandler {
 
     /**
      * FIXME
-     * Before setting read-from relation, we should handle the case that r locates in
-     * an assume statement (e.g., x > 1). When setting r to read from w that makes
-     * the condition not hold, i.e., (x > 1) not hold, set easConflict as true. If w is
-     * an indeterminate assignment, we set hasIndeterminacy as true.
+     * Precondition: r locates in an assume statement (e.g., x > 1).
+     * When setting r to read from w that makes the condition not hold, i.e., (x > 1) not
+     * hold, set A as true (has Conflict). If w contains indeterminate assignment, then we
+     * set B as true (has indeterminacy).
      * @return < A, B >
      * A = true if letting r read from w leads to conflict.
      * B = true if the w is an indeterminate assignment.
      */
     public Pair<Boolean, Boolean> handleAssumeStatement(
-            ObsGraph G,
             SharedEvent r,
             SharedEvent w,
-            Precision precision) throws UnsupportedCodeException {
+            Precision precision)
+            throws UnsupportedCodeException {
 
-        boolean hasConflict = false, hasIndeterminacy = false;
-        OGNode rNode = r.getInNode(), wNode = w.getInNode();
-        if (G.contain(rNode, rNode.getLoopDepth()) < 0) {
-            // We are going to set read-from relation for the newly added node, so we
-            // don't have to change the node.
-//            return r;
-            return Pair.of(false, false);
-        }
-        CFAEdge rEdge = r.getInEdge(), wEdge = w.getInEdge();
-
+        boolean hasConflict, hasIndeterminacy;
+        CFAEdge rEdge = r.getInEdge();
         if (!(rEdge instanceof AssumeEdge)) {
-//            return r;
             return Pair.of(false, false);
         }
 
-//        SharedEvent cor = r;
-        CFANode rLocation = rEdge.getSuccessor(), wLocation = wEdge.getSuccessor();
-        // r locates in an assumption edge.
         final AssumeEdge assumption = (AssumeEdge) rEdge;
-        Partition rPartition = varClass.getPartitionForEdge(rEdge);
-        CExpression rExpression = (CExpression) assumption.getExpression();
-        // FIXME: do we need precision here?
-        final Region[] assumeOperand = bvComputer.evaluateVectorExpression(rPartition,
-                rExpression, CNumericTypes.INT, rLocation, null);
-        Preconditions.checkArgument(assumeOperand != null,
-                "Assumption cannot be evaluated.");
-        Region assumeEvaluated = bvmgr.makeOr(assumeOperand), assignFormula = null;
+        CFAEdge wEdge = w.getInEdge();
+        OGNode wNode = w.getInNode();
 
-        if (!assumption.getTruthAssumption()) { // If false-branch.
-            assumeEvaluated = nrmgr.makeNot(assumeEvaluated);
-        }
+        hasConflict = hasConflict(assumption, wNode, precision);
+        hasIndeterminacy = hasIndeterminacy(w, wNode, wEdge);
+
+        return Pair.of(hasConflict, hasIndeterminacy);
+    }
+
+    private boolean hasIndeterminacy(SharedEvent w, OGNode wNode, CFAEdge wEdge)
+            throws UnsupportedCodeException {
+
+        boolean hasIndeterminacy = false;
+        String varName = w.getVar().getName();
 
         switch (wEdge.getEdgeType()) {
             case StatementEdge:
@@ -146,130 +133,25 @@ public class ConditionalStatementHandler {
                 if (statement instanceof CAssignment) {
                     CAssignment assignment = (CAssignment) statement;
                     CExpression lhs = assignment.getLeftHandSide();
-                    final String varName;
+                    final String lhsVarName;
                     if (lhs instanceof CIdExpression) {
-                        varName = ((CIdExpression) lhs).getName();
-                        Preconditions.checkArgument(w.getVar().getName().equals(varName),
-                                "Wrong cfaEdge '" + wEdge + "' for event in " + wNode);
+                        lhsVarName = ((CIdExpression) lhs).getName();
+                        assert Objects.equals(varName, lhsVarName) :
+                                "Wrong cfaEdge '" + wEdge + "' for event in " + wNode;
                     } else {
-                        throw new UnsupportedOperationException("Lhs " + lhs + " is not" +
-                                " a CIdExpression.");
+                        throw new UnsupportedOperationException(
+                                "Lhs " + lhs + " is not a CIdExpression.");
                     }
-
-                    final CType targetType = lhs.getExpressionType();
 
                     CRightHandSide rhs = assignment.getRightHandSide();
                     if (rhs instanceof CExpression) {
-                        final CExpression exp = (CExpression) rhs;
-                        final Partition partition = varClass.getPartitionForEdge(wEdge);
-
-                        if (isUsedInExpression(varName, exp)) {
-                            // make tmp for assignment, this is done to handle assignments
-                            // like "a = !a;" as "tmp = !a; a = tmp;"
-                            String tmpVarName = predmgr.getTmpVariableForPartition(partition);
-                            final Region[] tmp = predmgr.createPredicateWithoutPrecisionCheck(
-                                    tmpVarName, bvComputer.getBitsize(partition, targetType));
-                            // make region for RIGHT SIDE and build equality of var and region
-                            // FIXME: do we need precision here?
-                            final Region[] regionRHS =
-                                    bvComputer.evaluateVectorExpression(partition, exp,
-                                            targetType, wLocation, null);
-                            // Delete var, make tmp equal to (new) var, then delete tmp.
-                            final Region[] var = predmgr.createPredicate(scopeVar(lhs),
-                                    targetType, wLocation,
-                                    bvComputer.getBitsize(partition, targetType),
-                                    null);
-                            assignFormula = nrmgr.makeExists(nrmgr.makeTrue(), var);
-                            assignFormula = assignment(var, tmp, false);
-                            assignFormula = nrmgr.makeExists(assignFormula, tmp);
-
-                            break;
-                        } else {
-                            final Region[] var = predmgr.createPredicate(scopeVar(lhs),
-                                    targetType, wLocation,
-                                    bvComputer.getBitsize(partition, targetType),
-                                    null);
-                            final Region[] regionRHS =
-                                    bvComputer.evaluateVectorExpression(partition,
-                                            (CExpression) rhs, targetType, wLocation,
-                                            null);
-                            assignFormula = nrmgr.makeExists(nrmgr.makeTrue(), var);
-                            assignFormula = assignment(var, regionRHS, false);
-
-                            break;
-                        }
+                        // FIXME: In this case, no indeterminacy exists?
+                        //
                     } else if (rhs instanceof CFunctionCallExpression) {
-                        // handle params of functionCall, maybe there is a side effect.
-                        // 1) y = f(x), f write x, like scanf("%d", &x). In this case,
-                        // we need to handle the parameters of the function f. Even f
-                        // may write x more than once, but in all cases, the result is that
-                        // x can take any value. We just preserve the last result?
-                        // 2) x = f(), assign the return value to x. The result is that
-                        // x can take any value.
-                        // 3) x = f(x), f write x (may more than once) and finally we
-                        // assign the return value to x. In this case, we preserve the
-                        // result of the assignment?
-                        // FIXME: f may write x, or y and x are same var.
+                        // FIXME: here we assume that only the function call like
+                        //  'x = __VERIFIER_nondet_int();' contains the indeterminacy.
                         CFunctionCallExpression funCallExpr =
                                 (CFunctionCallExpression) rhs;
-                        final List<CExpression> params =
-                                funCallExpr.getParameterExpressions();
-                        final Partition partition = varClass.getPartitionForEdge(wEdge);
-                        // A flag indicates that we find the write event.
-                        boolean findAssignment = false;
-                        for (final CExpression param : params) {
-                            /* special case: external functioncall with possible side-effect!
-                             * this is the only statement, where a pointer-operation is allowed
-                             * and the var can be boolean, intEqual or intAdd,
-                             * because we know, the variable can have a random (unknown) value after the functioncall.
-                             * example: "scanf("%d", &input);" */
-                            CExpression unpackedParam = param;
-                            while (unpackedParam instanceof CCastExpression) {
-                                unpackedParam = ((CCastExpression) param).getOperand();
-                            }
-                            if (unpackedParam instanceof CUnaryExpression) {
-                                CUnaryExpression unaryExpression =
-                                        ((CUnaryExpression) unpackedParam);
-                                // AMPER = '&'.
-                                if (CUnaryExpression.UnaryOperator.AMPER == unaryExpression.getOperator()
-                                && unaryExpression.getOperand() instanceof CIdExpression) {
-                                    final CIdExpression id =
-                                            (CIdExpression) unaryExpression.getOperand();
-                                    if (!id.getName().equals(r.getVar().getName())) {
-                                        continue;
-                                    }
-                                    // FIXME: How to handle multi-times writes to the
-                                    //  same var?
-                                    findAssignment = true;
-                                    final Region[] var = predmgr.createPredicate(
-                                            scopeVar(id),
-                                            id.getExpressionType(),
-                                            wEdge.getSuccessor(),
-                                            bvComputer.getBitsize(partition, targetType),
-                                            null); // is default bitsize enough?
-                                    assignFormula = nrmgr.makeExists(nrmgr.makeTrue(),
-                                            var);
-                                }
-                            } else {
-                                // "printf("%d", output);" or "assert(exp);"
-                                // TODO: can we do something here?
-                            }
-                        }
-
-                        if (varName.equals(r.getVar().getName())) {
-                            findAssignment = true;
-                            final Region[] var = predmgr.createPredicate(
-                                    scopeVar(lhs),
-                                    targetType,
-                                    wEdge.getSuccessor(),
-                                    bvComputer.getBitsize(partition, targetType),
-                                    null);
-                            assignFormula = nrmgr.makeExists(nrmgr.makeTrue(), var);
-                        }
-                        Preconditions.checkState(findAssignment,
-                                "Doesn't find the write event to"
-                                        + r.getVar().getName() + " in edge" + wEdge);
-                        // handle x = __VERIFIER_nondet_int();
                         if (Arrays.stream(randomFunctions).anyMatch(f -> funCallExpr
                                 .getFunctionNameExpression().toString().contains(f))) {
                             hasIndeterminacy = true;
@@ -281,174 +163,16 @@ public class ConditionalStatementHandler {
                 break;
 
             case FunctionReturnEdge:
-                final String callerFunctionName = wEdge.getSuccessor().getFunctionName();
-                final FunctionReturnEdge fnReturnEdge = (FunctionReturnEdge) wEdge;
-                final FunctionSummaryEdge summaryEdge = fnReturnEdge.getSummaryEdge();
-                final CFunctionCall summaryExpr = (CFunctionCall) summaryEdge.getExpression();
-
-                Partition partition = varClass.getPartitionForEdge(wEdge);
-                // Handle assignments like "y = f(x);"
-                if (summaryExpr instanceof CFunctionCallAssignmentStatement) {
-                    Preconditions.checkArgument(
-                            summaryEdge.getFunctionEntry().getReturnVariable().isPresent());
-                    final String returnVar =
-                            summaryEdge.getFunctionEntry().getReturnVariable().get().getQualifiedName();
-                    CFunctionCallAssignmentStatement cAssignment =
-                            (CFunctionCallAssignmentStatement) summaryExpr;
-                    CExpression lhs = cAssignment.getLeftHandSide();
-                    final int size = bvComputer.getBitsize(partition, lhs.getExpressionType());
-
-                    // make variable (predicate) for LEFT SIDE of assignment,
-                    // delete variable, if it was used before, this is done with an existential operator
-                    final Region[] var = predmgr.createPredicate(scopeVar(lhs),
-                            lhs.getExpressionType(), wLocation, size, null),
-                            retVar = predmgr.createPredicate(returnVar,
-                                    summaryExpr.getFunctionCallExpression().getExpressionType(),
-                                    wLocation, size, null);
-                    assignFormula = assignment(var, retVar, false);
-
-                    // Remove returnVar?
-                    if (predmgr.getTrackedVars().contains(returnVar)) {
-                        nrmgr.makeExists(assignFormula,
-                                predmgr.createPredicateWithoutPrecisionCheck(returnVar));
-                    }
-
-                    break;
-                } else {
-                    // No assignment, nothing to do.
-                    assert summaryExpr instanceof CFunctionCallStatement;
-                }
-                break;
 
             case DeclarationEdge:
-                CDeclarationEdge declarationEdge = (CDeclarationEdge) wEdge;
-                CDeclaration declaration = declarationEdge.getDeclaration();
-                if (declaration instanceof CVariableDeclaration) {
-                    CVariableDeclaration vDecl= (CVariableDeclaration) declaration;
-                    if (vDecl.getType().isIncomplete()) {
-                        // Variables of such types cannot store values, only their address
-                        // can be taken.
-                        // FIXME: how to handle this case.
-                        throw new UnsupportedCodeException("Declared variable in edge " +
-                                "is incomplete.", wEdge);
-                    }
-
-                    CInitializer initializer = vDecl.getInitializer();
-                    CExpression init = null;
-                    if (initializer instanceof CInitializerExpression) {
-                        init = ((CInitializerExpression) initializer).getExpression();
-                    }
-
-                    // make variable (predicate) for LEFT SIDE of declaration,
-                    // delete variable, if it was initialized before i.e.
-                    // in another block, with an existential operator
-                    partition = varClass.getPartitionForEdge(wEdge);
-                    Region[] var = predmgr.createPredicate(
-                            vDecl.getQualifiedName(),
-                            vDecl.getType(),
-                            wEdge.getSuccessor(),
-                            bvComputer.getBitsize(partition, vDecl.getType()),
-                            null);
-//                    assignFormula = nrmgr.makeExists(nrmgr.makeTrue(), var);
-
-                    // initializer on the RIGHT SIDE available, make a region for it.
-                    if (init != null) {
-                        final Region[] rhs = bvComputer.evaluateVectorExpression(
-                                partition,
-                                init,
-                                vDecl.getType(),
-                                wEdge.getSuccessor(),
-                                null);
-                        assignFormula = assignment(var, rhs, false);
-                    } else {
-                        // C declaration without initialization, like: int y;
-                        // TODO
-                        CType declarationType = vDecl.getType();
-                        if (declarationType instanceof CSimpleType) {
-                            CBasicType basicType =
-                                    ((CSimpleType) declarationType).getType();
-                            switch (basicType) {
-                                // TODO
-                                case INT:
-                                    break;
-                                case BOOL:
-                                    break;
-                                case INT128:
-                                    break;
-                                case UNSPECIFIED:
-                                    break;
-                                case CHAR:
-                                    break;
-                                case FLOAT:
-                                    break;
-                                case DOUBLE:
-                                    break;
-                                case FLOAT128:
-                                    break;
-                                default:
-                                    throw new UnsupportedCodeException(
-                                            "Unsupported data type: " + basicType, wEdge);
-                            }
-
-                            CIntegerLiteralExpression integerLiteralExpression =
-                                    CIntegerLiteralExpression.createDummyLiteral(0,
-                                            new CSimpleType(false, false,
-                                                    CBasicType.INT,
-                                                    false,
-                                                    false,
-                                                    false,
-                                                    false,
-                                                    false,
-                                                    false,
-                                                    false));
-//                            CInitializerExpression dumyInitialization =
-//                                    new CInitializerExpression(
-//                                            vDecl.getFileLocation(),
-//                                            integerLiteralExpression);
-//                            init = dumyInitialization.getExpression();
-                            final Region[] rhs = bvComputer.evaluateVectorExpression(
-                                    partition,
-                                    integerLiteralExpression, /* init */
-                                    declarationType,
-                                    wEdge.getSuccessor(),
-                                    null);
-                            assignFormula = assignment(var, rhs, false);
-                        } else {
-                            throw new UnsupportedCodeException("Initializer on the right " +
-                                    "side should not be null", wEdge);
-                        }
-                    }
-                } else {
-                    throw new UnsupportedCodeException("W event in a " +
-                            "non-CVariableDeclaration edge is not supported.", wEdge);
-                }
-                break;
 
             default:
         }
 
-        Preconditions.checkArgument(assignFormula != null,
-                "Calculate formula for the write event failed.");
-
-        if (nrmgr.makeAnd(assumeEvaluated, assignFormula).isFalse()) {
-            hasConflict = true;
-        } else if (!nrmgr.makeAnd(assumeEvaluated, assignFormula).isTrue()) {
-            // FIXME: neither false nor true, should we use BDDState rather than wEdge to
-            //  compute the satisfiability?
-//            hasConflict = hasConflict(rEdge, wNode);
-            hasConflict = hasConflict2(assumption, wNode, precision);
-        }
-
-        if(hasIndeterminacy) {
-            assert assignFormula.isTrue()
-                    : "With indeterminacy, assignFormula must be true";
-        }
-
-//        return cor;
-        return Pair.of(hasConflict, hasIndeterminacy);
+        return hasIndeterminacy;
     }
 
-    private boolean hasConflict2(AssumeEdge assumption, OGNode wNode, Precision precision) {
+    private boolean hasConflict(AssumeEdge assumption, OGNode wNode, Precision precision) {
         BDDState wBDDState = AbstractStates.extractStateByType(wNode.getSucState(),
                         BDDState.class);
         assert wBDDState != null;
@@ -457,12 +181,12 @@ public class ConditionalStatementHandler {
         CExpression cExpression = (CExpression) aExpression;
         Region[] assumeRegion = null;
         try {
-            // Debug.
             PredicateManager predMgr = new PredicateManager(config, wBDDState.getManager(), cfa);
             assumeRegion = cExpression.accept(new BDDVectorCExpressionVisitor(predMgr,
                     null, wBDDState.getBvmgr(), cfa.getMachineModel(), null));
         } catch (Exception e) {
-            throw new UnsupportedOperationException("Cannot compute the BDD region for " + assumption);
+            throw new UnsupportedOperationException(
+                    "Cannot compute the BDD region for " + assumption);
         }
 
         assert assumeRegion != null;
@@ -473,110 +197,29 @@ public class ConditionalStatementHandler {
         }
 
         Collection<BDDState> tmpSuccessors;
-        { // Debug.
-            try {
-                BDDCPA bddCpa =
-                        retriveCPA(GlobalInfo.getInstance().getCPA().get(), BDDCPA.class);
-                BDDTransferRelation bddTransfer =
-                        (BDDTransferRelation) bddCpa.getTransferRelation();
-                VariableTrackingPrecision bddPrecision =
-                        retrivePrecision(precision, VariableTrackingPrecision.class);
-                tmpSuccessors =
-                        bddTransfer.getAbstractSuccessorsForEdge(wBDDState, bddPrecision, assumption);
-                if (tmpSuccessors.isEmpty())
-                    System.out.println("");
-            } catch (InvalidConfigurationException | CPATransferException
-                     | InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        Region region =
-                wBDDState.getManager().makeAnd(wBDDState.getRegion(), assumeRegionEvaluated);
-
-//        return region.isFalse();
-        return region.isFalse() || tmpSuccessors.isEmpty();
-    }
-
-    private boolean hasConflict(CFAEdge rEdge, OGNode wNode)
-            throws UnsupportedCodeException {
-        CAssumeEdge assumeEdge = (CAssumeEdge) rEdge;
-        PointerState pointerInfo =
-                AbstractStates.extractStateByType(wNode.getSucState(),
-                        PointerState.class);
-        BDDState wBDDState =
-                AbstractStates.extractStateByType(wNode.getSucState(),
-                        BDDState.class);
-        assert wBDDState != null;
-
-        Precision precision;
         try {
-            precision =
-                    VariableTrackingPrecision.createStaticPrecision(config, cfa.getVarClassification(),
-                            BDDCPA.class);
-        } catch (InvalidConfigurationException e) {
+            Optional<ConfigurableProgramAnalysis> cpa = GlobalInfo.getInstance().getCPA();
+            assert cpa.isPresent();
+            BDDCPA bddCpa = retriveCPA(cpa.get(), BDDCPA.class);
+            BDDTransferRelation bddTransfer =
+                    (BDDTransferRelation) bddCpa.getTransferRelation();
+            VariableTrackingPrecision bddPrecision =
+                    retrivePrecision(precision, VariableTrackingPrecision.class);
+            tmpSuccessors =
+                    bddTransfer.getAbstractSuccessorsForEdge(wBDDState, bddPrecision, assumption);
+            if (tmpSuccessors.isEmpty()) {
+                // Log something.
+            }
+        } catch (InvalidConfigurationException | CPATransferException
+                 | InterruptedException e) {
             throw new RuntimeException(e);
         }
 
-        final Region[] operand =
-                bvComputer.evaluateVectorExpressionWithPointerState(
-                        varClass.getPartitionForEdge(assumeEdge),
-                        assumeEdge.getExpression(),
-                        CNumericTypes.INT,
-                        assumeEdge.getSuccessor(),
-                        pointerInfo,
-                        (VariableTrackingPrecision) precision);
+        Region region =
+                wBDDState.getManager().makeAnd(wBDDState.getRegion(), assumeRegionEvaluated);
 
-        // FIXME: Use bddState's bitvectorManager and NamedRegionManager. why?
-        BitvectorManager bvMgr = wBDDState.getBvmgr();
-        NamedRegionManager nrMgr = wBDDState.getManager();
-        Region evaluated = bvMgr.makeOr(operand);
-        if (!assumeEdge.getTruthAssumption())
-            evaluated = nrMgr.makeNot(evaluated);
-        Region newRegion = nrMgr.makeAnd(wBDDState.getRegion(), evaluated);
-        return newRegion.isFalse();
-    }
-
-    /** This function returns true if the variable is used in the Expression. */
-    private static boolean isUsedInExpression(String varName, CExpression exp) {
-        return exp.accept(new VarCExpressionVisitor(varName));
-    }
-
-    private String scopeVar(final CExpression exp) {
-        if (exp instanceof CIdExpression) {
-            return ((CIdExpression) exp).getDeclaration().getQualifiedName();
-        } else {
-//            return functionName + "::" + exp.toASTString();
-            throw new UnsupportedOperationException("exp " + exp + " is not a " +
-                    "CIdExpression.");
-        }
-    }
-
-    /**
-     * Ref {@code @BDDState#addAssignment}
-     */
-    private Region assignment(Region[] leftSide, Region[] rightSide,
-                              boolean addIncreasing) {
-        Preconditions.checkArgument(leftSide != null && rightSide != null);
-        Preconditions.checkArgument(leftSide.length == rightSide.length,
-                "left side and right side should have equal length: "
-                + leftSide.length + " != " + rightSide.length);
-        final Region[] assignRegions = bvmgr.makeBinaryEqual(leftSide, rightSide);
-
-        Region result;
-
-        if (addIncreasing) {
-            result = assignRegions[0];
-            for (int i = 1; i < assignRegions.length; i++) {
-                result = nrmgr.makeAnd(result, assignRegions[i]);
-            }
-        } else {
-            result = assignRegions[assignRegions.length - 1];
-            for (int i = assignRegions.length - 2; i >= 0; i--) {
-                result = nrmgr.makeAnd(result, assignRegions[i]);
-            }
-        }
-
-        return result;
+        // FIXME: tmpSuccessors.isEmpty() is enough?
+        return tmpSuccessors.isEmpty() || region.isFalse();
     }
 
     @SuppressWarnings("unchecked")

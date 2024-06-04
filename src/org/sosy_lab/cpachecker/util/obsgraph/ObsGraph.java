@@ -17,9 +17,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
-import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.setRelation;
-import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
-import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
 
 public class ObsGraph implements Copier<ObsGraph> {
 
@@ -346,7 +343,6 @@ public class ObsGraph implements Copier<ObsGraph> {
          removeAssumeEdges(delete, rp);
      }
 
-     // FIXME
     public void deduceFromRead() {
          // Deduce the fr according the po and rf in the graph.
          // Use adjacency matrix and Floyd Warshall Algorithm to compute the transitive
@@ -391,7 +387,7 @@ public class ObsGraph implements Copier<ObsGraph> {
                          OGNode frn = nodes.get(m);
                          SharedEvent frnw = frn.getWriteToSameVar(r);
                          if (frnw == null) continue;
-                         setRelation("fr", this, r, frnw);
+                         r.setFromRead(frnw);
                      }
                  }
              }
@@ -441,69 +437,34 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
 
     /**
-     * FIXME
-     * When r locates in an assume edge and turns to read from a write event that
-     * contradicts r, i.e., r /\ w -> false, we change r to its co-event cor. If r
-     * comes from conditional branch d, then cor should come from !d. At the same time,
-     * we should also replace the rNode (r in) with the corNode (cor in), and assign all
-     * relations that rNode has to corNode.
+     * When r locates in an assumption edge and turns to read from a write event that
+     * contradicts r, i.e., r /\ w -> false, we change r to its co-event cor
+     * ('co' means conjugate) . If r comes from conditional branch d, then cor should
+     * come from !d. Precondition: before we change r to its co-event, the events that
+     * are in the same node with and behind r have been removed (including the
+     * corresponding edges).
      * @return r's co-event cor.
+     * @implNote we don't need to copy r for getting cor, just need to change r's
+     * inEdge to r.inEdge's co-edge.
      */
-    public SharedEvent changeAssumeNode(SharedEvent r) {
+    public SharedEvent changeAssumeEdge(SharedEvent r) {
         OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
         Map<Integer, List<SharedEvent>> edgeVarMap = ogInfo.getEdgeVarMap();
         // Find the corEdge.
         CFAEdge rEdge = r.getInEdge(), corEdge = getCoCFAEdge(rEdge);
-
         OGNode rNode = r.getInNode();
-        Preconditions.checkArgument(nodes.contains(rNode),
-                "rNode " + rNode + " should locate in the graph.");
+        assert rNode.contains(rEdge) && !rNode.contains(corEdge);
 
-        // Removing rEdge and all edges after it.
-        int rEdgeIdx = rNode.getBlockEdges().indexOf(rEdge);
-        List<CFAEdge> toRemove = new ArrayList<>();
-        for (int i = rEdgeIdx; i < rNode.getBlockEdges().size(); i++) {
-            toRemove.add(rNode.getBlockEdges().get(i));
-        }
-        rNode.getBlockEdges().removeAll(toRemove);
         // Replace rEdge with corEdge.
-        rNode.getBlockEdges().add(corEdge);
+        int rEdgeIdx = rNode.getBlockEdges().indexOf(rEdge);
+        assert rEdgeIdx == rNode.getBlockEdges().size() - 1 :
+                "When changing an assumption edge, it must be the last one in the node!";
+        rNode.getBlockEdges().set(rEdgeIdx, corEdge);
+        // NOTE: correct r's inEdge to corEdge. After this, the only change is that r's
+        //  inEdge become corEdge from rEdge, and we don't need to change anything else.
+        r.setInEdge(corEdge);
 
-        // We remove all events after the rEdge, and all relations they have.
-        // Relations of the events before rEdge remain unchanged. After
-        // replacing, events in rEdge and corEdge have the same relations.
-        // FIXME: how to handle the case like 'A < B' where both A and B are shared vars.
-        int rIdx = rNode.getEvents().indexOf(r);
-        SharedEvent cor = null;
-        List<SharedEvent> coEvents = edgeVarMap.get(corEdge.hashCode()),
-                toRm = new ArrayList<>();
-        assert coEvents != null && !coEvents.isEmpty();
-        for (int i = rIdx; i < rNode.getEvents().size(); i++) {
-            SharedEvent event = rNode.getEvents().get(i);
-            if (Objects.equals(event.getInEdge(), rEdge)) {
-                // Events in rEdge.
-                SharedEvent coEvent = event.getCoEvent(coEvents);
-                assert coEvent != null;
-                if (i == rIdx) cor = coEvent;
-                // Replace event with coEvent.
-                rNode.setEvent(i, coEvent);
-                // Set relations for coEvent.
-                event.copyRelations(coEvent);
-            } else {
-                // Events after rEdge.
-                // FIXME: we remove the event inEdge of which is after the r.inEdge.
-                if (rNode.getBlockEdges().indexOf(event.getInEdge()) >=
-                        rNode.getBlockEdges().indexOf(rEdge))
-                    toRm.add(event);
-            }
-        }
-        toRm.forEach(rme -> {
-            rme.removeAllRelations();
-            rNode.removeEvent(rme);
-        });
-
-        assert cor != null;
-        return cor;
+        return r;
     }
 
     private CFAEdge getCoCFAEdge(CFAEdge edge) {
@@ -533,7 +494,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         String curThread = firstNode.getInThread();
         nodeTable.put(curThread, firstNode);
 
-        // FIXME: other threads' current nodes should be null.
+        // set other threads' current nodes as null.
+        // FIXME: this may change in future.
         for (String thd : nodeTable.keySet()) {
             if (!Objects.equals(thd, curThread)) {
                 nodeTable.put(thd, null);
@@ -605,8 +567,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         return false;
     }
 
+    // FIXME
     public void resetCachedAssumeEdge() {
-        // TODO.
         // Adjust the cachedAssumeEdges after revisiting.
         for (String t : assumeEdgeTable.keySet()) {
             assumeEdgeTable.put(t, 0);
