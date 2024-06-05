@@ -178,7 +178,7 @@ public class OGRevisitor {
 
         result.add(Pair.of(pivotState, G));
         // debug.
-        G.setCreationState(parState);
+        // G.setCreationState(parState);
     }
 
     /**
