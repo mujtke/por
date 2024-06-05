@@ -21,6 +21,8 @@ public class OGNode implements Copier<OGNode> {
     // loop but with different loop depth.
     // loopDepth = 0 means the node is not in a loop.
     private int loopDepth = 0;
+    // NOTE: we will store every edge we meet, i.e., include those access to the
+    //  thread-local vars but are inside the block.
     private final List<CFAEdge> blockEdges = new ArrayList<>();
     private boolean simpleNode; /* contains only one edge */
     private final Set<SharedEvent> Rs = new HashSet<>();
@@ -856,6 +858,15 @@ public class OGNode implements Copier<OGNode> {
                 .collect(Collectors.toList());
         assert !RE.isEmpty();
         return RE;
+    }
+
+    /**
+     * @return events used for checking conflict when transferring graph along the ARG.
+     * @implNote check the writes after the last-handle(LHE) event only?
+     */
+    public List<SharedEvent> getToCheckEvents() {
+        return Ws.stream().filter(w -> events.indexOf(w) > LHEIndex)
+                .collect(Collectors.toList());
     }
 
     // Tests.

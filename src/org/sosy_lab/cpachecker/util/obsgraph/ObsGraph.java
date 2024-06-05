@@ -37,13 +37,22 @@ public class ObsGraph implements Copier<ObsGraph> {
     // Record the current hold node for each thread: tid -> node.
     private final Map<String, OGNode> nodeTable = new HashMap<>();
 
-    // FIXME
-    // thread -> <assumeEdge, loopDepthHash, pathLengthHash>
+    /**
+     * This variable is used to record the assumption edges that read from indeterminate
+     * assignments. We get loopDepth and pathLength from the {@link OGPORState},
+     * specifically, get loopDepth by {@link OGPORState#getLoopDepth()} and pathLength
+     * by {@link OGPORState#getNum()}.
+     * tid -> [<assumeEdge, loopDepth, pathLength>, ... ]
+     */
     private final Map<String, List<Triple<CFAEdge, Integer, Integer>>>
             cachedAssumeEdges = new HashMap<>();
 
-    // FIXME
-    // Recording the next assumption edge we should visit.
+    /**
+     * Recording the next assumption edge we should visit.
+     * tid -> i, 'i' is the index of the item in {@link #cachedAssumeEdges}.get(tid),
+     * specifically, it means for thread with tid, next assumption edge we should meet
+     * is the ith stored in the {@link #cachedAssumeEdges}.get(tid).
+     */
     private final Map<String, Integer> assumeEdgeTable = new HashMap<>();
 
     // Based on object's memory address, so this should be different for every graph object.
@@ -69,8 +78,8 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
 
     /**
-     * Judge whether the graph contains the node, this requires the correct
-     * implementation of {@link OGNode#equals(Object)}.
+     * Judge whether the graph contains the node. This requires a correct implementation
+     * of {@link OGNode#equals(Object)}.
      */
     public boolean contains(OGNode node) {
         return nodes.contains(node);
@@ -90,7 +99,9 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     /**
      * @return a list of the events that we need to revisit.
-     * @implNote find re-visitable events in the last node.
+     * @implNote we find re-visitable events only in the last node.
+     * FIXME: there may be the case where more than one node need to be revisited, but
+     *  we only choose current last node?
      */
     public List<SharedEvent> getRE() {
         assert lastNode != null :
@@ -98,6 +109,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         return lastNode.getRE();
     }
 
+    // Handle this carefully.
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -177,11 +189,11 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
 
     /**
-     * FIXME
      * @param a Based on this we find the events that access the same var with it.
      * @return A restrictive list of the events that access the same var with {@param a}.
-     * NOTE: this method matters, if we don't return all but a part of the target
-     * events that has the same location with {@param a}.
+     * NOTE: this method matters, because we don't return all but a part of the target
+     *  events that has the same location with {@param a}, which may cause the
+     *  incompleteness.
      */
     public List<SharedEvent> getSameLocationAs(SharedEvent a) {
 
@@ -196,83 +208,107 @@ public class ObsGraph implements Copier<ObsGraph> {
             arfNode = arf.getInNode();
             // When event 'a' is a read, maybe we shouldn't consider rf relations coming
             // from event 'a' and those after it in the aNode.
-            int aIndex = aNode.getEvents().indexOf(a);
-            exclusiveReadEvents = aNode.getRs().stream()
-                    .filter(r -> aNode.getEvents().indexOf(r) > aIndex)
-                    .collect(Collectors.toList());
+            exclusiveReadEvents = getExclusiveReadEvents(aNode, a);
             // Storing rfs for exclusive read events.
-            removedRfs = exclusiveReadEvents.stream().map(exr -> Pair.of(exr,
-                    exr.getReadFrom())).collect(Collectors.toList());
+            removedRfs = getRemovedRfs(exclusiveReadEvents);
             // Remove rfs for exclusive read events.
             exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
+
+            // FIXME: if arfNode exclusivePorf aNode, then we cannot revisit a?
+            if (exclusivePorf(arfNode, aNode, a)) {
+                restoreDeleteRfs(removedRfs);
+                return result;
+            }
         }
 
+        // FIXME: Which nodes we should consider?
         for (int i = nodes.indexOf(a.getInNode()) - 1; i >= 0; i--) {
             OGNode nodei = nodes.get(i);
-            // FIXME: how to handle the nodes not in the graph?
-//            if (!nodei.isInGraph()) continue;
+            if (!nodei.isInGraph()) {
+                // FIXME: how to handle the nodes not in the graph?
+            }
 
             if (a.isRead()) {
-                // FIXME: could we skip some nodes.
                 if (nodei.getWs().stream().noneMatch(w -> w.accessSameVarWith(a)))
                     continue;
-//                if (i == nodes.indexOf(arf.getInNode())) continue;
-                if (porfPres.isEmpty()) {
-                    if (exclusivePorf(nodei, aNode, a))
+                // Else, nodei has the write events that access to the same var with 'a'.
+                if (exclusivePorf(nodei, aNode, a)) {
+                    if (porfPres.stream().anyMatch(pre -> porf(nodei, pre))) {
+                        // nodei porf some nodes in the porfPres. In this case, event
+                        // 'a' cannot read from nodei.
                         porfPres.add(nodei);
-                    if (nodes.indexOf(arfNode) == i)
                         continue;
-                }
-                else {
-                    if (exclusivePorf(nodei, aNode, a)) {
-                        List<OGNode> coveredPorfPres = porfPres.stream()
-                                .filter(pre -> OGRevisitor.porf(nodei, pre))
-                                .collect(Collectors.toList());
-//                        porfPres.removeAll(coveredPorfPres);
-                        porfPres.add(nodei);
-                        // If nodei porf some nodes in porfPres, then we cannot use the
-                        // write event comes from it.
-                        if (!coveredPorfPres.isEmpty())
-                            continue;
                     }
-                    if (nodes.indexOf(arfNode) == i)
-                        continue;
+                    porfPres.add(nodei);
                 }
 
-                // The write event in nodei should be considered.
-                for (SharedEvent w : nodei.getWs()) {
-                    if (w.accessSameVarWith(a)) {
-                        result.add(w);
-                        break;
+                if (nodei == arfNode)
+                    continue;
+
+                // Otherwise, the write event in nodei should be considered.
+                SharedEvent w = nodei.getWriteToSameVar(a);
+                assert w != null :
+                        "Error when trying to get same-location write!";
+                result.add(w);
+
+            }  // 'a' is a READ.
+            else { // 'a' is WRITE.
+                // same-location read.
+                SharedEvent r = nodei.getReadToSameVar(a);
+                if (r == null
+                        || this.porf(r, a))
+                    continue;
+                // Else, r accesses to the same var as and !porf 'a'.
+                SharedEvent rf = r.getReadFrom();
+                assert rf != null;
+                OGNode rfNode = rf.getInNode();
+                if (!rfNode.isInGraph()) {
+                    exclusiveReadEvents = getExclusiveReadEvents(r.getInNode(), r);
+                    removedRfs = getRemovedRfs(exclusiveReadEvents);
+                    exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
+                    if (exclusivePorf(rfNode, r.getInNode(), r)) {
+                        // Cannot revisit event r.
+                        restoreDeleteRfs(removedRfs);
+                        continue;
                     }
-                }
-            } else {
-                // WRITE
-                for (SharedEvent r : nodei.getRs()) {
-                    if (r.accessSameVarWith(a) && !this.porf(r, a)) {
-                        result.add(r);
-                        break;
-                    }
+                    restoreDeleteRfs(removedRfs);
+                    result.add(r);
                 }
             }
         }
 
         if (a.isRead()) { // Restoring the rfs removed before if necessary.
-            if (removedRfs != null && !removedRfs.isEmpty()) {
-                removedRfs.forEach(rfpair -> {
-                    SharedEvent rf = rfpair.getSecondNotNull(),
-                            r = rfpair.getFirstNotNull();
-                    r.setReadFrom(rf);
-                });
-            }
+            restoreDeleteRfs(removedRfs);
         }
 
         return result;
     }
 
-    // FIXME
-    // Compute whether nodei still porf aNode in the case where event 'a' reads from some
-    // write event in nodei, but we will ignore the rf relation.
+    private List<SharedEvent> getExclusiveReadEvents(OGNode rNode, SharedEvent r) {
+        assert rNode.getEvents().contains(r);
+        int rIndex = rNode.getEvents().indexOf(r);
+        return rNode.getRs().stream()
+                .filter(e -> rNode.getEvents().indexOf(e) > rIndex)
+                .collect(Collectors.toList());
+    }
+
+    private List<Pair<SharedEvent, SharedEvent>> getRemovedRfs(
+            List<SharedEvent> exclusiveReadEvents) {
+        return exclusiveReadEvents.stream().map(e ->
+                Pair.of(e, e.getReadFrom())).collect(Collectors.toList());
+    }
+
+    private void restoreDeleteRfs(List<Pair<SharedEvent, SharedEvent>> removedRfs) {
+        if (removedRfs != null && !removedRfs.isEmpty()) {
+            removedRfs.forEach(rfpair -> {
+                SharedEvent r = rfpair.getFirstNotNull(), rf = rfpair.getSecondNotNull();
+                r.setReadFrom(rf);
+            });
+        }
+    }
+
+    // Judge whether nodei still porf aNode in the case where event 'a' reads from some
+    // write event in nodei, but we ignore the rf relation.
     private boolean exclusivePorf(OGNode nodei,
             OGNode aNode,
             SharedEvent a) {
@@ -301,10 +337,13 @@ public class ObsGraph implements Copier<ObsGraph> {
             int aEdgeIndex = A.getBlockEdges().indexOf(a.getInEdge()),
                     bEdgeIndex = B.getBlockEdges().indexOf(b.getInEdge());
             return aEdgeIndex < bEdgeIndex;
-//            return a.getAType() == READ || b.getAType() == WRITE;
         }
         // Case 2: A != B.
         // If A porf B, then we think a porf b too.
+        return OGRevisitor.porf(A, B);
+    }
+
+    public boolean porf(OGNode A, OGNode B) {
         return OGRevisitor.porf(A, B);
     }
 
@@ -394,45 +433,18 @@ public class ObsGraph implements Copier<ObsGraph> {
          }
      }
 
-     // FIXME
     public boolean lessThanOrEqual(SharedEvent e1, SharedEvent e2) {
-        Preconditions.checkArgument(e1 != null && e2 != null);
+        assert e1 != null && e2 != null;
         return e1 == e2 || this.lessThan(e1, e2);
     }
 
-    // FIXME
     public boolean lessThan(SharedEvent e1, SharedEvent e2) {
-        // FIXME: define '<'.
-        // Judge whether <e1, e2> in <.
-        // Assume:
-        //      | r1 |
-        //      | r2 |
-        //      | w1 |
-        // r1 < w1 && r2 < w1.
-        // r1 and r2 are unordered => both r1 < r2 && r2 < r1?
-        // Assume when choose r1 as e1, and r2 as e2, then e1 < e2.
-        // When choose r2 as e1, and r1 as e1, then e1 < e2.
-        // Same for the case in which both e1 and e2 are write.
+        // Judge whether e1 < e2, and the criterion is the order they are added.
         OGNode en1 = e1.getInNode(), en2 = e2.getInNode();
-        if (en1 == en2) {
-            // FIXME
-            // e1 and e2 in the same node.
-//            if (e1.getAType() == e2.getAType()) {
-//                return true;
-//            }
-//            return e1.getAType() == READ;
-            int e1EdgeIndex = en1.getBlockEdges().indexOf(e1.getInEdge()),
-                     e2EdgeIndex = en2.getBlockEdges().indexOf(e2.getInEdge());
-            if (e1EdgeIndex < e2EdgeIndex) {
-                return true;
-            }
-            else if (e1EdgeIndex == e2EdgeIndex) {
-                return en1.getEvents().indexOf(e1) < en2.getEvents().indexOf(e2);
-            }
-            return false;
-        } else {
-            int en1idx = this.nodes.indexOf(en1), en2idx = this.nodes.indexOf(en2);
-            return en1idx < en2idx;
+        if (en1 == en2) { // e1 and e2 in the same node.
+            return en1.getEvents().indexOf(e1) < en1.getEvents().indexOf(e2);
+        } else { // e1 and e2 in different nodes.
+            return nodes.indexOf(en1) < nodes.indexOf(en2);
         }
     }
 
@@ -495,7 +507,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         nodeTable.put(curThread, firstNode);
 
         // set other threads' current nodes as null.
-        // FIXME: this may change in future.
+        // FIXME: this may change if we don't choose the earliest state as the
+        //  pivotState all the time.
         for (String thd : nodeTable.keySet()) {
             if (!Objects.equals(thd, curThread)) {
                 nodeTable.put(thd, null);
@@ -519,109 +532,117 @@ public class ObsGraph implements Copier<ObsGraph> {
         // current thread. Else, we will set its value as some node below.
         nodeTable.put(curThread, null);
         for (OGNode suc : node.getSuccessors()) {
-            String sucThrd = suc.getInThread();
-            nodeTable.put(sucThrd, suc);
+            String sucThd = suc.getInThread();
+            nodeTable.put(sucThd, suc);
         }
     }
 
-    public void addVisitedAssumeEdge(String curThread,
+    public void addVisitedAssumeEdge(String curThd,
             CFAEdge edge,
             OGPORState chOgState) {
         // Add assume edges to the cache when we meet them at the first time.
-        if (!cachedAssumeEdges.containsKey(curThread)) {
-            cachedAssumeEdges.put(curThread, new ArrayList<>());
-        }
+        List<Triple<CFAEdge, Integer, Integer>> tripleList =
+                cachedAssumeEdges.computeIfAbsent(curThd, k -> new ArrayList<>());
+        tripleList.add(Triple.of(edge, chOgState.getLoopDepth(), chOgState.getNum()));
 
-        cachedAssumeEdges.get(curThread).add(
-                Triple.of(edge, chOgState.getLoopDepth(), chOgState.getNum()));
-
-       if (assumeEdgeTable.containsKey(curThread)) {
-           assumeEdgeTable.computeIfPresent(curThread, (k, v) -> v + 1);
+       if (assumeEdgeTable.containsKey(curThd)) {
+           assumeEdgeTable.computeIfPresent(curThd, (k, v) -> v + 1);
        } else {
-           assumeEdgeTable.put(curThread, 0);
+           assumeEdgeTable.put(curThd, 0);
        }
     }
 
-    public boolean matchCachedEdge(String curThread, CFAEdge edge, OGPORState chOgState) {
+    public boolean cachedEdgeMatch(String curThread, CFAEdge edge, OGPORState chOgState) {
         // Check whether the edge is equals to the storing edge of current thread.
         if (cachedAssumeEdges.containsKey(curThread)) {
-            List<Triple<CFAEdge, Integer, Integer>> curThreadAssumeEdgeList =
+            List<Triple<CFAEdge, Integer, Integer>> curThdAssumeEdgeList =
                     cachedAssumeEdges.get(curThread);
-            if (curThreadAssumeEdgeList != null) {
+            assert curThdAssumeEdgeList != null;
+            if (!curThdAssumeEdgeList.isEmpty()) {
                 assert assumeEdgeTable.containsKey(curThread);
                 int i = assumeEdgeTable.get(curThread);
-                CFAEdge assumeEdge =
-                        curThreadAssumeEdgeList.get(i).getFirst();
-                assert curThreadAssumeEdgeList.get(i).getSecond() != null
-                        && curThreadAssumeEdgeList.get(i).getThird() != null;
-                int loopDepth = curThreadAssumeEdgeList.get(i).getSecond().intValue();
+                try {
+                    Triple<CFAEdge, Integer, Integer> triple = curThdAssumeEdgeList.get(i);
+                    assert triple.getFirst() != null
+                            && triple.getSecond() != null
+                            && triple.getThird() != null;
+                    CFAEdge assumeEdge = triple.getFirst();
+                    int loopDepth = triple.getSecond();
 
-                if (Objects.equals(edge, assumeEdge)
-                        && loopDepth == chOgState.getLoopDepth()) {
-                    // Update the assumeEdgeTable.
-                    assumeEdgeTable.put(curThread, i + 1);
-                    return true;
+                    if (Objects.equals(edge, assumeEdge)
+                            && loopDepth == chOgState.getLoopDepth()) {
+                        // Update the assumeEdgeTable.
+                        assumeEdgeTable.put(curThread, i + 1);
+                        return true;
+                    }
+                } catch (IndexOutOfBoundsException e) {
+                    // Not matched.
                 }
             }
         }
+
         return false;
     }
 
-    // FIXME
+    /**
+     * Reset the {@link #assumeEdgeTable}. For tid, set the next assumption edge that we
+     * will meet to the first one in {@link #cachedAssumeEdges}.get(tid).
+     */
     public void resetCachedAssumeEdge() {
-        // Adjust the cachedAssumeEdges after revisiting.
         for (String t : assumeEdgeTable.keySet()) {
             assumeEdgeTable.put(t, 0);
         }
     }
 
-    // FIXME
+    /**
+     * After removing the events in {@param delete}, we also should remove the
+     * corresponding cached assume edges. Specifically, we should remove those after
+     * r and deleted events. We use pathLength as the criteria whether an assumption
+     * edge is after r or an event in {@param delete}.
+     * @param delete The events we removed during the revisit.
+     * @param r the upper bound of the deleted events (not include r).
+     */
     public void removeAssumeEdges(List<SharedEvent> delete, SharedEvent r) {
-        // Remove the corresponding cached assume edges after having removed the events in
-        // revisiting.
-        if (cachedAssumeEdges.isEmpty()) return;
-        Map<String, Integer> removeStartPoint = new HashMap<>();
+        if (cachedAssumeEdges.isEmpty())
+            return;
+        Map<String, Integer> startPointForRemove = new HashMap<>();
         // Handle r.
         OGNode rNode = r.getInNode();
         OGPORState rOgporState = AbstractStates.extractStateByType(rNode.getPreState(),
                 OGPORState.class);
         assert rOgporState != null && rOgporState.getInThread() != null;
         int rNodeStartNum = rOgporState.getNum();
-        assert rNode.getBlockEdges().contains(r.getInEdge());
-        removeStartPoint.put(rOgporState.getInThread(),
+        assert rNode.contains(r.getInEdge());
+        startPointForRemove.put(rOgporState.getInThread(),
                 rNodeStartNum + rNode.getBlockEdges().indexOf(r.getInEdge()));
 
-        // Handle delete. FIXME: more effective way.
-        List<OGNode> handledNodes = new ArrayList<>();
-        for (SharedEvent e : delete) {
-            OGNode node = e.getInNode();
-            if (handledNodes.contains(node))
-                continue;
+        // Handle the events in delete. FIXME: more effective way.
+        List<OGNode> deleteNodes = delete.stream().map(SharedEvent::getInNode)
+                .collect(Collectors.toList());
+        for (OGNode node : deleteNodes) {
             OGPORState ogporState =
                     AbstractStates.extractStateByType(node.getPreState(), OGPORState.class);
             assert ogporState != null && ogporState.getInThread() != null;
             int num = ogporState.getNum();
-            String thrd = ogporState.getInThread();
-            if (!removeStartPoint.containsKey(thrd)) {
-                removeStartPoint.put(thrd, num);
-            } else {
-                if (num < removeStartPoint.get(thrd))
-                    removeStartPoint.put(thrd, num);
-            }
-            handledNodes.add(node);
+            String thd = ogporState.getInThread();
+            // For a thread, we need only a minimal start num.
+            if (!startPointForRemove.containsKey(thd)
+                    || num < startPointForRemove.get(thd))
+                startPointForRemove.put(thd, num);
         }
 
         // Remove assume edges.
         for (String t : cachedAssumeEdges.keySet()) {
-            if (!removeStartPoint.containsKey(t))
+            if (!startPointForRemove.containsKey(t))
                 continue;
 
-            int removeStartNum = removeStartPoint.get(t);
+            int tStartNum = startPointForRemove.get(t);
             List<Triple<CFAEdge, Integer, Integer>> assumeEdgeList =
                     cachedAssumeEdges.get(t), remove = new ArrayList<>();
             for (Triple<CFAEdge, Integer, Integer> triple : assumeEdgeList) {
-                int num = triple.getThird().intValue();
-                if (num >= removeStartNum) {
+                assert triple.getThird() != null;
+                int num = triple.getThird();
+                if (num > tStartNum) { // We don't remove r.inEdge, so it cannot be equal.
                     remove.add(triple);
                 }
             }

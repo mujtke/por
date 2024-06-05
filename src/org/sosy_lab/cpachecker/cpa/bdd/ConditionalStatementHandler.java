@@ -252,28 +252,4 @@ public class ConditionalStatementHandler {
         throw new InvalidConfigurationException("Could not find the CPA " + pClass + " " +
                 "from " + pPrecision);
     }
-
-    // Debug.
-    public boolean isFalse(BDDState bddState, CFAEdge edge) {
-        CAssumeEdge assumeEdge = (CAssumeEdge) edge;
-        final Region[] operand;
-        BitvectorManager bvMgr = bddState.getBvmgr();
-        NamedRegionManager nrMgr = bddState.getManager();
-        try {
-            operand = bvComputer.evaluateVectorExpressionWithPointerState(
-                    varClass.getPartitionForEdge(assumeEdge),
-                    assumeEdge.getExpression(),
-                    CNumericTypes.INT,
-                    assumeEdge.getSuccessor(),
-                    null,
-                    null);
-        } catch (UnsupportedCodeException e) {
-            throw new RuntimeException(e);
-        }
-        Region evaluated = bvMgr.makeOr(operand);
-        if (!assumeEdge.getTruthAssumption())
-            evaluated = nrMgr.makeNot(evaluated);
-        Region newRegion = nrMgr.makeAnd(bddState.getRegion(), evaluated);
-        return newRegion.isFalse();
-    }
 }

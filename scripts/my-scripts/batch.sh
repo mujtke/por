@@ -4,6 +4,13 @@ if [[ ! -d "$1" ]]; then
 	echo "Dir $1 does not exist!"
 fi
 
+fullPath="$(realpath $0)"
+fullPath="${fullPath%/*}"
+fullPath="${fullPath%/*}"
+fullPath="${fullPath%/*}"
+workDir="$fullPath"
+[[ ! -d "$workDir" ]] && echo "Directory $workDir does not exist!" && exit 0
+
 targetDir="$1"
 GREEN="\033[32m"
 YELLOW="\033[33m"
@@ -16,7 +23,7 @@ printf "${GREEN}${BOLD}%-30s${YELLOW}%-10s${CLEAR}%-10s\n" "File" "Result" "Time
 function runTask() {
 	TEST_FILE="$1"
 	printf "%-30s" "$(basename ${TEST_FILE})"
-	cd "$HOME/Code/Java/por"
+	cd "$workDir"
 	RESULT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
 	-spec default -preprocess \
 	"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')

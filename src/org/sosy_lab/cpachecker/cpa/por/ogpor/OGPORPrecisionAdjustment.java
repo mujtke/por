@@ -24,14 +24,11 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
     private final LogManager logger;
 
     private final Map<Integer, List<ObsGraph>> OGMap;
-    private final Map<Integer, OGNode> nodeMap;
     private final OGTransfer transfer;
 
     public OGPORPrecisionAdjustment(LogManager pLogger) {
         logger = pLogger;
         OGMap = GlobalInfo.getInstance().getOgInfo().getOGMap();
-        nodeMap = GlobalInfo.getInstance().getOgInfo().getNodeMap();
-//        assert OGMap != null && nodeMap != null;
         assert OGMap != null;
         this.transfer = GlobalInfo.getInstance().getOgInfo().getTransfer();
     }

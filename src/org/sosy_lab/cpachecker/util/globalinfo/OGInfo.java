@@ -24,7 +24,11 @@ public class OGInfo {
      */
     private static Map<Integer, List<ObsGraph>> OGMap;
 
+    // For debugging.
+    // StateId -> [ (graphId, graphStr), ... ]
     private static Map<Integer, List<Pair<Integer, String>>> fullOGMap;
+    // StateId -> { graphId -> graphStr (produced in revisit) }
+    private static Map<Integer, Map<Integer, List<String>>> revisitOGMap;
 
     private static OGTransfer transfer;
 
@@ -60,6 +64,7 @@ public class OGInfo {
             OGMap.put(0, new ArrayList<>(Collections.singleton(new ObsGraph())));
             edgeVarMap = new HashMap<>();
             fullOGMap = new HashMap<>();
+            revisitOGMap = new HashMap<>();
             transfer = new OGTransfer(OGMap, edgeVarMap, enableDebug);
             revisitor = new OGRevisitor(pConfig, pCfa, pLogger, enableDebug);
             nlt = new HashMap<>();
@@ -81,13 +86,13 @@ public class OGInfo {
        return revisitor;
     }
 
-//    public Map<Integer, Map<Integer, String>> getFullOGMap() {
-//        return fullOGMap;
-//    }
     public Map<Integer, List<Pair<Integer, String>>> getFullOGMap() {
         return fullOGMap;
     }
 
+    public Map<Integer, Map<Integer, List<String>>> getRevisitOGMap() {
+        return revisitOGMap;
+    }
     public HashMap<Integer, Integer> getNlt() {
         return nlt;
     }

@@ -1,19 +1,13 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
-import jdd.bdd.BDD;
-import org.json.JSONObject;
-import org.sosy_lab.common.configuration.Configuration;
-import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.BDDState;
-import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
-import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.predicates.regions.NamedRegionManager;
@@ -22,14 +16,16 @@ import org.sosy_lab.cpachecker.util.predicates.regions.Region;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class DebugAndTest {
 
     private final static String dotFile = "output/ogs.dot";
     private final static String fullDotFile = "output/fullDot.json";
+    private final static String fullDotFile2 = "output/fullDot2.json";
+    private final static String revisitDotFile = "output/revisitDot.json";
     private final static String argFile = "output/arg.json";
+    private final static String argFile2 = "output/arg2.json";
     private final static String instantOG = "output/instantOG.dot";
 
     public static int print(ObsGraph g) {
@@ -94,7 +90,7 @@ public class DebugAndTest {
     }
 
     private static void addNewNode(FileWriter fout, OGNode n,
-                                   Map<OGNode, String> visited) throws IOException {
+            Map<OGNode, String> visited) throws IOException {
         String nodeStmt = String.valueOf(n.hashCode()),
                 nodeLabel = "[label=\""
                         + n.toString().replace(",", "\n")
@@ -109,7 +105,7 @@ public class DebugAndTest {
     }
 
     private static void strBuilderAddNewNode(StringBuilder strBuilder, OGNode n,
-                                   Map<OGNode, String> visited) {
+            Map<OGNode, String> visited) {
         String nodeStmt = String.valueOf(n.hashCode()),
                 nodeLabel = "[label=\""
                         + n.toString().replace(",", "\n")
@@ -410,57 +406,31 @@ public class DebugAndTest {
     }
 
     public static int dumpToJson(ReachedSet reachedSet) {
-//        Map<Integer, Map<Integer, String>> fullOGMap0 =
-//                GlobalInfo.getInstance().getOgInfo().getFullOGMap();
-        Map<Integer, List<Pair<Integer, String>>> fullOGMap0 =
+        Map<Integer, List<Pair<Integer, String>>> fullOGMap =
                 GlobalInfo.getInstance().getOgInfo().getFullOGMap();
-        Map<Integer, List<String>> fullOGMap = new HashMap<>();
-//        fullOGMap0.forEach((k, v) -> fullOGMap.put(k, new ArrayList<>(v.values())));
-        fullOGMap0.forEach((k, v) -> fullOGMap.put(k,
+        Map<Integer, List<String>> fullOGMap1 = new HashMap<>();
+        fullOGMap.forEach((k, v) -> fullOGMap1.put(k,
                 new ArrayList<>(v.stream().map(Pair::getSecondNotNull).collect(Collectors.toList()))));
-        JSONObject json = new JSONObject(fullOGMap);
+//        JSONObject json = new JSONObject(fullOGMap1);
+        ObjectMapper objMapper = new ObjectMapper();
         try {
             // Export ogs in json.
             FileWriter fout = new FileWriter(fullDotFile);
-            json.write(fout, 4, 0);
+
+            String fullOGMap1JsonString =
+                    objMapper.writerWithDefaultPrettyPrinter().writeValueAsString(fullOGMap1);
+            fout.write(fullOGMap1JsonString);
+//            json.write(fout, 4, 0);
             fout.close();
 
             // Export arg.
-            ARG arg = new ARG();
-            ARGState s = (ARGState) reachedSet.getFirstState();
-            assert s != null;
-            Stack<ARGState> stack = new Stack<>();
-            stack.push(s);
-            while (!stack.isEmpty()) {
-                ARGState cur = stack.pop(), par;
-                if (cur.getChildren().isEmpty()
-                        && (!fullOGMap.containsKey(cur.getStateId())
-                        || fullOGMap.get(cur.getStateId()) == null
-                        || fullOGMap.get(cur.getStateId()).isEmpty())) {
-//                    continue; // Has neither children nor graph.
-                }
-                cur.getChildren().forEach(stack::push);
-                int curStateId = cur.getStateId();
-                if (cur.getParents().isEmpty()) {
-                    ARG.State state = new ARG.State(String.valueOf(curStateId),
-                            "s" + curStateId);
-                    arg.getReached().add(state);
-                    continue;
-                }
-                // One parent at most (Assume).
-                par = cur.getParents().iterator().next();
-                int parStateId = par.getStateId();
-                ARG.State state = new ARG.State(String.valueOf(curStateId),
-                        "s" + curStateId);
-                ARG.Edge edge = new ARG.Edge(String.valueOf(parStateId),
-                        String.valueOf(curStateId),
-                        Objects.requireNonNull(par.getEdgeToChild(cur)).toString());
-                arg.getReached().add(state);
-                arg.getEdges().add(edge);
-            }
+            ARG arg = getARG(reachedSet, fullOGMap1, null);
+            String argJsonString =
+                    objMapper.writerWithDefaultPrettyPrinter().writeValueAsString(arg);
             fout = new FileWriter(argFile);
-            json = new JSONObject(arg);
-            json.write(fout, 4, 0);
+            fout.write(argJsonString);
+//            json = new JSONObject(arg);
+//            json.write(fout, 4, 0);
             fout.close();
 
             // Debug.
@@ -480,22 +450,126 @@ public class DebugAndTest {
         return 0;
     }
 
+    public static int dumpToJson2(ReachedSet reachedSet) {
+        Map<Integer, List<Pair<Integer, String>>> fullOGMap =
+                GlobalInfo.getInstance().getOgInfo().getFullOGMap();
+        Map<Integer, Map<Integer, List<String>>> revisitOGMap =
+                GlobalInfo.getInstance().getOgInfo().getRevisitOGMap();
+//        JSONObject revisitOGMapJson = new JSONObject(revisitOGMap);
+        ObjectMapper objMapper = new ObjectMapper();
+        try {
+            // Export { stateNum -> [ (og_id, og_str), ... ] }.
+            Map<Integer, List<OGItem>> fullOGMap0 = new HashMap<>();
+
+            fullOGMap.forEach((k, v) -> fullOGMap0.put(k,
+                    v.stream().map(p -> new OGItem(p.getFirstNotNull(),
+                            p.getSecondNotNull())).collect(Collectors.toList())));
+//            JSONObject fullOGMap0Json = new JSONObject(fullOGMap0);
+            String fullOGMap0JsonString =
+                    objMapper.writerWithDefaultPrettyPrinter().writeValueAsString(fullOGMap0);
+            FileWriter fout =  new FileWriter(fullDotFile2);
+            fout.write(fullOGMap0JsonString);
+//            fullOGMap0Json.write(fout, 4, 0);
+            fout.close();
+            // Export { stateNum -> { og_id -> [ revisit_og_str, ... ] }.
+            fout = new FileWriter(revisitDotFile);
+
+            String revisitOGMapJsonString =
+                    objMapper.writerWithDefaultPrettyPrinter().writeValueAsString(revisitOGMap);
+            fout.write(revisitOGMapJsonString);
+//            revisitOGMapJson.write(fout, 4, 0);
+            fout.close();
+
+            // Export arg.
+            Map<Integer, List<String>> fullOGMap1 = new HashMap<>();
+            fullOGMap.forEach((k, v) -> fullOGMap1.put(k,
+                    new ArrayList<>(v.stream().map(Pair::getSecondNotNull).collect(Collectors.toList()))));
+            ARG arg = getARG(reachedSet, fullOGMap1, revisitOGMap);
+            fout = new FileWriter(argFile2);
+            String argJsonString = objMapper.writerWithDefaultPrettyPrinter().writeValueAsString(arg);
+            fout.write(argJsonString);
+//            JSONObject argJson = new JSONObject(arg);
+//            argJson.write(fout, 4, 0);
+            fout.close();
+
+            Process p = Runtime.getRuntime().exec(new String[] {
+                    "/bin/bash",
+                    "-c",
+                    "$(which cp) " + fullDotFile2 + " $HOME/mmm/js/ogs-visual/model/; "
+                            + "$(which cp) " + revisitDotFile + " $HOME/mmm/js/ogs-visual/model/; "
+                            + "$(which cp) " + argFile2 + " $HOME/mmm/js/ogs-visual/model/"
+            });
+            p.waitFor();
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        return 0;
+    }
+
+    private static String getARGStateFillColor(Map<Integer, Map<Integer, List<String>>> revisitOGMap,
+            int curStateId) {
+        if (revisitOGMap != null) {
+            Map<Integer, List<String>> revisitOgs = revisitOGMap.get(curStateId);
+            if (revisitOgs != null && !revisitOgs.isEmpty())
+                return "orange";
+        }
+        return "white";
+    }
+    private static ARG getARG(ReachedSet reachedSet,
+            Map<Integer, List<String>> fullOGMap,
+            Map<Integer, Map<Integer, List<String>>> revisitOGMap) {
+        ARG arg = new ARG();
+        ARGState s = (ARGState) reachedSet.getFirstState();
+        assert s != null;
+        Stack<ARGState> stack = new Stack<>();
+        stack.push(s);
+        while (!stack.isEmpty()) {
+            ARGState cur = stack.pop(), par;
+            if (cur.getChildren().isEmpty()
+                    && (!fullOGMap.containsKey(cur.getStateId())
+                    || fullOGMap.get(cur.getStateId()) == null
+                    || fullOGMap.get(cur.getStateId()).isEmpty())) {
+//                    continue; // Has neither children nor graph.
+            }
+            cur.getChildren().forEach(stack::push);
+            int curStateId = cur.getStateId();
+            if (cur.getParents().isEmpty()) {
+                ARG.State state = new ARG.State(String.valueOf(curStateId),
+                        "s" + curStateId,
+                        getARGStateFillColor(revisitOGMap, curStateId));
+                arg.getReached().add(state);
+                continue;
+            }
+            // One parent at most (Assume).
+            par = cur.getParents().iterator().next();
+            int parStateId = par.getStateId();
+            ARG.State state = new ARG.State(String.valueOf(curStateId),
+                    "s" + curStateId,
+                    getARGStateFillColor(revisitOGMap, curStateId));
+            ARG.Edge edge = new ARG.Edge(String.valueOf(parStateId),
+                    String.valueOf(curStateId),
+                    Objects.requireNonNull(par.getEdgeToChild(cur)).toString());
+            arg.getReached().add(state);
+            arg.getEdges().add(edge);
+        }
+        return arg;
+    }
+
     public static class ARG {
         public static class State {
-            public State(String pKey, String pStateNum) {
+            public State(String pKey, String pStateNum, String pFillColor) {
                 this.key = pKey;
                 this.stateNum = pStateNum;
+                this.fillColor = pFillColor;
             }
             private final String key;
             private final String stateNum;
+            private final String fillColor;
 
-            public String getKey() {
-                return key;
-            }
+            public String getKey() { return key; }
 
-            public String getStateNum() {
-                return stateNum;
-            }
+            public String getStateNum() { return stateNum; }
+            public String getFillColor() { return fillColor; }
         }
 
         public static class Edge {
@@ -530,25 +604,16 @@ public class DebugAndTest {
         }
     }
 
-    // Given a state and assumption edge, test whether they are compatible.
-    public static boolean isFalse(AbstractState state,
-            CFAEdge assumeEdge) {
-        GlobalInfo globalInfo = GlobalInfo.getInstance();
-        ConditionalStatementHandler conditionalStatementHandler;
-        try {
-            conditionalStatementHandler = new ConditionalStatementHandler(
-                    Configuration.defaultConfiguration(),
-                    globalInfo.getEdgeInfo().getCFA(),
-                    globalInfo.getLogManager());
-        } catch (InvalidConfigurationException e) {
-            throw new RuntimeException(e);
+    private static class OGItem {
+        private final Integer id;
+        private final String dotStr;
+
+        public OGItem(Integer pId, String pDotStr) {
+            this.id = pId;
+            this.dotStr = pDotStr;
         }
 
-        boolean result = true;
-        BDDState bddState = AbstractStates.extractStateByType(state, BDDState.class);
-        assert bddState != null;
-        result = conditionalStatementHandler.isFalse(bddState, assumeEdge);
-
-        return result;
+        public Integer getId() { return this.id; }
+        public String getDotStr() { return this.dotStr; }
     }
 }

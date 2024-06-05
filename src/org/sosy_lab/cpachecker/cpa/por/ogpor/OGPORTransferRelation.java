@@ -55,7 +55,6 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
     private final Map<Integer, List<ObsGraph>> OGMap;
 
     // Map: edge.hashCode() -> OGNode.
-    private final Map<Integer, OGNode> nodeMap;
     private final String mainThreadId;
     private final CFANode mainExitNode;
 
@@ -73,7 +72,6 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         assert mainExitNode != null;
         logger = pLogger;
         shutdownNotifier = pShutdownNotifier;
-        nodeMap = GlobalInfo.getInstance().getOgInfo().getNodeMap();
         OGMap = GlobalInfo.getInstance().getOgInfo().getOGMap();
         if (OGMap == null) {
             throw new InvalidConfigurationException("OGMap unusable, please enable the " +
