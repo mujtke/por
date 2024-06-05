@@ -1,0 +1,3 @@
+[submodule "ogs-visual"]
+	path = ogs-visual
+	url = git@gitee.com:mujueke/ogs-visual.git

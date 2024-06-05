@@ -27,6 +27,7 @@ public class DebugAndTest {
     private final static String argFile = "output/arg.json";
     private final static String argFile2 = "output/arg2.json";
     private final static String instantOG = "output/instantOG.dot";
+    private final static String modelDumpDir = "ogs-visual/model/";
 
     public static int print(ObsGraph g) {
         String dotStr = getDotStr(g);
@@ -455,7 +456,6 @@ public class DebugAndTest {
                 GlobalInfo.getInstance().getOgInfo().getFullOGMap();
         Map<Integer, Map<Integer, List<String>>> revisitOGMap =
                 GlobalInfo.getInstance().getOgInfo().getRevisitOGMap();
-//        JSONObject revisitOGMapJson = new JSONObject(revisitOGMap);
         ObjectMapper objMapper = new ObjectMapper();
         try {
             // Export { stateNum -> [ (og_id, og_str), ... ] }.
@@ -495,9 +495,9 @@ public class DebugAndTest {
             Process p = Runtime.getRuntime().exec(new String[] {
                     "/bin/bash",
                     "-c",
-                    "$(which cp) " + fullDotFile2 + " $HOME/mmm/js/ogs-visual/model/; "
-                            + "$(which cp) " + revisitDotFile + " $HOME/mmm/js/ogs-visual/model/; "
-                            + "$(which cp) " + argFile2 + " $HOME/mmm/js/ogs-visual/model/"
+                    "$(which cp) " + fullDotFile2 + " " + modelDumpDir + "; "
+                            + "$(which cp) " + revisitDotFile + " " + modelDumpDir + "; "
+                            + "$(which cp) " + argFile2 + " " + modelDumpDir
             });
             p.waitFor();
         } catch (IOException | InterruptedException e) {
