@@ -1,13 +1,10 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Preconditions;
-import org.junit.Assume;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.c.CAssumeEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.bam.ARGSubtreeRemover;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
@@ -72,21 +69,6 @@ public class OGTransfer {
         }
 
         return null;
-    }
-
-    // FIXME
-    public boolean hasNonDet(ARGState parState, CFAEdge edge) {
-        // Check whether parState has indeterminate successors.
-        List<ARGState> coSuccessors = new ArrayList<>();
-        parState.getChildren().forEach(s -> {
-            CFAEdge tmpEdge = parState.getEdgeToChild(s);
-            assert tmpEdge != null;
-            if (Objects.equals(tmpEdge.getPredecessor(), edge.getPredecessor())) {
-                coSuccessors.add(s);
-            }
-        });
-
-        return coSuccessors.size() == 2;
     }
 
     private static class NLTComparator implements Comparator<AbstractState> {
