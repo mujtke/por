@@ -23,14 +23,8 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
 
     private final LogManager logger;
 
-    private final Map<Integer, List<ObsGraph>> OGMap;
-    private final OGTransfer transfer;
-
     public OGPORPrecisionAdjustment(LogManager pLogger) {
         logger = pLogger;
-        OGMap = GlobalInfo.getInstance().getOgInfo().getOGMap();
-        assert OGMap != null;
-        this.transfer = GlobalInfo.getInstance().getOgInfo().getTransfer();
     }
 
     @Override
@@ -40,25 +34,6 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
             UnmodifiableReachedSet reachedSet,
             Function<AbstractState, AbstractState> stateProjection,
             AbstractState fullState) throws CPAException, InterruptedException {
-
-        assert fullState instanceof ARGState;
-        ARGState chState =  (ARGState) fullState;
-        // Only one parent exists is required in OG-based algorithm.
-//        assert chState.getParents().size() == 1;
-//        ARGState parState = chState.getParents().iterator().next();
-//
-//        CFAEdge edge = parState.getEdgeToChild(chState);
-//        assert edge != null;
-//
-//        OGPORState parOGState = AbstractStates.extractStateByType(parState,
-//                OGPORState.class),
-//                chOGState = (OGPORState) state;
-        OGPORState chOGState = (OGPORState) state;
-
-        // Here, set the num for chOGState.
-        chOGState.setNum(chState.getStateId());
-
-        // System.out.println(chState.getStateId() + ": " + chOGState.getLocks());
 
         return Optional.of(PrecisionAdjustmentResult.create(state,
                 precision, PrecisionAdjustmentResult.Action.CONTINUE));

@@ -3,7 +3,11 @@ package org.sosy_lab.cpachecker.cpa.por.ogpor;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
+import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.DummyCFAEdge;
 import org.sosy_lab.cpachecker.cfa.ast.AExpression;
 import org.sosy_lab.cpachecker.cfa.ast.c.*;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
@@ -14,16 +18,17 @@ import org.sosy_lab.cpachecker.cfa.model.c.CFunctionReturnEdge;
 import org.sosy_lab.cpachecker.cfa.model.c.CStatementEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Graphable;
-import org.sosy_lab.cpachecker.cpa.threading.ThreadingState;
+import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.util.LoopStructure;
 import org.sosy_lab.cpachecker.util.LoopStructure.Loop;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
+import org.sosy_lab.cpachecker.util.identifiers.GeneralLocalVariableIdentifier;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
-import java.util.regex.Matcher;
+import java.util.logging.Level;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -32,16 +37,20 @@ import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaActio
 import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.LockStatus.*;
 
 public class OGPORState implements AbstractState, Graphable {
-
+    private static LogManager logger;
     private static CFA cfa;
+    // Use this var to record the length of the path till the current state.
     private int num;
-    // Assume there is an edge: sn -- Ei --> sm, then the value of 'inThread' will be
-    // the activeThread of 'Ei', which comes from the threadingState in sn. We set
-    // its value in a 'strengthen' process.
+    /**
+     * Assume there is an edge: sn -- Ei --> sm, then the value of 'inThread' will be
+     * the activeThread of 'Ei', which comes from the threadingState in sn. We set
+     * its value in {@link OGPORTransferRelation#strengthen(AbstractState, Iterable,
+     * CFAEdge, Precision)}.
+     */
     private String inThread;
     private final Map<String, String> threads;
 
-    // The variable is used to record all loops that all alive threads in.
+    // This variable is used to record loops that all alive threads in.
     // Structure: thread -> Stack<CFANode>
     // Use stack to record all loop starts we have met because the inner loops should
     // always terminate before the outer ones.
@@ -52,7 +61,7 @@ public class OGPORState implements AbstractState, Graphable {
 
     private final Map<String, Stack<String>> locks = new HashMap<>();
 
-    // Map from thread to its parent thread.
+    // tid -> parent's tid
     private final Map<String, String> parentThread = new HashMap<>();
 
     public CriticalAreaAction getInCaa() {
@@ -65,9 +74,7 @@ public class OGPORState implements AbstractState, Graphable {
         return parentThread.get(inThread);
     }
 
-    public Map<String, String> getParentThread() {
-        return parentThread;
-    }
+    public Map<String, String> getParentThread() { return parentThread; }
 
     public void setParentThread(Map<String, String> pParentThread) {
         parentThread.putAll(pParentThread);
@@ -80,31 +87,32 @@ public class OGPORState implements AbstractState, Graphable {
     }
 
     public enum CriticalAreaAction {
-        START, /* start a critical area */
-        CONTINUE, /* be inside a critical area */
-        END, /* end a critical area */
-        NOT_IN, /* not any one above, lock-free */
+        START,     /* start a critical area */
+        CONTINUE,  /* be inside a critical area */
+        END,       /* end a critical area */
+        NOT_IN,    /* not any one above, lock-free */
     }
 
+    // tid -> caa, recording each thread's caa.
     private final Map<String, CriticalAreaAction> caas = new HashMap<>();
 
     // Record the entering edge.
     CFAEdge enteringEdge;
-    // Record whether the enteringEdge is the normal edge.
+    // Record whether the enteringEdge is normal, i.e., it doesn't access to any shared
+    // vars or start an atomic area.
     boolean isNormalEnteringEdge;
     private static HashMap<Integer, List<SharedEvent>> edgeVarMap;
-    private static Set<String> atomicBegins = ImmutableSet.of("__VERIFIER_atomic_begin"
-            , "__VERIFIER_atomic_r", "__VERIFIER_atomic_w");
-    private final Set<Pattern> atomicBeginPatterns = new HashSet<>();
-    private static Set<String> atomicEnds = ImmutableSet.of("__VERIFIER_atomic_end");
-    private final Set<Pattern> atomicEndPatterns = new HashSet<>();
-    private static Set<String> lockBegins = ImmutableSet.of("pthread_mutex_lock", "pthread_lock", "lock");
-    private final Set<Pattern> lockBeginPatterns = new HashSet<>();
-    private static Set<String> lockEnds = ImmutableSet.of("pthread_mutex_unlock", "pthread_unlock", "unlock");
-    private final Set<Pattern> lockEndPatterns = new HashSet<>();
+    private static Set<String> atomicBegins;
+    private static Set<String> atomicEnds;
+    private static Set<String> lockBegins;
+    private static Set<String> lockEnds;
+    private final static Set<Pattern> atomicBeginPatterns = new HashSet<>();
+    private final static Set<Pattern> atomicEndPatterns = new HashSet<>();
+    private final static Set<Pattern> lockBeginPatterns = new HashSet<>();
+    private final static Set<Pattern> lockEndPatterns = new HashSet<>();
 
     public void setLocks(Map<String, Stack<String>> pLocks) {
-        // Deep copy needed for 'Stack<Sting>'
+        // NOTE: handle this carefully.
         pLocks.forEach((k, v) -> {
             Stack<String> newLocks = new Stack<>();
             newLocks.addAll(v);
@@ -113,28 +121,17 @@ public class OGPORState implements AbstractState, Graphable {
     }
 
     // Remove the parent thread for thread t.
-    public void removeParentThread(String t) {
-        parentThread.remove(t);
-    }
+    public void removeParentThread(String t) { parentThread.remove(t); }
 
     // Set the parent thread for thread t.
     public void setParentThread(String t, String parent) {
-        if (Objects.equals(parent, parentThread.get(t)))
-            assert false : "Try to set a different parent thread for the same thread.";
-        parentThread.put(t, parent);
+        parentThread.putIfAbsent(t, parent);
+        assert Objects.equals(parent, parentThread.get(t));
     }
 
-    public Map<String, Stack<String>> getLocks() {
-        return locks;
-    }
+    public Map<String, Stack<String>> getLocks() { return locks; }
 
-    public boolean enteringEdgeIsNormal() {
-        return isNormalEnteringEdge;
-    }
-
-    public CFAEdge getEnteringEdge() {
-        return enteringEdge;
-    }
+    public CFAEdge getEnteringEdge() { return enteringEdge; }
 
     @Override
     public int hashCode() {
@@ -169,56 +166,55 @@ public class OGPORState implements AbstractState, Graphable {
     }
 
     @Override
-    public boolean shouldBeHighlighted() {
-        return true;
-    }
+    public boolean shouldBeHighlighted() { return true; }
 
     public OGPORState(int pNum, CFAEdge pEdge) {
         num = pNum;
         threads = new HashMap<>();
         enteringEdge = pEdge;
-        if (edgeVarMap == null) {
-            try {
-                GlobalInfo globalInfo = GlobalInfo.getInstance();
-                assert globalInfo != null : "Initialize edgeVarMap for OGPORState " +
-                        "failed since the absence of the GlobalInfo";
-                OGInfo ogInfo = globalInfo.getOgInfo();
-                assert ogInfo != null : "Initialize edgeVarMap for OGPORState failed " +
-                        "since the absence of the ogInfo.";
-                edgeVarMap = ogInfo.getEdgeVarMap();
-            } catch (Exception e) {
-                throw e;
-            }
-        }
-        isNormalEnteringEdge = isNormalEdge(pEdge);
+        if (!(pEdge instanceof DummyCFAEdge))
+            isNormalEnteringEdge = isNormalEdge(pEdge);
+    }
+
+    /**
+     * Extract patterns from the {@link #atomicBegins}, {@link #atomicEnds},
+     * {@link #lockBegins}, {@link #lockEnds}.
+     */
+    public void extractPatterns() {
         extractPatterns(atomicBegins, atomicBeginPatterns);
         extractPatterns(atomicEnds, atomicEndPatterns);
         extractPatterns(lockBegins, lockBeginPatterns);
         extractPatterns(lockEnds, lockEndPatterns);
     }
 
+    public void setAtomicBegins(Set<String> pAtomicBegins) { atomicBegins = pAtomicBegins; }
+    public void setAtomicEnds(Set<String> pAtomicEnds) { atomicEnds = pAtomicEnds; }
+    public void setLockBegins(Set<String> pLockBegins) { lockBegins = pLockBegins; }
+    public void setLockEnds(Set<String> pLockEnds) { lockEnds = pLockEnds; }
+    public void setLogger(LogManager pLogger) { logger = pLogger; }
+    public void setEdgeVarMap() {
+        edgeVarMap = GlobalInfo.getInstance().getOgInfo().getEdgeVarMap();
+        assert edgeVarMap != null : "Initializing edgeVarMap for OGPORState failed!";
+    }
+
     private void extractPatterns(Set<String> atomicStmts, Set<Pattern> atomicPatterns) {
         atomicStmts.forEach(stmt -> {
-            // FIXME: Write regular expression correctly, JDK Version is too low?
+            // FIXME: current implementation need jdk11.
             String patternStr = "^" + stmt + " *(.*)";
             Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE);
             atomicPatterns.add(pattern);
         });
     }
 
-    public Map<String, CriticalAreaAction> getCaas() {
-        return caas;
-    }
+    public Map<String, CriticalAreaAction> getCaas() { return caas; }
 
     public void setCaas(Map<String, CriticalAreaAction> pCaas) {
         caas.putAll(pCaas);
     }
 
     private boolean isNormalEdge(CFAEdge edge) {
-        // FIXME: should we consider the block ends?
-        // Check whether the given edge is a normal edge, i.e., the edge neither accesses
-        // any shared vars nor begin any atomic block.
-
+        // Check whether the given edge is normal, i.e., the edge neither accesses
+        // to any shared vars nor start any atomic block.
         if (edge instanceof CStatementEdge) {
             CStatement cStatement = ((CStatementEdge) edge).getStatement();
             if (cStatement instanceof CFunctionCallStatement) {
@@ -244,15 +240,14 @@ public class OGPORState implements AbstractState, Graphable {
     }
 
     public void setLoopInfo() {
-        Preconditions.checkArgument(cfa.getLoopStructure().isPresent(),
-                "Missing loop structure.");
+        assert cfa.getLoopStructure().isPresent() :
+                "Missing loop structure when trying to set the loop info!";
         LoopStructure loopStructure = cfa.getLoopStructure().get();
         for (Loop loop : loopStructure.getAllLoops()) {
-            // one loop just have one loop head?
+            // A loop just have one loop head?
             Set<CFANode> loopStarts = loop.getIncomingEdges()
                     .stream().map(CFAEdge::getSuccessor).collect(Collectors.toSet());
-            Preconditions.checkState(loopStarts.size() == 1,
-                    "Just one loop start node is expected.");
+            assert loopStarts.size() == 1 : "Just one loop start node is expected!";
             CFANode loopStart = loopStarts.iterator().next();
             if (!loopStart.isLoopStart()) {
                 // In some special cases, loopStart is not the real loop start node. In
@@ -265,37 +260,27 @@ public class OGPORState implements AbstractState, Graphable {
                     }
                 }
             }
-            Preconditions.checkState(loopStart != null,
-                    "Finding loop start node failed.");
+            assert loopStart != null : "Finding loop start node failed!";
             // Corresponding loopStart to its loop exit nodes.
+            // NOTE: one loop start node may has more than one exit node.
             Set<CFANode> loopExits = loop.getOutgoingEdges()
                     .stream().map(CFAEdge::getSuccessor).collect(Collectors.toSet());
             loopExitNodes.put(loopStart, loopExits);
         }
     }
 
-    public Map<String, String> getThreads() {
-        return threads;
-    }
+    public Map<String, String> getThreads() { return threads; }
 
     public void setThreads(Map<String, String> pThreads) {
         threads.putAll(pThreads);
     }
-    public int getNum() {
-        return num;
-    }
+    public int getNum() { return num; }
 
-    public String getInThread() {
-        return this.inThread;
-    }
+    public String getInThread() { return this.inThread; }
 
-    public void setInThread(String thread) {
-        this.inThread = thread;
-    }
+    public void setInThread(String thread) { this.inThread = thread; }
 
-    public Map<String, Stack<CFANode>> getLoops() {
-        return loops;
-    }
+    public Map<String, Stack<CFANode>> getLoops() { return loops; }
 
     public void setLoops(final Map<String, Stack<CFANode>> pLoops) {
         pLoops.forEach((k, v) -> {
@@ -305,30 +290,21 @@ public class OGPORState implements AbstractState, Graphable {
         });
     }
 
-    public Map<CFANode, Integer> getLoopDepthTable() {
-        return loopDepthTable;
-    }
+    public Map<CFANode, Integer> getLoopDepthTable() { return loopDepthTable; }
 
     public void setLoopDepthTable(final Map<CFANode, Integer> pLoopDepthTable) {
         loopDepthTable.putAll(pLoopDepthTable);
     }
 
-    public void setNum(int pNum) {
-        this.num = pNum;
-    }
+    public void setNum(int pNum) { this.num = pNum; }
 
-    public void setCfa(CFA pCfa) {
-        cfa = pCfa;
-    }
+    public void setCfa(CFA pCfa) { cfa = pCfa; }
 
     public void updateLoopDepth(CFAEdge cfaEdge) {
-        Preconditions.checkArgument(cfaEdge != null,
-                "A CFA edge is required.");
+        assert cfaEdge != null :
+                "Missing CFA edge when trying to update the loop depth.";
         CFANode pre = cfaEdge.getPredecessor(), curLoop = null;
-        if (!loops.containsKey(inThread)) {
-            loops.put(inThread, new Stack<>());
-        }
-        Stack<CFANode> curLoops = loops.get(inThread);
+        Stack<CFANode> curLoops = loops.computeIfAbsent(inThread, k -> new Stack<>());
         if (!curLoops.isEmpty()) {
             curLoop = loops.get(inThread).peek();
         }
@@ -337,73 +313,69 @@ public class OGPORState implements AbstractState, Graphable {
             if (!pre.equals(curLoop)) {
                 // curLoop is null or pre != curLoop, which means we reach a new loop
                 // start. We add a new loop item with initial depth = 1.
-                loops.get(inThread).push(pre);
+                // loops.get(inThread).push(pre);
+                curLoops.push(pre);
                 loopDepthTable.put(pre, 1);
             } else {
                 // pre == curLoop, which means we are in a loop and reach its loop start
                 // again. In this case, we increase the loop depth.
-                Preconditions.checkState(loopDepthTable.containsKey(curLoop));
+                assert loopDepthTable.containsKey(curLoop);
                 loopDepthTable.compute(curLoop, (k, v) -> v + 1);
             }
         } else {
             // Pre may be a loop exit node.
             if (curLoop != null) {
-                Preconditions.checkArgument(!loopExitNodes.isEmpty()
-                                && loopExitNodes.containsKey(curLoop),
-                        "Obtain loop structure failed.");
+                assert loopExitNodes.containsKey(curLoop) :
+                        "Cannot get loop exit nodes for loop start " + curLoop + ".";
                 if (loopExitNodes.get(curLoop).contains(pre)) {
                     // If pre is a loop exit node, then we exit the curLoop.
                     loopDepthTable.remove(curLoop);
-                    loops.get(inThread).pop();
+                    CFANode removedLoop = loops.get(inThread).pop();
+                    assert Objects.equals(removedLoop, curLoop) :
+                            "Try to remove a loop " + removedLoop + ", which mismatches" +
+                                    " the current loop " + curLoop + "!.";
                 }
             }
         }
-        // Debug.
-//        System.out.println(cfaEdge + "@" + (!loops.get(inThread).isEmpty() ?
-//                loopDepthTable.get(loops.get(inThread).peek()) : 0));
     }
 
     /**
-     * @return 0 if this state is not in any loop (just thinking of the inThread), the
+     * @return 0 if this state is not inside any loop (just considering the inThread), the
      * depth of the current loop else.
      */
     public int getLoopDepth() {
+        assert loops.containsKey(inThread);
         if (loops.get(inThread).isEmpty()) {
             return 0;
         }
+        // At current state, we may locate in nested loops. For this case, we compute
+        // loop depth by hashing, until we get a non-zero hash value.
         int res = 0;
-        for (CFANode loop : loops.get(inThread)) {
-            int depth = loopDepthTable.get(loop);
-            res = hash(res, loop, depth);
-        }
+        do {
+            for (CFANode loop : loops.get(inThread)) {
+                int depth = loopDepthTable.get(loop);
+                res = hash(res, loop, depth);
+            }
+        } while (res != 0);
 
         return res;
     }
 
     // Update the lock status.
     public void updateLockStatus(CFAEdge edge) {
-        if (!locks.containsKey(inThread)) {
-            locks.put(inThread, new Stack<>());
-        }
+        locks.putIfAbsent(inThread, new Stack<>());
+        caas.putIfAbsent(inThread, NOT_IN);
 
-        if (!caas.containsKey(inThread)) {
-            caas.put(inThread, NOT_IN);
-        }
-
-        // Possible lock variable in edge.
+        // Get lock variable in the edge if exists.
         Pair<LockStatus, String> l = getLock(edge);
-        Stack<String> curLocks = locks.get(inThread);
+        Stack<String> curLocks = locks.computeIfAbsent(inThread, k -> new Stack<>());
 
-        // FIXME: critical area end caused by exit and termination edge.
+        // NOTE: end of the critical area that is caused by exit and termination edge.
         if (willTerminate(edge)
                 && (caas.get(inThread) == START || caas.get(inThread) == CONTINUE)) {
             caas.put(inThread, END);
             return;
         }
-//        if (willTerminate(edge)) {
-//            terminateBlock(inThread);
-//            return;
-//        }
 
         caas.put(inThread, handleLock(curLocks, l));
     }
@@ -605,6 +577,13 @@ public class OGPORState implements AbstractState, Graphable {
         return lockName;
     }
 
+    /**
+     * Update the lock status according to the locks of the current thread, and the lock
+     * and lock status obtained from the current edge.
+     * @param curLocks locks of the current thread.
+     * @param pL pair of the lock and lock status obtained from the {@link #enteringEdge}.
+     * @return Updated critical area action {@link CriticalAreaAction}.
+     */
     private CriticalAreaAction handleLock(Stack<String> curLocks,
             Pair<LockStatus, String> pL) {
         String l = pL.getSecond(), l0;
@@ -623,47 +602,53 @@ public class OGPORState implements AbstractState, Graphable {
                 assert !curLocks.isEmpty();
                 l0 = curLocks.peek();
                 if (lockStatus == LOCK) {
-                    // FIXME
+                    // NOTE: nested locks.
                     // Push a new lock after having pushed one before.
                     curLocks.push(l);
                     return CONTINUE;
                 } else {
                     if (lockMatch(l, l0)) {
-                        // Unlock.
+                        // Unlock l0, just remove it from the curLocks.
                         curLocks.pop();
-                        // FIXME: empty-content block?
                         return curLocks.isEmpty() ? END : CONTINUE;
                     } else if (curLocks.contains(l)) {
+                        // FIXME: in this case, locks aren't acquired or released like a
+                        //  stack: { ABBA }, instead they are nested out of the order like
+                        //  : { ABAB }. Should we keep the critical area till all locks
+                        //  released?
                         // Current critical area preserved.
                         curLocks.remove(l);
-                        Preconditions.checkArgument(!curLocks.isEmpty(),
-                                "Unlocking a lock that doesn't at the top of " +
-                                        "stack should leave locks not empty");
+                        assert !curLocks.isEmpty() :
+                                "Removing a lock not at the top of the " +
+                                        "stack should leave locks not empty!";
                         return CONTINUE;
                     }
-                    throw new UnsupportedOperationException("Cannot unlock a lock not held");
+                    throw new UnsupportedOperationException(
+                            "Trying to release a lock not held!");
+                    // logger.log(Level.WARNING, "Release a lock not held!");
                 }
 
             case CONTINUE:
                 if (lockStatus == LOCK) {
                     // FIXME: nested locks.
                     curLocks.push(l);
-                    // Add a new lock couldn't terminate the current critical area.
+                    // Add a new lock won't terminate the current critical area.
                     return CONTINUE;
                 } else {
                     l0 = curLocks.peek();
                     if (lockMatch(l, l0)) {
-                        // Unlock.
+                        // Unlock l0.
                         curLocks.pop();
                         return curLocks.isEmpty() ? END : CONTINUE;
                     } else if (curLocks.contains(l)) {
                         curLocks.remove(l);
-                        Preconditions.checkArgument(!curLocks.isEmpty(),
-                                "Unlocking a lock that doesn't at the top of " +
-                                        "stack should make locks not empty");
+                        assert !curLocks.isEmpty() :
+                                "Removing a lock not at the top of the " +
+                                        "stack should leave locks not empty!";
                         return CONTINUE;
                     }
-                    throw new UnsupportedOperationException("Cannot unlock a lock not held");
+                    throw new UnsupportedOperationException(
+                            "Trying to release a lock not held!");
                 }
 
             case END:
@@ -673,8 +658,8 @@ public class OGPORState implements AbstractState, Graphable {
                     curLocks.push(l);
                     return START;
                 } else {
-                    throw new UnsupportedOperationException("Unlocking " +
-                            "is not allowed when no lock held.");
+                    throw new UnsupportedOperationException(
+                            "Trying to release a lock not held!");
                 }
 
             default:
@@ -684,6 +669,7 @@ public class OGPORState implements AbstractState, Graphable {
     }
 
 
+    // TODO: find a better implementation.
     private boolean lockMatch(String l, String l0) {
         if (Objects.equals(l, l0)) {
             return true;

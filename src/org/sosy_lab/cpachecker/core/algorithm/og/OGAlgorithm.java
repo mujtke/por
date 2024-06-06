@@ -174,7 +174,7 @@ public class OGAlgorithm implements Algorithm {
                 noGraphs = new ArrayList<>();
         List<ObsGraph> parGraphs = OGMap.get(parState.getStateId()), chGraphs = null;
         assert parGraphs != null && !parGraphs.isEmpty() :
-                "There is one graph in the parState at least.";
+                "Require one graph at least but not found in s" + parState.getStateId() + "!";
 
         // Use this array of boolean to indicate whether a graph has been removed
         // from the parent state.

@@ -61,9 +61,7 @@ public class GlobalInfo {
     return Optional.ofNullable(cfaInfo);
   }
 
-  public OGInfo getOgInfo() {
-    return ogInfo;
-  }
+  public OGInfo getOgInfo() { return ogInfo; }
 
   public synchronized void buildOGInfo(final Configuration pConfig) {
     Preconditions.checkState(pConfig != null && cfaInfo != null);

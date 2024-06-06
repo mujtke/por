@@ -12,17 +12,11 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.AbstractCPA;
 import org.sosy_lab.cpachecker.core.defaults.AutomaticCPAFactory;
 import org.sosy_lab.cpachecker.core.interfaces.*;
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
-import org.sosy_lab.cpachecker.util.threading.MultiThreadState;
-import org.sosy_lab.cpachecker.util.threading.SingleThreadState;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.logging.Logger;
 
 @Options(prefix = "cpa.ogpor")
 public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis {
@@ -31,13 +25,6 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
     private final CFA cfa;
     private final LogManager logger;
     private final ShutdownNotifier shutdownNotifier;
-
-   @Option(secure = true,
-           description = "With this option enabled, function calls that occur in the CFA are "
-               + "followed. By disabling this option one can traverse a function without "
-               + "following function calls (in this case FunctionSummaryEdges are used).")
-    private boolean followFunctionCall = true;
-
 
     public static CPAFactory factory() { return AutomaticCPAFactory.forType(OGPORCPA.class); }
 
@@ -53,24 +40,35 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
         super("sep", "sep",
             new OGPORTransferRelation(pConfig, pCfa, pLogger, pShutdownNotifier));
         config = pConfig;
+        config.inject(this);
         cfa = pCfa;
         logger = pLogger;
         shutdownNotifier = pShutdownNotifier;
     }
 
     @Override
-    public AbstractState getInitialState(CFANode node, StateSpacePartition partition) throws InterruptedException {
+    public AbstractState getInitialState(CFANode node, StateSpacePartition partition)
+            throws InterruptedException {
 
         String mainFuncName = cfa.getMainFunction().getFunctionName();
         OGPORState initState = new OGPORState(0, new DummyCFAEdge(null, null));
+        OGPORTransferRelation transferRelation = (OGPORTransferRelation) getTransferRelation();
+
         initState.getThreads().put(mainFuncName, "N" + node.getNodeNumber());
         initState.setCfa(cfa);
         initState.setLoopInfo();
+        initState.setLogger(logger);
+        initState.setEdgeVarMap();
+        initState.setAtomicBegins(transferRelation.getAtomicBegins());
+        initState.setAtomicEnds(transferRelation.getAtomicEnds());
+        initState.setLockBegins(transferRelation.getLockBegins());
+        initState.setLockEnds(transferRelation.getLockEnds());
+        initState.extractPatterns();
+
         // initially, the first element of OGMap is set to be 'initState.num <-> \empty'.
         GlobalInfo.getInstance().getOgInfo().getOGMap().put(initState.getNum(),
                 new ArrayList<>(Collections.singleton(new ObsGraph())));
 
         return initState;
     }
-
 }
