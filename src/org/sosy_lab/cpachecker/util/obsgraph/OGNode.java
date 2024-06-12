@@ -587,7 +587,7 @@ public class OGNode implements Copier<OGNode> {
     // Get the read events that need to visit when we are visiting the corresponding node.
     public void getRsNeedToVisit(@NonNull Set<SharedEvent> rFlag) {
         Rs.forEach(e -> {
-            if (events.indexOf(e) > LHEIndex)
+            if (events.indexOf(e) > LHEIndex && e.getReadFrom() == null)
                 rFlag.add(e);
         });
     }
