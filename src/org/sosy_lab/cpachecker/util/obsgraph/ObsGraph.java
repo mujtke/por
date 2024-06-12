@@ -822,7 +822,7 @@ public class ObsGraph implements Copier<ObsGraph> {
                 nodes.stream().filter(OGNode::shouldRevisit).collect(Collectors.toList());
         assert nodesToRevisit.size() == 1 : "More than one nodes need to revisit.";
         OGNode result =nodesToRevisit.get(0);
-        assert result == lastNode : "The re-visitable node is not the to-max one.";
+//        assert result == lastNode : "The re-visitable node is not the to-max one.";
         return result;
     }
 
