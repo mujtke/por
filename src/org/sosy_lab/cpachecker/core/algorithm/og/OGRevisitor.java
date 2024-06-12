@@ -6,13 +6,13 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
 import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
@@ -44,6 +44,8 @@ public class OGRevisitor {
         this.enableDebug = pEnableDebug;
     }
 
+    public boolean isEnableDebug() { return enableDebug; }
+
     /**
      * @param precision useful when computing the satisfiability for reading from an
      *                  indeterminate assignment.
@@ -51,6 +53,7 @@ public class OGRevisitor {
      * @param result All results produced by revisit process.
      */
     public void apply(ARGState parState,
+            ARGState chState,
             Precision precision,
             List<ObsGraph> graphs,
             List<Pair<AbstractState, ObsGraph>> result) {
@@ -60,12 +63,13 @@ public class OGRevisitor {
         for (ObsGraph graph : graphs) {
             if (!graph.needToRevisit())
                 continue;
-            result.addAll(revisit(parState, precision, graph));
+            result.addAll(revisit(parState, chState, precision, graph));
         }
     }
 
     // parState: indicating where the revisit takes place.
     private List<Pair<AbstractState, ObsGraph>> revisit(ARGState parState,
+            ARGState chState,
             Precision precision,
             ObsGraph g) {
         List<Pair<AbstractState, ObsGraph>> result = new ArrayList<>();
@@ -102,17 +106,17 @@ public class OGRevisitor {
                             // a revisit for a read event, i.e., those in the same node
                             // with and behind 'ap'.
                             List<SharedEvent> delete =
-                                    getDelete(REVISIT_TYPE.READ, Gr, wp, ap);
+                                    getDelete(REVISIT_TYPE.READ, Gr, ap, wp);
                             // Maximality should always hold when revisiting a read.
                             Gr.removeDelete(delete, ap);
                             Pair<ObsGraph, ObsGraph> GrAndcoGr =
                                     setReadFrom(Gr, ap, wp, REVISIT_TYPE.READ, precision);
 
                             Gr = GrAndcoGr.getFirstNotNull(); // Gr must not be null.
-                            handleRevisitResult(result, RG, Gr, parState, enableDebug);
+                            handleRevisitResult(result, RG, G0, Gr, parState, chState);
                             coGr = GrAndcoGr.getSecond(); // coGr may be null.
                             if (coGr != null)
-                                handleRevisitResult(result, RG, coGr, parState, enableDebug);
+                                handleRevisitResult(result, RG, G0, coGr, parState, chState);
                         }
                         break;
 
@@ -136,10 +140,11 @@ public class OGRevisitor {
                                     setReadFrom(Gw, rp, ap, REVISIT_TYPE.WRITE, precision);
 
                             Gw = GwAndcoGw.getFirstNotNull(); // Gw must not be null.
-                            handleRevisitResult(result, RG, Gw, parState, enableDebug);
+                            handleRevisitResult(result, RG, G0, Gw, parState, chState);
+
                             coGw = GwAndcoGw.getSecond(); // coGw may be null.
                             if (coGw != null)
-                                handleRevisitResult(result, RG, coGw, parState, enableDebug);
+                                handleRevisitResult(result, RG, G0, coGw, parState, chState);
                         }
                         break;
 
@@ -154,13 +159,13 @@ public class OGRevisitor {
 
     private void handleRevisitResult(final List<Pair<AbstractState, ObsGraph>> result,
             final List<ObsGraph> RG,
+            final ObsGraph G0,
             final ObsGraph G,
             final ARGState parState,
-            boolean enableDebug) {
+            final ARGState chState) {
         if (G == null)
             return;
 
-        AbstractState pivotState = getPivotState(G);
         if (consistent(G)) {
             // If G is consistent, add it to the result.
         } else {
@@ -176,15 +181,21 @@ public class OGRevisitor {
             }
         }
 
+        AbstractState pivotState = getPivotState(G);
+        // Set 'needToRevisit' to false, whether a further revisit is needed is
+        // specified in the future.
+        G.setNeedToRevisit(false);
         result.add(Pair.of(pivotState, G));
         // debug.
         // G.setCreationState(parState);
+        if (isEnableDebug())
+            debugActions(G0, G, chState);
     }
 
     /**
      * By letting {@param r} read from {@param w}, we get a new rf.
      * NOTE: When {@param w} contains indeterminacy, we may get two graphs as the
-     * result, one of them is G and the other is coG.
+     *  result, one of them is G and the other is coG.
      * @param G The graph that {@param r} and {@param w} locate in.
      * @param r The read event which will read from {@param w}.
      * @param w The write event that will be read by {@param r}.
@@ -198,6 +209,13 @@ public class OGRevisitor {
             SharedEvent w,
             REVISIT_TYPE type,
             Precision precision) {
+        assert r.getReadFrom() != null :
+                "Revisiting requires that the read event must read from some value.";
+        // Remove the old rf.
+        r.removeReadFrom();
+        // Clear the old fr.
+        G.clearFR();
+
         // When setting read-from relation, we may get a new graph because of the indeterminacy.
         ObsGraph coG = null;
         SharedEvent corp = null;
@@ -231,7 +249,7 @@ public class OGRevisitor {
             r.setReadFrom(w);
         }
 
-        if (hasConflict) {
+        else if (hasConflict) {
             // We don't need to create a new graph despite the conflict. Instead, we
             // replace r with the event co-r.
             SharedEvent cor = G.changeAssumeEdge(r);
@@ -244,10 +262,16 @@ public class OGRevisitor {
         if (coG != null)
             coG.deduceFromRead();
 
-        // Debug, r and corp should be the last-handled events in their nodes.
-        r.getInNode().checkLHE(r);
-        if (corp != null)
-            corp.getInNode().checkLHE(corp);
+        // Debug. If type == REVISIT_TYPE.READ, then r and corp should be the last-handled
+        // events in their nodes. Otherwise, w should be the last-handled event in its
+        // node.
+        if (type == REVISIT_TYPE.READ) {
+            r.getInNode().checkLHE(r);
+            if (corp != null)
+                corp.getInNode().checkLHE(corp);
+        } else {
+            w.getInNode().checkLHE(w);
+        }
 
         return Pair.of(G, coG);
     }
@@ -299,20 +323,9 @@ public class OGRevisitor {
             List<SharedEvent> deletePlusR,
             SharedEvent w) {
         for (SharedEvent e : deletePlusR) {
-            List<SharedEvent> previous = new ArrayList<>();
-            // Get previous for e.
-            // FIXME: how to get correct 'previous'?
-            for (OGNode n : G.getNodes()) {
-                // e.getInNode() must be added before w.getInNode()
-                for (SharedEvent ep : n.getEvents()) {
-                    if (G.lessThanOrEqual(ep, e) || G.porf(ep, w))
-                        previous.add(ep);
-                }
-            }
-
+            List<SharedEvent> previous = G.getPrevious(e, w);
             // e is maximally added?
-            boolean maximallyAdded = checkMaximality(previous, e);
-            if (!maximallyAdded)
+            if (!maximallyAdded(previous, e))
                 return false;
         }
         return true;
@@ -323,7 +336,7 @@ public class OGRevisitor {
      * {@param previous}.
      * @param previous the events must be kept after the revisit?
      */
-    private boolean checkMaximality(List<SharedEvent> previous, SharedEvent e) {
+    private boolean maximallyAdded(List<SharedEvent> previous, SharedEvent e) {
         boolean eIsWrite = e.getAType() == WRITE;
         SharedEvent ep = eIsWrite ? e : e.getReadFrom();
         assert ep != null : "Cannot find ep for event: " + e;
@@ -425,7 +438,7 @@ public class OGRevisitor {
         // Handle the node that r in.
         OGNode rNode = r.getInNode();
         List<SharedEvent> events = r.getInNode().getEvents();
-        for (int i = events.indexOf(r); i < events.size(); i++) {
+        for (int i = events.indexOf(r) + 1; i < events.size(); i++) {
             SharedEvent e = events.get(i);
             if (r.inSameEdgeWith(e))
                 continue;
@@ -484,5 +497,18 @@ public class OGRevisitor {
 //        }
 
         return false;
+    }
+
+    // Debug.
+    private void debugActions(ObsGraph G, ObsGraph Gp, ARGState chState) {
+        // Gp is produced by revisiting G.
+        Map<Integer, Map<Integer, List<String>>>  revisitOGMap =
+                GlobalInfo.getInstance().getOgInfo().getRevisitOGMap();
+        Map<Integer, List<String>> revisitOgsMap =
+                revisitOGMap.computeIfAbsent(chState.getStateId(), k -> new HashMap<>());
+        List<String> revisitOgs =
+                revisitOgsMap.computeIfAbsent(System.identityHashCode(G), k -> new ArrayList<>());
+        String revisitOg = DebugAndTest.getDotStr(Gp);
+        revisitOgs.add(revisitOg);
     }
 }

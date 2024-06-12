@@ -59,71 +59,27 @@ public class SharedEvent implements Copier<SharedEvent> {
 
     // Remove rf, fr and mo for this event.
     public void removeAllRelations() {
+        List<SharedEvent> toRemove;
         // Rf
         if (readFrom != null)
             removeReadFrom();
-        readBy.forEach(this::removeReadBy);
+        toRemove = new ArrayList<>(readBy);
+        toRemove.forEach(this::removeReadBy);
+        // readBy.forEach(this::removeReadBy);
 
         // Fr.
-        fromRead.forEach(this::removeFromRead);
-        fromReadBy.forEach(this::removeFromReadBy);
+        toRemove = new ArrayList<>(fromRead);
+        toRemove.forEach(this::removeFromRead);
+        toRemove = new ArrayList<>(fromReadBy);
+        toRemove.forEach(this::removeFromReadBy);
+        // fromRead.forEach(this::removeFromRead);
+        // fromReadBy.forEach(this::removeFromReadBy);
 
         // Mo.
         if (moAfter != null)
             removeMoAfter();
         if (moBefore != null)
             removeMoBefore();
-    }
-
-    // FIXME
-    public void copyRelations(SharedEvent coEvent) {
-        // InNode.
-        coEvent.inNode = inNode;
-        // Rf.
-        if (readFrom != null) {
-            coEvent.readFrom = readFrom;
-            readFrom.readBy.remove(this);
-            readFrom.readBy.add(coEvent);
-            readFrom = null;
-        }
-        // Rb.
-        if (!readBy.isEmpty()) {
-            readBy.forEach(rb -> {
-                rb.readFrom = coEvent;
-                coEvent.readBy.add(rb);
-            });
-            readBy.clear();
-        }
-        // Fr.
-        if (!fromRead.isEmpty()) {
-            fromRead.forEach(fr -> {
-                fr.fromReadBy.remove(this);
-                fr.fromReadBy.add(coEvent);
-                coEvent.fromRead.add(fr);
-            });
-            fromRead.clear();
-        }
-        // Frb.
-        if (!fromReadBy.isEmpty()) {
-            fromReadBy.forEach(frb -> {
-                frb.fromRead.remove(this);
-                frb.fromRead.add(coEvent);
-                coEvent.fromReadBy.add(frb);
-            });
-            fromReadBy.clear();
-        }
-        // Ma.
-        if (moAfter != null) {
-            coEvent.moAfter = moAfter;
-            moAfter.moBefore = coEvent;
-            moAfter = null;
-        }
-        // Mb.
-        if (moBefore != null) {
-            coEvent.moBefore = moBefore;
-            moBefore.moAfter = coEvent;
-            moBefore = null;
-        }
     }
 
     /**
@@ -274,7 +230,9 @@ public class SharedEvent implements Copier<SharedEvent> {
 
         /* Write before: no copy. */
 
-        /* From read: no copy. */
+        /* From read. */
+        this.fromRead.forEach(fr -> nEvent.fromRead.add(fr.deepCopy(memo)));
+        this.fromReadBy.forEach(frb -> nEvent.fromReadBy.add(frb.deepCopy(memo)));
 
         nEvent.inNode = this.inNode == null ? null : this.inNode.deepCopy(memo);
 

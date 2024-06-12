@@ -40,7 +40,10 @@ public class OGPORState implements AbstractState, Graphable {
     private static LogManager logger;
     private static CFA cfa;
     // Use this var to record the length of the path till the current state.
-    private int num;
+    private int pathLen;
+
+    // Use this var to aid the obtaining of the ObsGraphs, as the key of OGMap.
+    private int sid;
     /**
      * Assume there is an edge: sn -- Ei --> sm, then the value of 'inThread' will be
      * the activeThread of 'Ei', which comes from the threadingState in sn. We set
@@ -63,6 +66,11 @@ public class OGPORState implements AbstractState, Graphable {
 
     // tid -> parent's tid
     private final Map<String, String> parentThread = new HashMap<>();
+
+    public int getSid() { return sid; }
+
+    public void setSid(int sid) { this.sid = sid; }
+
 
     public CriticalAreaAction getInCaa() {
         assert inThread != null;
@@ -135,7 +143,7 @@ public class OGPORState implements AbstractState, Graphable {
 
     @Override
     public int hashCode() {
-        return hash(num, inThread, threads);
+        return hash(pathLen, sid, inThread, threads);
     }
 
     @Override
@@ -145,7 +153,8 @@ public class OGPORState implements AbstractState, Graphable {
         }
         if (obj instanceof OGPORState) {
             OGPORState other = (OGPORState) obj;
-            return num == other.num
+            return pathLen == other.pathLen
+                    && sid == other.sid
                     && inThread.equals(other.inThread)
                     && threads.equals(other.threads);
         }
@@ -154,7 +163,7 @@ public class OGPORState implements AbstractState, Graphable {
 
     @Override
     public String toString() {
-        return "[" + num + "] " + inThread + "@" + threads.get(inThread);
+        return "[" + pathLen + "] " + inThread + "@" + threads.get(inThread);
     }
 
     @Override
@@ -168,8 +177,9 @@ public class OGPORState implements AbstractState, Graphable {
     @Override
     public boolean shouldBeHighlighted() { return true; }
 
-    public OGPORState(int pNum, CFAEdge pEdge) {
-        num = pNum;
+    public OGPORState(int pPathLen, CFAEdge pEdge) {
+        pathLen = pPathLen;
+        sid = -1;
         threads = new HashMap<>();
         enteringEdge = pEdge;
         if (!(pEdge instanceof DummyCFAEdge))
@@ -274,7 +284,7 @@ public class OGPORState implements AbstractState, Graphable {
     public void setThreads(Map<String, String> pThreads) {
         threads.putAll(pThreads);
     }
-    public int getNum() { return num; }
+    public int getPathLen() { return pathLen; }
 
     public String getInThread() { return this.inThread; }
 
@@ -296,7 +306,7 @@ public class OGPORState implements AbstractState, Graphable {
         loopDepthTable.putAll(pLoopDepthTable);
     }
 
-    public void setNum(int pNum) { this.num = pNum; }
+    public void setPathLen(int pPathLen) { this.pathLen = pPathLen; }
 
     public void setCfa(CFA pCfa) { cfa = pCfa; }
 
@@ -378,14 +388,6 @@ public class OGPORState implements AbstractState, Graphable {
         }
 
         caas.put(inThread, handleLock(curLocks, l));
-    }
-
-    public boolean terminateBlock(String thd) {
-        if (caas.get(thd) == START || caas.get(thd) == CONTINUE){
-            caas.put(thd, END);
-            return true;
-        }
-        return false;
     }
 
     private boolean willTerminate(CFAEdge edge) {

@@ -117,7 +117,6 @@ public class OGNode implements Copier<OGNode> {
         OGNode nNode = new OGNode();
         nNode.blockEdges.addAll(this.blockEdges);
         // Put the copy into memo.
-//        memo.put(this, nNode);
         memo.put(System.identityHashCode(this), nNode);
 
         // The threadsLoc and inThread are used to distinguish different OGNodes that has
@@ -125,10 +124,10 @@ public class OGNode implements Copier<OGNode> {
         // Because String is immutable, so shallow copy has the same effect with a deep
         // one.
         nNode.loopDepth = this.loopDepth;
+        nNode.simpleNode = this.simpleNode;
         // FIXME: When we copy the node from the nodeMap, we may miss the threadLoc.
         nNode.inThread = String.valueOf(this.inThread);
         nNode.threadLoc.putAll(this.threadLoc); /* Deep copy */
-        // This variable is not in use now.
         nNode.inGraph = this.inGraph;
         nNode.LHEIndex = this.LHEIndex;
         nNode.lastVisitedEdge = this.lastVisitedEdge;
@@ -376,7 +375,7 @@ public class OGNode implements Copier<OGNode> {
         assert events.contains(e) && (Rs.contains(e) || Ws.contains(e)) :
                 "Trying to remove a event not in the node!";
         int i = events.indexOf(e);
-        assert LHEIndex > 0 :
+        assert LHEIndex >= 0 :
                 "It's impossible to remove a event with last-handled event not set.";
         if (i <= LHEIndex)
             LHEIndex--;
@@ -458,7 +457,11 @@ public class OGNode implements Copier<OGNode> {
                     // For multiple writes to the same var, only the last one will be added.
                     sameW = getWriteToSameVar(e);
                     if (sameW != null) {
-                        removeEvent(sameW);
+                        // The sameW will be covered by e, so we remove it.
+                        assert events.contains(sameW) && Ws.remove(sameW) :
+                                "Trying to cover a write event not added yet!";
+                        events.remove(sameW);
+                        Ws.remove(sameW);
                     }
                     events.add(e);
                     e.setInNode(this);
@@ -636,6 +639,10 @@ public class OGNode implements Copier<OGNode> {
         return hasBeenAddedToGraph;
     }
 
+    public void setHasBeenAddedToGraph(boolean pHasBeenAddedToGraph) {
+        hasBeenAddedToGraph = pHasBeenAddedToGraph;
+    }
+
     // FIXME
     public void addEdgeWithEvents(CFAEdge edge, List<SharedEvent> sharedEvents) {
         blockEdges.add(edge);
@@ -655,15 +662,14 @@ public class OGNode implements Copier<OGNode> {
      * For rf, mo, fr and other relations that could be defined on shared events, we update
      * the relations between nodes accordingly when relations between events changed.
      */
-    public void removeMoAfter(OGNode maInNode) {
-        assert maInNode != null
-                && moAfter.contains(maInNode) && maInNode.moBefore.contains(this);
-        moAfter.remove(maInNode);
+    public void removeMoAfter(OGNode maNode) {
+        assert maNode != null && moAfter.contains(maNode);
+        moAfter.remove(maNode);
     }
 
-    public void removeMoBefore(OGNode mbInNode) {
-        assert mbInNode != null && moBefore.contains(mbInNode);
-        moBefore.remove(mbInNode);
+    public void removeMoBefore(OGNode mbNode) {
+        assert mbNode != null && moBefore.contains(mbNode);
+        moBefore.remove(mbNode);
     }
 
     public void removeReadFrom(OGNode rfNode) {
@@ -803,47 +809,45 @@ public class OGNode implements Copier<OGNode> {
         happenBefore.remove(haNode);
     }
 
-    // Note: here is a strong assumption: before removing all relations for this,
-    // we should have remove all relations for all events that belongs to this node.
+    /**
+     * Note: here is a strong assumption: before removing all relations for this,
+     * we should have remove all relations for all events that belongs to this node.
+     * @implNote For rf, fr and mo, we don't need to remove them here, we should have
+     * done that when we remove all relations for the events in the node.
+     */
     public void removeAllRelations() {
-        // Remove po, rf, fr, to and mo.
+        // Remove po (and rf, fr, mo).
         OGNode tmp;
         // po.
         if (predecessor != null) {
             predecessor.removeSuccessor(this);
             removePredecessor();
         }
-        successors.forEach(suc -> {
-            suc.removePredecessor();
-            removeSuccessor(suc);
-        });
+        successors.forEach(OGNode::removePredecessor);
+        successors.clear();
+
         // rf.
-        readFrom.forEach(rf -> {
-            rf.removeReadBy(this);
-            removeReadFrom(rf);
-        });
-        readBy.forEach(rb -> {
-            rb.removeReadFrom(this);
-            removeReadBy(rb);
-        });
+//        readFrom.forEach(rf -> rf.removeReadBy(this));
+//        readFrom.clear();
+//        readBy.forEach(rb -> rb.removeReadFrom(this));
+//        readBy.clear();
+        assert readFrom.isEmpty() && readBy.isEmpty();
+
         // fr.
-        fromRead.forEach(fr -> {
-            fr.removeFromReadBy(this);
-            removeFromRead(fr);
-        });
-        fromReadBy.forEach(frb -> {
-            frb.removeFromRead(this);
-            removeFromReadBy(frb);
-        });
+//        fromRead.forEach(fr -> fr.removeFromReadBy(this));
+//        fromRead.clear();
+//        fromReadBy.forEach(frb -> frb.removeFromRead(this));
+//        fromReadBy.clear();
+        assert fromRead.isEmpty() && fromReadBy.isEmpty();
+
         // mo.
-        moBefore.forEach(mb -> {
-            mb.removeMoAfter(this);
-            removeMoBefore(mb);
-        });
-        moAfter.forEach(ma -> {
-            ma.removeMoBefore(this);
-            removeMoAfter(ma);
-        });
+//        moBefore.forEach(mb -> mb.removeMoAfter(this));
+//        moBefore.clear();
+//        moAfter.forEach(ma -> ma.removeMoBefore(this));
+//        moAfter.clear();
+        assert moBefore.isEmpty() && moAfter.isEmpty();
+
+        // Remove to in another place.
     }
 
     /**

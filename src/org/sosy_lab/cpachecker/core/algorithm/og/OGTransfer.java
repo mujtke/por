@@ -124,6 +124,7 @@ public class OGTransfer {
 
         // For debugging.
         int parId = parState.getStateId(), chId = chState.getStateId();
+        ObsGraph g = graphWrapper.get(0);
 
         OGPORState chOgState =
                 AbstractStates.extractStateByType(chState, OGPORState.class);
@@ -195,8 +196,7 @@ public class OGTransfer {
         assert chOgState != null;
         String curThd = chOgState.getInThread();
         OGNode node = graph.getCurrentNode(curThd);
-        if (node != null)
-            assert node.isSimpleNode();
+
         List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
         int edgeType = getEdgeType(sharedEvents, edge);
         boolean newNodeCreated = false;
@@ -204,10 +204,19 @@ public class OGTransfer {
 
         if (edgeType == 0) { // Local non-assumption edge.
             //
+            node = null; // We still don't meet the node.
         } else if (edgeType == 1) { // Local assumption edge.
+            node = null;
             CFAEdge coARGEdge = getCoEdgeFromARG(parState, edge);
             if (coARGEdge != null && isSimpleTransfer) {
-                // Indeterminacy exists, and it's the first time that graph meet the edge.
+                // In this case indeterminacy exists, and it's the first time that the
+                // graph meet the edge. We need to traverse both two edges.
+                // This is done only when a graph meets the edge at the first
+                // time, otherwise, the graph has known which edge to choose. This
+                // is because the graph has stored the corresponding edge at the
+                // first time.
+                // Specifically, if graph G choose edge(d), then its deep copy nG will
+                // choose coEdge(!d). And either of them will remember their choices.
                 copiedGraph = handleNonDet(graph, parState, edge);
                 graph.addVisitedAssumeEdge(curThd, edge, chOgState);
             } else if (coARGEdge != null) {
@@ -218,10 +227,11 @@ public class OGTransfer {
             }
         } else if (edgeType == 2) { // Shared non-assumption edge
             if (node != null) {
-                // In this case, we must check the conflict. But we cannot check the
-                // conflict until we visit the node and update its relations.
+                // In this case, we must check the conflict.
                 assert node.contains(edge) :
                         "A simple node must contains its only edge!";
+                if (isConflict(graph, curThd, node))
+                    return Pair.of(null, null);
             } else if (hasUnmetNode(graph)) { // Node == null and there are unmet nodes.
                 // Transfer requires no unmet nodes.
                 return Pair.of(null, null);
@@ -233,12 +243,16 @@ public class OGTransfer {
                         parState,
                         chState);
                 node.addEvents(sharedEvents);
+                graph.addNode(node);
                 // Indicate there is no need to check the conflict.
                 newNodeCreated = true;
             }
             // edgeType = 2
         } else { // Shared assumption edge.
             if (node != null) {
+                // FIXME: check the conflict first?
+                if (isConflict(graph, curThd, node))
+                    return Pair.of(null, null);
                 boolean edgeInNode = node.contains(edge);
                 if (!edgeInNode) { // The node doesn't contain the edge.
                     // In this case, we should transfer the graph along the coEdge,
@@ -269,23 +283,25 @@ public class OGTransfer {
                         parState,
                         chState);
                 node.addEvents(sharedEvents);
+                graph.addNode(node);
                 newNodeCreated = true;
             }
         }
 
         // assert graph != null;
         if (node != null) {
-            visitNode(graph, node);
-            node.updatePreAndSucState(parState, chState);
+            graph.visitNode(node, true);
             if (!newNodeCreated && isConflict(graph, curThd, node))
-                graph = null;
+                return Pair.of(null, null);
+            node.updatePreAndSucState(parState, chState);
+            node.setLoopDepth(chOgState.getLoopDepth());
         }
-        if (graph != null) {
-            graph.setNeedToRevisit(node != null && node.shouldRevisit());
-            if (node != null)
-                graph.updateCurrentNodeTable(curThd, node);
-            graphWrapper.clear();
-        }
+        assert graph != null;
+        graph.setNeedToRevisit(node != null && node.shouldRevisit());
+        // we have reached the end of the node, so update the current node for curThd.
+        if (node != null)
+            graph.updateCurrentNodeTable(curThd, node);
+        graphWrapper.clear();
         if (enableDebug)
             debugActions(graph, parState, chState, edge);
         result = Pair.of(graph, copiedGraph);
@@ -376,7 +392,7 @@ public class OGTransfer {
         if (graph != null) {
             // Even if the node has been added to the graph, we may still need to set
             // relations for the events after lhe.
-            visitNode(graph, node);
+            graph.visitNode(node, true);
             // After set relations, we need to check the conflict.
             if (isConflict(graph, curThd, node)) // Conflict exists.
                 graph = null;
@@ -385,6 +401,7 @@ public class OGTransfer {
             node.updatePreAndSucState(null, chState);
             node.setLoopDepth(chOgState.getLoopDepth());
             graph.setNeedToRevisit(node.shouldRevisit());
+            // having reached the end of the node, update the current node for curThd.
             graph.updateCurrentNodeTable(curThd, node);
             graphWrapper.clear();
             if (enableDebug)
@@ -591,11 +608,9 @@ public class OGTransfer {
                 assert !node.isSimpleNode() && node.contains(edge);
                 // NOTE: here is an implicit strong assumption: block start edge contains
                 //  no writes.
-                // We don't check the conflict until the node become complete, because
-                // we can't always know which write events the node will have at this
-                // time.
-                // TODO: For a complete node, we could know its all write events,
-                //  and check the conflict.
+                // Check the conflict.
+                if (isConflict(graph, curThd, node))
+                    return Pair.of(null, null);
             }
             else { // node == null.
                 // We start a new node and enter it if no conflicts exist.
@@ -609,12 +624,14 @@ public class OGTransfer {
                         false,
                         parState,
                         chState);
+                graph.visitNode(node, false);
             }
             // edgeType == 0
         } else if (edgeType == 2) { // Shared non-assumption edge.
             if (node != null) {
                 assert !node.isSimpleNode() && node.contains(edge);
-                // TODO: we check the conflict only when node is complete.
+                if (isConflict(graph, curThd, node))
+                    return Pair.of(null, null);
             } else { // Node == null.
                 if (hasUnmetNode(graph)) {
                     return Pair.of(null, null);
@@ -624,6 +641,7 @@ public class OGTransfer {
                         false,
                         parState,
                         chState);
+                graph.visitNode(node, false);
             }
         } else {
             throw new UnsupportedOperationException(
@@ -678,11 +696,12 @@ public class OGTransfer {
     }
 
     /**
+     * FIXME
      * Handle the case where the node has been added to the graph but the edge
      * not in the node.
      * Assume: edge = d, co-edge = !d, then d is not inside the node.
-     * There are four cases, and each of them has two according to whether the edge
-     * contains shared vars:
+     * There are four main cases, and each of them has two sub-cases according to whether
+     * the edge contains shared vars:
      * (1) !d is not in the ARG but the node:
      *      (A).if edge don't access shared vars, then * we need to replace
      *          !d(co-edge) with d(edge) and transfer the graph along the edge(d).
@@ -691,8 +710,8 @@ public class OGTransfer {
      * (2) !d is neither in the ARG nor the node, then add the edge(d) to the node
      *      and transfer the graph along the edge(d) no matter whether the edge
      *      contains shared vars.
-     * (3) !d is in the ARG but the node, then we need to handle the indeterminacy. No
-     *      whether the edge contains shared vars, we need to copy the graph.
+     * (3) !d is in the ARG but the node, then we need to handle the indeterminacy.
+     *      Despite whether the edge contains shared vars, we need to copy the graph.
      * (4) !d is in the ARG and the node, then transfer should stop here no matter
      *      whether the edge contains shared vars. Because we should transfer the graph
      *      along !d.
@@ -724,53 +743,42 @@ public class OGTransfer {
                 // Replacing coCFAEdge(!d) with edge(d).
                 node.replaceCoEdge(coCFAEdge, edge);
                 assert node.getBlockEdges().contains(edge) :
-                        "Replacing edge " + edge + "Failed.";
+                        "Replacing edge " + edge + "Failed!";
             } else {
                 // Replacement won't happen for shared assumption edge because the graph
                 // remembers which edge it has met. Therefore, transfer gets blocked here.
                 throw new UnsupportedOperationException(
-                        "Transfer gets blocked at " + parState);
+                        "Transfer gets blocked at s" + parState.getStateId());
             }
-        }
+        } // case (1)
 
         else if (!coCFAEdgeInNode && coARGEdge == null) { // case (2)
             // Replacement shouldn't happen. Add the edge(d) to the node.
-            node.addEdgeWithEvents(edge, null);
+            node.addEdgeWithEvents(edge,
+                    isShared ? edgeVarMap.get(edge.hashCode()) : null);
         }
 
         else if (!coCFAEdgeInNode) { // case (3), coARGEdge != null
-            // In this case indeterminacy exists.
-            // When indeterminacy exists, we need to traverse both two edges.
-            // This is done only when a graph meets the edge at the first
-            // time, otherwise, the graph has known which edge to choose. This
-            // is because the graph has stored the corresponding edge at the
-            // first time.
-            // Specifically, if graph G choose edge(d), then its deep copy nG will
-            // choose coEdge(!d). And either of them will remember their choices.
-            if (isSimpleTransfer) { // graph meets the edge first time.
-                copiedGraph = handleNonDet(graph, parState, edge);
-                node.addEdgeWithEvents(edge, null);
-                if (!isShared) {
-                    graph.addVisitedAssumeEdge(curThd, edge, chOgState);
-                } else {
-                    // FIXME: should we store the edge if it contains shared vars?
-                }
-                // Don't add coEdge(!d) for the copied graph, because the latter
-                // still doesn't meet the former now.
-            } else { // not the first time the graph meets the edge.
-                if (!isShared) {
-                    if (!graph.cachedEdgeMatch(curThd, edge, chOgState)) {
-                        graph = null;
-                    }
-                } else {
-                    // FIXME: the case where the edge contains shared vars.
-                    throw new UnsupportedOperationException("Unhandled case: " +
-                            "indeterminacy exists inside node during a multi-step " +
-                            "transfer");
-                }
+            // In this case indeterminacy exists. When indeterminacy exists, we need to
+            // traverse both two edges. If it's the first time that the graph meets the
+            // edge.
+            // FIXME: In this case, the node doesn't contain the edge, which means that
+            //  even if it's not the first time the graph meets the edge, the graph has
+            //  forgotten the edge it visited before because of the revisit, which
+            //  causes some edges to get deleted. Therefore, we handle the case just like
+            //  the graph meets the edge the first time.
+            copiedGraph = handleNonDet(graph, parState, edge);
+            node.addEdgeWithEvents(edge,
+                    isShared ? edgeVarMap.get(edge.hashCode()) : null);
+            if (!isShared) {
+                graph.addVisitedAssumeEdge(curThd, edge, chOgState);
+            } else {
+                // FIXME: should we store the edge if it contains shared vars?
             }
-            // case (3)
-        }
+            // Don't add coEdge(!d) for the copied graph, because the latter
+            // still doesn't meet the former now.
+        } // case (3)
+
         else { // case (4), coCFAEgeInNode && coARGEdge != null
             graph = null;
         }
@@ -830,10 +838,9 @@ public class OGTransfer {
      * @return pair of the target state and the graph.
      */
     public Pair<AbstractState, ObsGraph> multiStepTransfer(Vector<AbstractState> waitlist,
-                                  ARGState leadState,
-                                  List<ObsGraph> graphWrapper) {
-        Preconditions.checkArgument(graphWrapper.size() == 1,
-                "Only one graph in graphWrapper is allowed.");
+            ARGState leadState,
+            List<ObsGraph> graphWrapper) {
+        assert graphWrapper.size() == 1 : "Only one graph in graphWrapper is allowed.";
         // Divide children of leadState into two parts: in the waitlist or not.
         List<ARGState> inWait = new ArrayList<>(), notInWait = new ArrayList<>();
         leadState.getChildren().forEach(s -> {
@@ -845,18 +852,18 @@ public class OGTransfer {
         notInWait.sort(nltcmp);
         // Handle states in the waitlist first.
         for (ARGState chState : inWait) {
-            if (graphWrapper.isEmpty()) return null;
+            if (graphWrapper.isEmpty()) // The graph in wrapper has been transferred.
+                return null;
             CFAEdge etp = leadState.getEdgeToChild(chState);
             assert etp != null;
-            // assert node != null: "Could not find OGNode for edge " + etp;//
-//            ObsGraph chGraph = singleStepTransfer(graphWrapper, etp, leadState, chState);
             Pair<ObsGraph, ObsGraph> transferResult = singleStepTransfer(graphWrapper,
                     etp, leadState, chState, false);
             ObsGraph chGraph = transferResult.getFirst();
             if (chGraph != null) {
-                // Transfer stop, we have found the target state.
-                OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
-                List<ObsGraph> chGraphs = OGMap.get(chState.getStateId());
+                // Find the target state.
+                List<ObsGraph> chGraphs =
+                        OGMap.computeIfAbsent(chState.getStateId(),
+                                k -> new ArrayList<>());
                 chGraphs.add(chGraph);
                 // Adjust the waitlist to ensure chState will be explored before its
                 // siblings that has no graphs.
@@ -864,25 +871,26 @@ public class OGTransfer {
                 return Pair.of(chState, chGraph);
             }
         }
+
         // Handel states not in the waitlist.
         for (ARGState chState : notInWait) {
-            if (graphWrapper.isEmpty()) return null;
+            if (graphWrapper.isEmpty())
+                return null;
             CFAEdge etp = leadState.getEdgeToChild(chState);
             assert etp != null;
-            // assert node != null: "Could not find OGNode for edge " + etp;
-//            ObsGraph chGraph = singleStepTransfer(graphWrapper, etp, leadState, chState);
             Pair<ObsGraph, ObsGraph> transferResult = singleStepTransfer(graphWrapper,
                     etp, leadState, chState, false);
             ObsGraph chGraph = transferResult.getFirst();
             if (chGraph != null) {
                 if (chState.getChildren().isEmpty()) {
-                    // FIXME: chState may be neither in the waitlist nor have any child.
+                    // FIXME: neither the chState is in the waitlist nor does it have any child.
                     // In this case, should we add the chState to the waitlist again?
                     // At the same time, when we can add states to the waitlist, do we
                     // still need to adjust it?
                     waitlist.add(chState);
-                    OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
-                    List<ObsGraph> chGraphs = OGMap.get(chState.getStateId());
+                    List<ObsGraph> chGraphs =
+                            OGMap.computeIfAbsent(chState.getStateId(),
+                                    k -> new ArrayList<>());
                     chGraphs.add(chGraph);
                     return Pair.of(chState, chGraph);
                 }
@@ -892,6 +900,7 @@ public class OGTransfer {
                 return multiStepTransfer(waitlist, chState, newGraphWrapper);
             }
         }
+
         return null;
     }
 
@@ -914,8 +923,10 @@ public class OGTransfer {
         });
 
         for (OGNode otn : otherThdNodes) {
-            if (otn.getFromRead().contains(curNode)
-                    || porf(otn, curNode)) {
+            // FIXME: Which relations should we use here to judge if a node that comes
+            //  from another thread ought to happen before the curNode?
+            // otn.getFromRead().contains(curNode) || porf(otn, curNode) ?
+            if (graph.hb(otn, curNode)) {
                 return true;
             }
         }
@@ -999,62 +1010,6 @@ public class OGTransfer {
             toRemove.clear();
             n = n.getTrAfter();
         }
-    }
-
-    /**
-     * When visiting a node, we add rf relations for the events that behind the
-     * last-handled event of the node, update mo relations for all write events, and
-     * update po for the node.
-     * @param node the specific node that just terminates.
-     */
-    public void visitNode(ObsGraph graph, OGNode node) {
-        Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>();
-        node.getRsNeedToVisit(rFlag);
-        node.getWsNeedToVisit(wFlag);
-        // Indicate whether we have found the predecessor(po) of the node.
-        boolean preFlag = node.getPredecessor() != null;
-        // Till now, the node hasn't been added to the graph, so we choose the last
-        // node in the trace as the start of backtracking.
-        OGNode n = graph.getLastNode();
-        // Backtracking along with the trace.
-        while (n != null) {
-            // FIXME: is there the case where the node isn't in the graph?
-            assert n.isInGraph() :
-                    "Trying to visit a node not in graph when backtracking!";
-            if (!preFlag && n.isPredecessorOf(node)) {
-                n.setSuccessor(node);
-                node.setPredecessor(n);
-                preFlag = true;
-            }
-            if (rFlag.isEmpty() && wFlag.isEmpty()) {
-                // All events in rFlag and wFlag have been handled.
-                if (preFlag) {
-                    // If we have found the predecessor of the node, then stop backtracking.
-                    break;
-                } else {
-                    // Else, continue to find predecessor.
-                    n = n.getTrAfter();
-                    continue;
-                }
-            }
-
-            graph.setRelations(n, rFlag, wFlag);
-            n = n.getTrAfter();
-        }
-
-        if (!graph.contains(node)) {
-            // Add the node to the graph if we visit it the first time.
-            graph.addNode(node);
-        }
-
-        // Update info for node and graph.
-        node.setInGraph(true);
-        if (graph.getLastNode() != null) {
-            graph.getLastNode().setTrBefore(node);
-            node.setTrAfter(graph.getLastNode());
-        }
-        graph.setLastNode(node);
-        graph.setTraceLen(graph.getTraceLen() + 1);
     }
 
     private void adjustWaitlist(Map<Integer, List<ObsGraph>> OGMap,

@@ -90,7 +90,7 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
     }
 
     @Override
-    public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(
+        public Collection<? extends AbstractState> getAbstractSuccessorsForEdge(
             AbstractState state,
             Precision precision,
             CFAEdge cfaEdge)
@@ -98,14 +98,15 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
 
         OGPORState parOGState = (OGPORState) state;
 
-        if (OGMap.get(parOGState.getNum()) == null) {
+        if (OGMap.get(parOGState.getSid()) == null) {
             return Set.of();
         }
 
         if (!edgeVarMap.containsKey(cfaEdge.hashCode())) {
             edgeVarMap.put(cfaEdge.hashCode(), extractor.extractSharedVarsInfo(cfaEdge));
         }
-        OGPORState chOGState = new OGPORState(parOGState.getNum() + 1, cfaEdge);
+
+        OGPORState chOGState = new OGPORState(parOGState.getPathLen() + 1, cfaEdge);
         // initialize some fields of chOGState by using parOGState's. We will update
         // them in 'strengthen' method if needed.
         chOGState.setLoops(parOGState.getLoops());

@@ -41,7 +41,7 @@ public class ObsGraph implements Copier<ObsGraph> {
      * This variable is used to record the assumption edges that read from indeterminate
      * assignments. We get loopDepth and pathLength from the {@link OGPORState},
      * specifically, get loopDepth by {@link OGPORState#getLoopDepth()} and pathLength
-     * by {@link OGPORState#getNum()}.
+     * by {@link OGPORState#getPathLen()}.
      * tid -> [<assumeEdge, loopDepth, pathLength>, ... ]
      */
     private final Map<String, List<Triple<CFAEdge, Integer, Integer>>>
@@ -86,9 +86,10 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
 
     public void addNode(OGNode node) {
-        assert !nodes.contains(node) :
+        assert !nodes.contains(node) && !node.hasBeenAddedToGraph():
                 "Trying to add a node that has been added before!";
         nodes.add(node);
+        node.setHasBeenAddedToGraph(true);
     }
 
     public void removeNode(OGNode node) {
@@ -106,6 +107,8 @@ public class ObsGraph implements Copier<ObsGraph> {
     public List<SharedEvent> getRE() {
         assert lastNode != null :
                 "Try to revisit a graph which has no last node specified.";
+        if (!lastNode.shouldRevisit())
+            return List.of();
         return lastNode.getRE();
     }
 
@@ -255,8 +258,7 @@ public class ObsGraph implements Copier<ObsGraph> {
             else { // 'a' is WRITE.
                 // same-location read.
                 SharedEvent r = nodei.getReadToSameVar(a);
-                if (r == null
-                        || this.porf(r, a))
+                if (r == null /*|| this.porf(r, a) */)
                     continue;
                 // Else, r accesses to the same var as and !porf 'a'.
                 SharedEvent rf = r.getReadFrom();
@@ -272,8 +274,8 @@ public class ObsGraph implements Copier<ObsGraph> {
                         continue;
                     }
                     restoreDeleteRfs(removedRfs);
-                    result.add(r);
                 }
+                result.add(r);
             }
         }
 
@@ -343,8 +345,35 @@ public class ObsGraph implements Copier<ObsGraph> {
         return OGRevisitor.porf(A, B);
     }
 
+    /**
+     * Judge whether (A, B) \in porf^+.
+     */
     public boolean porf(OGNode A, OGNode B) {
+        assert A != null && B != null;
         return OGRevisitor.porf(A, B);
+    }
+
+    /**
+     * Judge whether node A should happen before node B in a trace.
+     */
+    public boolean hb(OGNode A, OGNode B) {
+        assert A != null && B != null;
+        for (OGNode n : A.getSuccessors()) {
+            if (n == B || hb(n, B))
+                return true;
+        }
+
+        for (OGNode n : A.getReadBy()) {
+            if (n == B || hb(n, B))
+                return true;
+        }
+
+        for (OGNode n : A.getFromRead()) {
+            if (n == B || hb(n, B))
+                return true;
+        }
+
+        return false;
     }
 
     /**
@@ -353,10 +382,17 @@ public class ObsGraph implements Copier<ObsGraph> {
      * FIXME: remove cached assumption edges here?
      */
      public void removeDelete(List<SharedEvent> delete, SharedEvent rp) {
+
          OGNode rpn = rp.getInNode();
-         // In rpn, some events may get delete, and we need to remove corresponding
-         // edges, too.
-         Set<CFAEdge> toRemove = new HashSet<>();
+         // In rpn, some events may get delete, and we need to remove corresponding edges, too.
+         CFAEdge rpe = rp.getInEdge();
+         assert rpn.contains(rpe);
+         int rpeIndex = rpn.getBlockEdges().indexOf(rpe);
+         Set<CFAEdge> edgesToRemove = rpn.getBlockEdges().stream()
+                 .filter(edge -> rpn.getBlockEdges().indexOf(edge) > rpeIndex)
+                 .collect(Collectors.toSet());
+         Set<OGNode> nodesToRemove = new HashSet<>();
+
          // remove relations before removing nodes.
          delete.forEach(e -> {
              // For e.
@@ -365,17 +401,17 @@ public class ObsGraph implements Copier<ObsGraph> {
              // For e.inNode.
              OGNode en = e.getInNode();
              if (!Objects.equals(rpn, en)) {
-                 en.removeAllRelations();
                  // Remove node en.
-                 nodes.remove(en);
+                 nodesToRemove.add(en);
              } else {
                  // Don't remove node rpn, just remove event e.
                  rpn.removeEvent(e);
-                 toRemove.add(e.getInEdge());
              }
          });
 
-         rpn.removeEdges(toRemove);
+         rpn.removeEdges(edgesToRemove);
+         nodesToRemove.forEach(OGNode::removeAllRelations);
+         nodes.removeAll(nodesToRemove);
 
          // Remove the corresponding cached assumption edges because of the removal of
          // deleted events.
@@ -417,8 +453,7 @@ public class ObsGraph implements Copier<ObsGraph> {
                  if (w == null) continue;
                  // Deduce fr caused by r and w.
                  OGNode wNode = w.getInNode();
-                 Preconditions.checkState(wNode.getReadBy().contains(node)
-                         && node.getReadFrom().contains(wNode));
+                 assert wNode.readBy(node) && node.readFrom(wNode);
                  for (int m = 0; m < n; m++) {
                      if (porf[nodes.indexOf(wNode)][m] && m != nodes.indexOf(node)) {
                          // if wNode porf nodes[m] and nodes[m] != node (wNode must
@@ -543,7 +578,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         // Add assume edges to the cache when we meet them at the first time.
         List<Triple<CFAEdge, Integer, Integer>> tripleList =
                 cachedAssumeEdges.computeIfAbsent(curThd, k -> new ArrayList<>());
-        tripleList.add(Triple.of(edge, chOgState.getLoopDepth(), chOgState.getNum()));
+        tripleList.add(Triple.of(edge, chOgState.getLoopDepth(), chOgState.getPathLen()));
 
        if (assumeEdgeTable.containsKey(curThd)) {
            assumeEdgeTable.computeIfPresent(curThd, (k, v) -> v + 1);
@@ -611,10 +646,10 @@ public class ObsGraph implements Copier<ObsGraph> {
         OGPORState rOgporState = AbstractStates.extractStateByType(rNode.getPreState(),
                 OGPORState.class);
         assert rOgporState != null && rOgporState.getInThread() != null;
-        int rNodeStartNum = rOgporState.getNum();
+        int rNodeStartPathLen = rOgporState.getPathLen();
         assert rNode.contains(r.getInEdge());
         startPointForRemove.put(rOgporState.getInThread(),
-                rNodeStartNum + rNode.getBlockEdges().indexOf(r.getInEdge()));
+                rNodeStartPathLen + rNode.getBlockEdges().indexOf(r.getInEdge()));
 
         // Handle the events in delete. FIXME: more effective way.
         List<OGNode> deleteNodes = delete.stream().map(SharedEvent::getInNode)
@@ -623,12 +658,12 @@ public class ObsGraph implements Copier<ObsGraph> {
             OGPORState ogporState =
                     AbstractStates.extractStateByType(node.getPreState(), OGPORState.class);
             assert ogporState != null && ogporState.getInThread() != null;
-            int num = ogporState.getNum();
+            int pathLen = ogporState.getPathLen();
             String thd = ogporState.getInThread();
             // For a thread, we need only a minimal start num.
             if (!startPointForRemove.containsKey(thd)
-                    || num < startPointForRemove.get(thd))
-                startPointForRemove.put(thd, num);
+                    || pathLen < startPointForRemove.get(thd))
+                startPointForRemove.put(thd, pathLen);
         }
 
         // Remove assume edges.
@@ -636,13 +671,14 @@ public class ObsGraph implements Copier<ObsGraph> {
             if (!startPointForRemove.containsKey(t))
                 continue;
 
-            int tStartNum = startPointForRemove.get(t);
+            int tStartPathLen = startPointForRemove.get(t);
             List<Triple<CFAEdge, Integer, Integer>> assumeEdgeList =
                     cachedAssumeEdges.get(t), remove = new ArrayList<>();
             for (Triple<CFAEdge, Integer, Integer> triple : assumeEdgeList) {
                 assert triple.getThird() != null;
-                int num = triple.getThird();
-                if (num > tStartNum) { // We don't remove r.inEdge, so it cannot be equal.
+                int pathLen = triple.getThird();
+                if (pathLen > tStartPathLen) { // We don't remove r.inEdge, so it cannot be
+                    // equal.
                     remove.add(triple);
                 }
             }
@@ -653,26 +689,14 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     public void clearFR() {
         // Remove all from-read relations.
-        // FIXME: more effective way to do this?
+        // TODO: a more effective way to do this?
         for (OGNode node : nodes) {
             if (node.getRs().isEmpty()) continue;
             for (SharedEvent r : node.getRs()) {
-                // Handle events first.
-                List<SharedEvent> frs = r.getFromRead();
-                frs.forEach(fr -> fr.getFromReadBy().remove(r));
-                r.getFromRead().clear();
-
-                // Handle nodes.
-                OGNode rNode = r.getInNode();
-                List<OGNode> frns = rNode.getFromRead();
-                frns.forEach(frn -> frn.getFromReadBy().remove(rNode));
-                rNode.getFromRead().clear();
+                List<SharedEvent> toRemove = new ArrayList<>(r.getFromRead());
+                toRemove.forEach(r::removeFromRead);
             }
         }
-    }
-
-    public void deduceFromRead(SharedEvent w, SharedEvent r) {
-        // TODO
     }
 
     /**
@@ -725,5 +749,97 @@ public class ObsGraph implements Copier<ObsGraph> {
             wFlag.removeAll(toRemove);
             toRemove.clear();
         }
+    }
+
+    /**
+     * When visiting a node, we add rf relations for the events that behind the
+     * last-handled event of the node, update mo relations for all write events, and
+     * update po for the node.
+     * @param isTerminated Whether the node has terminated.
+     */
+    public void visitNode(OGNode node, boolean isTerminated) {
+        Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>();
+        node.getRsNeedToVisit(rFlag);
+        node.getWsNeedToVisit(wFlag);
+        // Indicate whether we have found the predecessor(po) of the node.
+        boolean preFlag = node.getPredecessor() != null;
+        // Till now, the node hasn't been added to the graph, so we choose the last
+        // node in the trace as the start of backtracking.
+        OGNode n = lastNode;
+        // Backtracking along with the trace.
+        while (n != null) {
+            // FIXME: is there the case where the node isn't in the graph?
+            assert n.isInGraph() :
+                    "Trying to visit a node not in graph when backtracking!";
+            if (!preFlag && n.isPredecessorOf(node)) {
+                n.setSuccessor(node);
+                node.setPredecessor(n);
+                preFlag = true;
+            }
+            if (rFlag.isEmpty() && wFlag.isEmpty()) {
+                // All events in rFlag and wFlag have been handled.
+                if (preFlag) {
+                    // If we have found the predecessor of the node, then stop backtracking.
+                    break;
+                } else {
+                    // Else, continue to find predecessor.
+                    n = n.getTrAfter();
+                    continue;
+                }
+            }
+
+            setRelations(n, rFlag, wFlag);
+            n = n.getTrAfter();
+        }
+
+        if (!contains(node)) {
+            // Add the node to the graph if we visit it the first time.
+            addNode(node);
+        }
+
+        // Update info for the node and graph if the node has terminated.
+        if (isTerminated) {
+            node.setInGraph(true);
+            if (lastNode != null) {
+                lastNode.setTrBefore(node);
+                node.setTrAfter(lastNode);
+            }
+            setLastNode(node);
+            setTraceLen(traceLen + 1);
+        }
+    }
+
+    /**
+     * @return the re-visitable node.
+     * FIXME:
+     * 1) should the number of the re-visitable nodes be 1? Otherwise, there is
+     * no or more than one re-visitable node in the graph. Is that allowed?
+     * 2) is the returned node to-max? If so, the node is complete and we have add
+     * relations for it.
+     */
+    public OGNode getRevisitNode() {
+        List<OGNode> nodesToRevisit =
+                nodes.stream().filter(OGNode::shouldRevisit).collect(Collectors.toList());
+        assert nodesToRevisit.size() == 1 : "More than one nodes need to revisit.";
+        OGNode result =nodesToRevisit.get(0);
+        assert result == lastNode : "The re-visitable node is not the to-max one.";
+        return result;
+    }
+
+    /**
+     * Get previous for e.
+     * FIXME: how to get correct 'previous'?
+     */
+    public List<SharedEvent> getPrevious(SharedEvent e, SharedEvent w) {
+        List<SharedEvent> result = new ArrayList<>();
+        for (OGNode n : nodes) {
+            // e.getInNode() must be added before w.getInNode()
+            for (SharedEvent ep : n.getEvents()) {
+                if (lessThanOrEqual(ep, e) || porf(ep, w))
+                    result.add(ep);
+            }
+        }
+
+        return result;
     }
 }

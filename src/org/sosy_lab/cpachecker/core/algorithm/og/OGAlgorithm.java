@@ -294,8 +294,8 @@ public class OGAlgorithm implements Algorithm {
         if (!blockedGraphs.isEmpty()) {
             logger.log(Level.WARNING,
                     "Blocked graphs found at state s" + parState.getStateId());
-//            blockedGraphs.forEach(g -> performRevisitForBlockedGraph(g, parState, precision,
-//                    successors, revisitResult));
+            blockedGraphs.forEach(
+                    g -> performRevisitForBlockedGraph(g, parState, precision, revisitResult));
         }
 
         // Remove transferred graphs from parGraphs.
@@ -312,7 +312,7 @@ public class OGAlgorithm implements Algorithm {
             ARGState ch = (ARGState) pair.getFirstNotNull();
             chGraphs = OGMap.get(ch.getStateId());
             assert chGraphs != null;
-            revisitor.apply(parState, precision, chGraphs, revisitResult);
+            revisitor.apply(parState, ch, precision, chGraphs, revisitResult);
         }
 
         // Perform multi-step transfer for all graphs in 'revisitResult'.
@@ -327,8 +327,8 @@ public class OGAlgorithm implements Algorithm {
                 // TODO: do something here, like print result to log?
             } else {
                 // TODO: In this case, have some graphs not been transferred to a proper state?
-                throw new UnsupportedOperationException(
-                        "Some graph hasn't been transferred to a proper state");
+//                throw new UnsupportedOperationException(
+//                        "Some graph hasn't been transferred to a proper state");
             }
         }
 
@@ -362,52 +362,20 @@ public class OGAlgorithm implements Algorithm {
      * FIXME
      * Perform revisit for the blocked graphs.
      */
-    private void performRevisitForBlockedGraph(ObsGraph graph,
+    private void performRevisitForBlockedGraph(
+            ObsGraph graph,
             ARGState parState,
             Precision precision,
-            Collection<? extends AbstractState> successors,
             List<Pair<AbstractState, ObsGraph>> revisitResult) {
-//        if (true) return;
-        int nodeNum = graph.getNodes().size();
-        assert nodeNum > 0;
-        OGNode lastAddedNode = graph.getNodes().get(nodeNum - 1);
-        String thd = lastAddedNode.getInThread();
-        List<AbstractState> sucInThd =
-                successors.stream().filter(suc -> {
-                    OGPORState ogporSuc = AbstractStates.extractStateByType(suc, OGPORState.class);
-                    assert ogporSuc != null;
-                    return Objects.equals(thd, ogporSuc.getInThread());
-                }).collect(Collectors.toList());
-        assert sucInThd.size() == 1;
-        ARGState suc = (ARGState) sucInThd.iterator().next();
-        CFAEdge edge = parState.getEdgeToChild(suc);
-        assert edge != null;
-        // NOTE: here edge should contain some write event, else, graph should not get
-        //  blocked.
-        Map<Integer, List<SharedEvent>> edgeVarMap =
-                GlobalInfo.getInstance().getOgInfo().getEdgeVarMap();
-        if (!lastAddedNode.getBlockEdges().contains(edge)) {
-            // The edge hasn't been added to the graph yet.
-            // FIXME: add events directly?
-            lastAddedNode.addEdgeWithEvents(edge, edgeVarMap.get(edge.hashCode()));
-        } else { // LastAddedNode contains the edge, but we still may need to add some events
-            // FIXME: write events may get covered by the later ones.
-            lastAddedNode.addEvents(edgeVarMap.get(edge.hashCode()));
-        }
+        // Get the re-visitable nodes of the graph.
+        OGNode revisitNode = graph.getRevisitNode();
+        graph.setNeedToRevisit(true);
 
-        // FIXME: Not all lastAddedNode should be revisited.
-        if (!lastAddedNode.shouldRevisit())
-            return; // Not finished exploration.
-        assert lastAddedNode.shouldRevisit() : "The node should be revisited: " + lastAddedNode;
-        graph.setNeedToRevisit(lastAddedNode.shouldRevisit());
-//
-//        assert graph.getNodes().contains(lastAddedNode);
-//        graph.setLastNode(lastAddedNode);
+        // FIXME
+        assert parState.getParents().size() == 1;
+        ARGState revisitParState = parState.getParents().iterator().next();
 
-        graph.clearFR();
-        transfer.visitNode(graph, lastAddedNode);
-
-        revisitor.apply(parState, precision, List.of(graph), revisitResult);
+        revisitor.apply(revisitParState, parState, precision, List.of(graph), revisitResult);
     }
 
     /**
