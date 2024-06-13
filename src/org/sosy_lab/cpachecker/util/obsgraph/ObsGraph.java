@@ -713,46 +713,79 @@ public class ObsGraph implements Copier<ObsGraph> {
      */
     public void setRelations(OGNode n, Set<SharedEvent> rFlag, Set<SharedEvent> wFlag) {
         for (SharedEvent nw : n.getWs()) {
-            Set<SharedEvent> toRemove = new HashSet<>();
+            if (rFlag.isEmpty() && wFlag.isEmpty())
+                break;
             // Rf.
-            for (SharedEvent r : rFlag) {
-                if (r.accessSameVarWith(nw)) {
-                    // let r read from w.
-                    r.setReadFrom(nw);
-                    toRemove.add(r);
-                }
-            }
-            rFlag.removeAll(toRemove);
-            toRemove.clear();
-
+            setRfForReads(rFlag, nw);
             // Mo.
-            // NOTE: we don't remove previous mo relations.
-            // We use rules follow:
-            // rule1:
-            //      Old mo: nw --> nwmb
-            //      New mo: nw --> w --> nwmb
-            // rule2:
-            //      Old mo: nw --> null
-            //      new mo: nw --> w
-            //
-            // rule3: (nw, w) have been in the mo.
-            //      Old mo: nw --> w
-            //      new mo: nw --> w
-            for (SharedEvent w : wFlag) {
-                if (w.accessSameVarWith(nw)) {
-                    SharedEvent nwmb = nw.getMoBefore();
-                    if (nwmb == null) {      // nwmb == null
-                        w.setMoAfter(nw);    // Add new mo for j.
-                    } else if (nwmb != w) {
-                        nwmb.setMoAfter(w);
-                        w.setMoAfter(nw);
-                    }
-                    toRemove.add(w);
-                }
-            }
-            wFlag.removeAll(toRemove);
-            toRemove.clear();
+            setMoForWrites(wFlag, nw);
         }
+    }
+
+    /**
+     * Let r in {@param rFlag} read from {@param nw} if they access to the same var.
+     * @param rFlag The read events we need to set rf for.
+     * @param nw possible read-from object for r in {@param rFlag}.
+     */
+    private void setRfForReads(Set<SharedEvent> rFlag, SharedEvent nw) {
+        Set<SharedEvent> toRemove = new HashSet<>();
+        for (SharedEvent r : rFlag) {
+            if (r.accessSameVarWith(nw)) {
+                // let r read from w.
+                r.setReadFrom(nw);
+                toRemove.add(r);
+            }
+        }
+        rFlag.removeAll(toRemove);
+    }
+
+    /**
+     * NOTE: When setting some nodes invisible, we don't remove the old mo relations.
+     * 1. If there are old mo relations for w, then we remove them first:
+     *     Old mo: oldMa -> w -> oldMb
+     *     After removing: oldMa -> oldMb + w
+     * 2. We follow the rules below to add new mo relations for w:
+     * rule1:
+     *     Old mo: nw --> nwmb
+     *     New mo: nw --> w --> nwmb
+     * rule2:
+     *     Old mo: nw --> null
+     *     new mo: nw --> w
+     * rule3: (nw, w) have been in the mo.
+     *     Old mo: nw --> w
+     *     new mo: nw --> w
+     * @param wFlag The write events we need to set mo for.
+     * @param nw the candidate for possible mo predecessor of w in {@param wFlag}.
+     */
+    private void setMoForWrites(Set<SharedEvent> wFlag, SharedEvent nw) {
+        Set<SharedEvent> toRemove = new HashSet<>();
+        for (SharedEvent w : wFlag) {
+            removeOldMoFor(w);
+            if (w.accessSameVarWith(nw)) {
+                SharedEvent nwmb = nw.getMoBefore();
+                if (nwmb == null) {      // nwmb == null
+                    w.setMoAfter(nw);    // Add new mo for j.
+                } else if (nwmb != w) {
+                    nw.removeMoBefore();
+                    w.setMoBefore(nwmb);
+                    w.setMoAfter(nw);
+                }
+                toRemove.add(w);
+            }
+        }
+        wFlag.removeAll(toRemove);
+    }
+
+    private void removeOldMoFor(SharedEvent w) {
+        SharedEvent oldMa = w.getMoAfter(), oldMb = w.getMoBefore();
+        if (oldMa != null) {
+            w.removeMoAfter();
+        }
+        if (oldMb != null) {
+            w.removeMoBefore();
+        }
+        if (oldMa != null && oldMb != null)
+            oldMa.setMoBefore(oldMb);
     }
 
     /**
@@ -793,8 +826,6 @@ public class ObsGraph implements Copier<ObsGraph> {
             }
 
             setRelations(n, rFlag, wFlag);
-            assert !enableDebug || !DebugAndTest.acyclicMo(this) :
-                    "Circle from mo found!";
             n = n.getTrAfter();
         }
 

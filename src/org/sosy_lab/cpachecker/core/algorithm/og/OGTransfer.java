@@ -395,6 +395,8 @@ public class OGTransfer {
             // Even if the node has been added to the graph, we may still need to set
             // relations for the events after lhe.
             graph.visitNode(node, true);
+            assert !enableDebug || !DebugAndTest.acyclicMo(graph) :
+                    "Circle from mo found!";
             // After set relations, we need to check the conflict.
             if (isConflict(graph, curThd, node)) // Conflict exists.
                 graph = null;
