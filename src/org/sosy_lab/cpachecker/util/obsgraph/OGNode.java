@@ -586,13 +586,16 @@ public class OGNode implements Copier<OGNode> {
 
     public Set<OGNode> getAllMoPredecessors() {
         Set<OGNode> result = new HashSet<>(),
+                visitedNodes = new HashSet<>(),
                 waitlist = new HashSet<>(moAfter),
                 tmp = new HashSet<>();
         while (!waitlist.isEmpty()) {
             result.addAll(waitlist);
             waitlist.forEach(n -> {
-                if (!result.contains(n))
-                    tmp.addAll(n.getMoAfter());
+                if (!visitedNodes.contains(n)) {
+                    tmp.addAll(n.moAfter);
+                    visitedNodes.add(n);
+                }
             });
             waitlist.clear();
             waitlist.addAll(tmp);
