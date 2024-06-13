@@ -18,20 +18,19 @@ CLEAR="\033[0m"
 BOLD="\033[1m"
 
 # echo -e "\033[32mFile\t\t\t\t\033[33mResult\033[0m"
-printf "${GREEN}${BOLD}%-30s${YELLOW}%-10s${CLEAR}%-10s\n" "File" "Result" "Time"
+printf "${GREEN}${BOLD}%-30s${CLEAR}%-10s${YELLOW}%-10s${CLEAR}%-10s\n" "File" "LOC" "Result" "Time"
 
 function runTask() {
 	TEST_FILE="$1"
 	printf "%-30s" "$(basename ${TEST_FILE})"
+	printf "%-10s" "$(grep -v -E '^//|^$|^[\s\t ]*$' "$TEST_FILE" | wc -l)"
 	cd "$workDir"
 	RESULT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
 	-spec default -preprocess \
 	"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')
-		if [[ "$RESULT" =~ FALSE.* || "$RESULT" == TRUE.* ]]; then
-		#echo "$RESULT"
+	if [[ "$RESULT" =~ FALSE.* || "$RESULT" == TRUE.* ]]; then
 		printf "%-10s\n" "$RESULT"
 	else
-		#echo "UNKNOWN"
 		printf "%-10s\n" "UNKNOWN"
 	fi
 }
