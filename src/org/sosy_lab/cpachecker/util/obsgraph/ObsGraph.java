@@ -196,95 +196,113 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
 
     /**
-     * @param a Based on this we find the events that access the same var with it.
-     * @return A restrictive list of the events that access the same var with {@param a}.
+     * @param a Based on this we find the events that access to the same var with it.
+     * @return A restrictive list of the events that access to the same var with
+     * {@param a}.
      * NOTE: this method matters, because we don't return all but a part of the target
-     *  events that has the same location with {@param a}, which may cause the
-     *  incompleteness.
+     *  events that has the same location with {@param a}, which will cause the
+     *  incompleteness if not implemented correctly.
      */
     public List<SharedEvent> getSameLocationAs(SharedEvent a) {
+        return a.isRead() ?
+                getSameLocationForRead(a) :
+                getSameLocationForWrite(a);
+    }
 
-        List<SharedEvent> result = new ArrayList<>(), exclusiveReadEvents = null;
-        List<Pair<SharedEvent, SharedEvent>> removedRfs = null;
-        List<OGNode> porfPres = new ArrayList<>();
-        OGNode aNode = a.getInNode(), arfNode = null;
-        if (a.isRead()) {
-            SharedEvent arf = a.getReadFrom();
-            assert arf != null :
-                    "ReadFrom must be not null When revisiting a read event.";
-            arfNode = arf.getInNode();
-            // When event 'a' is a read, maybe we shouldn't consider rf relations coming
-            // from event 'a' and those after it in the aNode.
-            exclusiveReadEvents = getExclusiveReadEvents(aNode, a);
-            // Storing rfs for exclusive read events.
-            removedRfs = getRemovedRfs(exclusiveReadEvents);
-            // Remove rfs for exclusive read events.
-            exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
+    private List<SharedEvent> getSameLocationForRead(SharedEvent r) {
 
-            // FIXME: if arfNode exclusivePorf aNode, then we cannot revisit a?
-            if (exclusivePorf(arfNode, aNode, a)) {
-                restoreDeleteRfs(removedRfs);
-                return result;
-            }
+        List<SharedEvent> result = new ArrayList<>();
+        SharedEvent rf = r.getReadFrom();
+        assert rf != null :
+                "ReadFrom must be not null When revisiting a read event.";
+        OGNode rNode = r.getInNode(), rfNode = rf.getInNode();
+        // Maybe we shouldn't consider rf relations that come from event r and those
+        // after it in the r.inNode.
+        List<SharedEvent> exclusiveReadEvents = getExclusiveReadEvents(rNode, r);
+        // Storing rfs for exclusive read events.
+        List<Pair<SharedEvent, SharedEvent>> removedRfs =
+                getRemovedRfs(exclusiveReadEvents);
+        // Remove rfs for exclusive read events.
+        exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
+
+        // FIXME: if arfNode exclusivePorf aNode, then we cannot revisit a?
+        if (exclusivePorf(rfNode, rNode, r)) {
+            restoreDeleteRfs(removedRfs);
+            return result;
         }
 
-        // FIXME: Which nodes we should consider?
-        for (int i = nodes.indexOf(a.getInNode()) - 1; i >= 0; i--) {
+        List<OGNode> porfPres = new ArrayList<>();
+        for (int i = nodes.indexOf(rNode) - 1; i >= 0; i--) {
+            // FIXME: Which nodes we should consider?
             OGNode nodei = nodes.get(i);
             if (!nodei.isInGraph()) {
-                // FIXME: how to handle the nodes not in the graph?
+                // FIXME: How to handle the nodes not in the graph?
             }
 
-            if (a.isRead()) {
-                if (nodei.getWs().stream().noneMatch(w -> w.accessSameVarWith(a)))
-                    continue;
-                // Else, nodei has the write events that access to the same var with 'a'.
-                if (exclusivePorf(nodei, aNode, a)) {
-                    if (porfPres.stream().anyMatch(pre -> porf(nodei, pre))) {
-                        // nodei porf some nodes in the porfPres. In this case, event
-                        // 'a' cannot read from nodei.
-                        porfPres.add(nodei);
-                        continue;
-                    }
+            // Same-location write.
+            SharedEvent w = nodei.getWriteToSameVar(r);
+            if (w == null)
+                continue;
+
+            // Else, nodei has w access to the same var with r.
+            if (exclusivePorf(nodei, rNode, r)) {
+                if (porfPres.stream().anyMatch(pre -> porf(nodei, pre))) {
+                    // nodei porf some nodes in the porfPres. In this case, r cannot read
+                    // from nodei.
                     porfPres.add(nodei);
-                }
-
-                if (nodei == arfNode)
                     continue;
-
-                // Otherwise, the write event in nodei should be considered.
-                SharedEvent w = nodei.getWriteToSameVar(a);
-                assert w != null :
-                        "Error when trying to get same-location write!";
-                result.add(w);
-
-            }  // 'a' is a READ.
-            else { // 'a' is WRITE.
-                // same-location read.
-                SharedEvent r = nodei.getReadToSameVar(a);
-                if (r == null /*|| this.porf(r, a) */)
-                    continue;
-                // Else, r accesses to the same var as and !porf 'a'.
-                SharedEvent rf = r.getReadFrom();
-                assert rf != null;
-                OGNode rfNode = rf.getInNode();
-                if (!rfNode.isInGraph()) {
-                    exclusiveReadEvents = getExclusiveReadEvents(r.getInNode(), r);
-                    removedRfs = getRemovedRfs(exclusiveReadEvents);
-                    exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
-                    if (exclusivePorf(rfNode, r.getInNode(), r)) {
-                        // Cannot revisit event r.
-                        restoreDeleteRfs(removedRfs);
-                        continue;
-                    }
-                    restoreDeleteRfs(removedRfs);
                 }
-                result.add(r);
+                porfPres.add(nodei);
             }
+
+            if (nodei == rfNode) // Skip rfNode.
+                continue;
+
+            // Otherwise, w should be used for revisiting.
+            result.add(w);
         }
 
-        if (a.isRead()) { // Restoring the rfs removed before if necessary.
-            restoreDeleteRfs(removedRfs);
+        // Restoring the rfs removed before if necessary.
+        restoreDeleteRfs(removedRfs);
+
+        return result;
+    }
+
+    private List<SharedEvent> getSameLocationForWrite(SharedEvent w) {
+
+        List<SharedEvent> result = new ArrayList<>();
+        for (int i = nodes.indexOf(w.getInNode()) - 1; i >= 0; i--) {
+            // FIXME: Which nodes we should consider?
+            OGNode nodei = nodes.get(i);
+
+            if (!nodei.isInGraph()) {
+                // FIXME: How to handle the nodes not in the graph?
+            }
+
+            // same-location read.
+            SharedEvent r = nodei.getReadToSameVar(w);
+            if (r == null)
+                continue;
+//            if (this.porf(r, w))
+//                continue;
+
+            SharedEvent rf = r.getReadFrom();
+            assert rf != null;
+            OGNode rNode = r.getInNode(), rfNode = rf.getInNode();
+            if (!rfNode.isInGraph()) {
+                List<SharedEvent> exclusiveReadEvents =
+                        getExclusiveReadEvents(rNode, r);
+                List<Pair<SharedEvent, SharedEvent>> removedRfs =
+                        getRemovedRfs(exclusiveReadEvents);
+                exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
+                if (exclusivePorf(rfNode, rNode, r)) {
+                    // Cannot revisit event r.
+                    restoreDeleteRfs(removedRfs);
+                    continue;
+                }
+                restoreDeleteRfs(removedRfs);
+            }
+            result.add(r);
         }
 
         return result;
