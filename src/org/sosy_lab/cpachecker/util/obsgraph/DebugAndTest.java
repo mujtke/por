@@ -256,20 +256,14 @@ public class DebugAndTest {
         return true;
     }
 
-    public static boolean testMo(ObsGraph g) {
-        for (OGNode node : g.getNodes()) {
-            for (OGNode mbn : node.getMoBefore())
-                if (!mbn.getMoAfter().contains(node)) return false;
-            for (OGNode mba : node.getMoAfter())
-                if (!mba.getMoBefore().contains(node)) return false;
-            for (SharedEvent e : node.getWs()) {
-                if (e.getMoAfter() != null && e.getMoAfter().getMoBefore() != e)
-                    return false;
-                if (e.getMoBefore() != null && e.getMoBefore().getMoAfter() != e)
-                    return false;
-            }
+    // Is acyclic for mo in g?
+    public static boolean acyclicMo(ObsGraph g) {
+        for (OGNode n : g.getNodes()) {
+            if (n.getAllMoPredecessors().contains(n))
+                return true;
         }
-        return true;
+
+        return false;
     }
 
     // Detecting whether there some duplicated graphs in the given ARG state.

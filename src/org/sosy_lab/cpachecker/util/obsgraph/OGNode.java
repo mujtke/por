@@ -548,19 +548,6 @@ public class OGNode implements Copier<OGNode> {
         return refCount;
     }
 
-    // FIXME: used for coEvent?
-    // Set events[i] = e, at the same time, we also update Rs or Ws.
-    public void setEvent(int i, SharedEvent e) {
-        if (e.isRead()) {
-            Rs.remove(events.get(i));
-            Rs.add(e);
-        } else {
-            Ws.remove(events.get(i));
-            Ws.add(e);
-        }
-        events.set(i, e);
-    }
-
     public boolean isPredecessorOf(OGNode pNode) {
         // There two cases where this node is the predecessor of pNode.
         // Case1: the node locates in the same thread as pNode.
@@ -595,6 +582,24 @@ public class OGNode implements Copier<OGNode> {
     // Get the write events that need to visit.
     public void getWsNeedToVisit(@NonNull Set<SharedEvent> wFlag) {
         wFlag.addAll(Ws);
+    }
+
+    public Set<OGNode> getAllMoPredecessors() {
+        Set<OGNode> result = new HashSet<>(),
+                waitlist = new HashSet<>(moAfter),
+                tmp = new HashSet<>();
+        while (!waitlist.isEmpty()) {
+            result.addAll(waitlist);
+            waitlist.forEach(n -> {
+                if (!result.contains(n))
+                    tmp.addAll(n.getMoAfter());
+            });
+            waitlist.clear();
+            waitlist.addAll(tmp);
+            tmp.clear();
+        }
+
+        return result;
     }
 
     // FIXME
