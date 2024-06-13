@@ -113,10 +113,13 @@ public class OGRevisitor {
                                     setReadFrom(Gr, ap, wp, REVISIT_TYPE.READ, precision);
 
                             Gr = GrAndcoGr.getFirstNotNull(); // Gr must not be null.
-                            handleRevisitResult(result, RG, G0, Gr, parState, chState);
+                            // NOTE: Use g rather than G0 as the most original source of Gr.
+                            // Because Gr may be the copy of g, too. This is used
+                            // for debugging, specifically, for outputting right data
+                            // that will be stored in output/revisitDot.json.
+                            handleRevisitResult(result, RG, g, Gr, chState);
                             coGr = GrAndcoGr.getSecond(); // coGr may be null.
-                            if (coGr != null)
-                                handleRevisitResult(result, RG, G0, coGr, parState, chState);
+                            handleRevisitResult(result, RG, g, coGr, chState);
                         }
                         break;
 
@@ -140,11 +143,10 @@ public class OGRevisitor {
                                     setReadFrom(Gw, rp, ap, REVISIT_TYPE.WRITE, precision);
 
                             Gw = GwAndcoGw.getFirstNotNull(); // Gw must not be null.
-                            handleRevisitResult(result, RG, G0, Gw, parState, chState);
+                            handleRevisitResult(result, RG, g, Gw, chState);
 
                             coGw = GwAndcoGw.getSecond(); // coGw may be null.
-                            if (coGw != null)
-                                handleRevisitResult(result, RG, G0, coGw, parState, chState);
+                            handleRevisitResult(result, RG, g, coGw, chState);
                         }
                         break;
 
@@ -157,13 +159,19 @@ public class OGRevisitor {
         return result;
     }
 
+    /**
+     * @param result If {@param G} should be transferred, then add it into this.
+     * @param RG If {@param G} could be revisited further, then add it into this.
+     * @param G0 The most original graph where {@param G} comes from.
+     * @param G The result of revisiting.
+     * @param chState Used for debugging.
+     */
     private void handleRevisitResult(final List<Pair<AbstractState, ObsGraph>> result,
             final List<ObsGraph> RG,
             final ObsGraph G0,
             final ObsGraph G,
-            final ARGState parState,
             final ARGState chState) {
-        if (G == null)
+        if (G == null) // If G == null, do nothing.
             return;
 
         if (consistent(G)) {
@@ -187,7 +195,7 @@ public class OGRevisitor {
         G.setNeedToRevisit(false);
         result.add(Pair.of(pivotState, G));
         // debug.
-        // G.setCreationState(parState);
+        G.setCreationState(chState);
         if (isEnableDebug())
             debugActions(G0, G, chState);
     }

@@ -147,19 +147,6 @@ public class OGAlgorithm implements Algorithm {
         try {
             successors = transferRelation.getAbstractSuccessors(state, precision);
 
-//            if (enableDebug) {
-//                ARGState pars = (ARGState) state;
-//                for (AbstractState ch : successors) {
-//                    ARGState chs = (ARGState) ch;
-//                    CFAEdge chtp = pars.getEdgeToChild(chs);
-//                    int parId = pars.getStateId(), chId = chs.getStateId();
-//                    // Debug.
-//                    System.out.println("s" + parId
-//                            + " -> s" + chId
-//                            + " [label=\"" + chtp + "\"]");
-//                }
-//            }
-
         } finally {
             // Stop timer for transfer.
         }
