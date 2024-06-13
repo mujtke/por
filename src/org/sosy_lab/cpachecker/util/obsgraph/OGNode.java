@@ -524,9 +524,9 @@ public class OGNode implements Copier<OGNode> {
                             refCount++;
                 break;
             case "frb":
-                for (SharedEvent w : other.Ws)
+                for (SharedEvent w : Ws)
                     for (SharedEvent r : w.getFromReadBy())
-                        if (Rs.contains(r))
+                        if (other.Rs.contains(r))
                             refCount++;
                 break;
 
