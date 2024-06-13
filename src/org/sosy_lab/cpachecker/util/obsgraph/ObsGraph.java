@@ -60,7 +60,11 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     // Debug: indicating where the graph is created.
     ARGState creationState = null;
+    private static boolean enableDebug = false;
 
+    public void enableDebug(boolean pEnableDebug) {
+        enableDebug = pEnableDebug;
+    }
     public ObsGraph() {
     }
 
@@ -789,6 +793,8 @@ public class ObsGraph implements Copier<ObsGraph> {
             }
 
             setRelations(n, rFlag, wFlag);
+            assert !enableDebug || !DebugAndTest.acyclicMo(this) :
+                    "Circle from mo found!";
             n = n.getTrAfter();
         }
 

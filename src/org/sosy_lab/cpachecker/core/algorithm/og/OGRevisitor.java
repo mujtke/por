@@ -27,7 +27,8 @@ import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE
 @Options(prefix = "algorithm.og")
 public class OGRevisitor {
 
-    private boolean enableDebug;
+    private static boolean enableDebug = false;
+
     public enum REVISIT_TYPE {
         READ, WRITE
     }
@@ -35,14 +36,13 @@ public class OGRevisitor {
     // Handle conditional statements.
     private static ConditionalStatementHandler CSHandler;
 
-    public OGRevisitor(
-            Configuration config,
-            CFA cfa,
-            LogManager logger,
-            boolean pEnableDebug) throws InvalidConfigurationException {
+    public OGRevisitor(Configuration config, CFA cfa, LogManager logger)
+            throws InvalidConfigurationException {
         CSHandler = new ConditionalStatementHandler(config, cfa, logger);
-        this.enableDebug = pEnableDebug;
     }
+
+
+    public void enableDebug(boolean pEnableDebug) { enableDebug = pEnableDebug; }
 
     public boolean isEnableDebug() { return enableDebug; }
 

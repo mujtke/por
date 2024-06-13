@@ -28,15 +28,13 @@ public class OGTransfer {
     private final Map<Integer, List<ObsGraph>> OGMap;
     private final Map<Integer, List<SharedEvent>> edgeVarMap;
     private final NLTComparator nltcmp = new NLTComparator();
-    private final boolean enableDebug;
+    private static boolean enableDebug = false;
 
     public OGTransfer(
             Map<Integer, List<ObsGraph>> pOGMap,
-            HashMap<Integer, List<SharedEvent>> pEdgeVarMap,
-            boolean pEnableDebug) {
+            HashMap<Integer, List<SharedEvent>> pEdgeVarMap) {
         this.OGMap = pOGMap;
         this.edgeVarMap = pEdgeVarMap;
-        this.enableDebug = pEnableDebug;
     }
 
     public NLTComparator getNltcmp() { return nltcmp; }
@@ -69,6 +67,10 @@ public class OGTransfer {
         }
 
         return null;
+    }
+
+    public void enableDebug(boolean pEnableDebug) {
+        enableDebug = pEnableDebug;
     }
 
     private static class NLTComparator implements Comparator<AbstractState> {

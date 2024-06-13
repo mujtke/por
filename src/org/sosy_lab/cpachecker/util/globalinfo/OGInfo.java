@@ -22,17 +22,17 @@ public class OGInfo {
      * Store the states num and list<og>. One state may own more than one og,
      * so we use list to store them.
      */
-    private static Map<Integer, List<ObsGraph>> OGMap;
+    private final Map<Integer, List<ObsGraph>> OGMap;
 
     // For debugging.
     // StateId -> [ (graphId, graphStr), ... ]
-    private static Map<Integer, List<Pair<Integer, String>>> fullOGMap;
+    private final Map<Integer, List<Pair<Integer, String>>> fullOGMap;
     // StateId -> { graphId -> graphStr (produced in revisit) }
-    private static Map<Integer, Map<Integer, List<String>>> revisitOGMap;
+    private final Map<Integer, Map<Integer, List<String>>> revisitOGMap;
 
-    private static OGTransfer transfer;
+    private final OGTransfer transfer;
 
-    private static OGRevisitor revisitor;
+    private final OGRevisitor revisitor;
 
     // <next table.
     private final HashMap<Integer, Integer> nlt;
@@ -43,6 +43,9 @@ public class OGInfo {
 
     // edge-sharedVars map.
     private HashMap<Integer, List<SharedEvent>> edgeVarMap;
+
+    // The first graph used to initialize the OGMap.
+    private final ObsGraph initialGraph;
 
     @Option(secure = true,
             description = "this option is enabled iff we use OGPORCPA.")
@@ -61,17 +64,34 @@ public class OGInfo {
         if (useOG) {
             OGMap = new HashMap<>();
             // Put an empty graph into the first state.
-            OGMap.put(0, new ArrayList<>(Collections.singleton(new ObsGraph())));
+            initialGraph = new ObsGraph();
+            OGMap.put(0, new ArrayList<>(Collections.singleton(initialGraph)));
             edgeVarMap = new HashMap<>();
             fullOGMap = new HashMap<>();
             revisitOGMap = new HashMap<>();
-            transfer = new OGTransfer(OGMap, edgeVarMap, enableDebug);
-            revisitor = new OGRevisitor(pConfig, pCfa, pLogger, enableDebug);
+            transfer = new OGTransfer(OGMap, edgeVarMap);
+            revisitor = new OGRevisitor(pConfig, pCfa, pLogger);
             nlt = new HashMap<>();
+            enableDebug();
         } else {
+            initialGraph = null;
             OGMap = null;
+            edgeVarMap = null;
+            fullOGMap = null;
+            revisitOGMap = null;
+            transfer = null;
+            revisitor = null;
             nlt = null;
         }
+    }
+
+    private void enableDebug() {
+        if (initialGraph != null)
+            initialGraph.enableDebug(enableDebug);
+        if (transfer != null)
+            transfer.enableDebug(enableDebug);
+        if (revisitor != null)
+            revisitor.enableDebug(enableDebug);
     }
 
     public Map<Integer, List<ObsGraph>> getOGMap() {

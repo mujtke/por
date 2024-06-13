@@ -70,7 +70,7 @@ public class GlobalInfo {
       ogInfo = new OGInfo(pConfig, cpa, cfa, logger);
     } catch (InvalidConfigurationException e) {
       logger.log(Level.SEVERE,
-                      "Failed to build the biMap of states and OGGraphs: " + e.getMessage());
+                      "Failed to build the OGInfo: " + e.getMessage());
     }
   }
 

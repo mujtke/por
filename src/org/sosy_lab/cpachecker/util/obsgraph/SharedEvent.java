@@ -40,8 +40,7 @@ public class SharedEvent implements Copier<SharedEvent> {
         List<SharedEvent> allMoBefore = new ArrayList<>();
         SharedEvent next = this.getMoBefore();
         while (next != null) {
-            Preconditions.checkState(!allMoBefore.contains(next),
-                    "mo should be acyclic.");
+            assert !allMoBefore.contains(next) : "mo should be acyclic.";
             allMoBefore.add(next);
             next = next.getMoBefore();
         }
