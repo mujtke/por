@@ -271,6 +271,13 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     private List<SharedEvent> getSameLocationForWrite(SharedEvent w) {
 
+        List<SharedEvent> exclusiveReadEvents = getExclusiveReadEvents(w.getInNode(), w);
+        // Storing rfs for exclusive read events.
+        List<Pair<SharedEvent, SharedEvent>> removedRfs =
+                getRemovedRfs(exclusiveReadEvents);
+        // Remove rfs for exclusive read events.
+        exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
+
         List<SharedEvent> result = new ArrayList<>();
         for (int i = nodes.indexOf(w.getInNode()) - 1; i >= 0; i--) {
             // FIXME: Which nodes we should consider?
@@ -284,27 +291,29 @@ public class ObsGraph implements Copier<ObsGraph> {
             SharedEvent r = nodei.getReadToSameVar(w);
             if (r == null)
                 continue;
-//            if (this.porf(r, w))
-//                continue;
+            if (this.porf(r, w))
+                continue;
 
             SharedEvent rf = r.getReadFrom();
             assert rf != null;
             OGNode rNode = r.getInNode(), rfNode = rf.getInNode();
             if (!rfNode.isInGraph()) {
-                List<SharedEvent> exclusiveReadEvents =
+                List<SharedEvent> exclusiveReadEvents2 =
                         getExclusiveReadEvents(rNode, r);
-                List<Pair<SharedEvent, SharedEvent>> removedRfs =
-                        getRemovedRfs(exclusiveReadEvents);
-                exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
+                List<Pair<SharedEvent, SharedEvent>> removedRfs2 =
+                        getRemovedRfs(exclusiveReadEvents2);
+                exclusiveReadEvents2.forEach(SharedEvent::removeReadFrom);
                 if (exclusivePorf(rfNode, rNode, r)) {
                     // Cannot revisit event r.
-                    restoreDeleteRfs(removedRfs);
+                    restoreDeleteRfs(removedRfs2);
                     continue;
                 }
-                restoreDeleteRfs(removedRfs);
+                restoreDeleteRfs(removedRfs2);
             }
             result.add(r);
         }
+
+        restoreDeleteRfs(removedRfs);
 
         return result;
     }

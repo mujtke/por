@@ -375,10 +375,12 @@ public class OGNode implements Copier<OGNode> {
         assert events.contains(e) && (Rs.contains(e) || Ws.contains(e)) :
                 "Trying to remove a event not in the node!";
         int i = events.indexOf(e);
-        assert LHEIndex >= 0 :
-                "It's impossible to remove a event with last-handled event not set.";
-        if (i <= LHEIndex)
+        if (LHEIndex >= 0 && i <= LHEIndex) {
+            // LHEIndex >= 0 means we have updated it, i.e., the node is not totally new.
+            // Else, LHEIndex = -1, the node is totally new, deleting an event won't
+            // change the LHEIndex.
             LHEIndex--;
+        }
         events.remove(e);
         // Don't forget to remove event from Rs or Ws.
         if (e.isRead()) {
@@ -447,28 +449,36 @@ public class OGNode implements Copier<OGNode> {
                         // If there is a write that accesses the same var with r, then r could be
                         // ignored, because it will always read from the write inside the node.
                     } else { // sameR == null && sameW == null.
-                        events.add(e);
-                        e.setInNode(this);
-                        Rs.add(e);
+                        addEvent(e);
                     }
                     break;
 
                 case WRITE:
-                    // For multiple writes to the same var, only the last one will be added.
                     sameW = getWriteToSameVar(e);
+                    addEvent(e);
+                    // For multiple writes to the same var, only the last one will be added.
                     if (sameW != null) {
                         // The sameW will be covered by e, so we remove it.
-                        assert events.contains(sameW) && Ws.remove(sameW) :
-                                "Trying to cover a write event not added yet!";
-                        events.remove(sameW);
-                        Ws.remove(sameW);
+                        assert events.contains(sameW) && Ws.contains(sameW) :
+                                "Trying to cover a write event not existed!";
+                        removeEvent(sameW);
+                        // Transfer relations owned by sameW to e.
+                        sameW.transferRelationsTo(e);
                     }
-                    events.add(e);
-                    e.setInNode(this);
-                    Ws.add(e);
                 default:
             }
         });
+    }
+
+    private void addEvent(SharedEvent e) {
+        assert !events.contains(e) : "Trying to add an existed event again!";
+        events.add(e);
+        e.setInNode(this);
+        if (e.isRead()) {
+            Rs.add(e);
+        } else {
+            Ws.add(e);
+        }
     }
 
     /**

@@ -358,4 +358,40 @@ public class SharedEvent implements Copier<SharedEvent> {
         if (e == null) return false;
         return Objects.equals(inEdge, e.inEdge);
     }
+
+    /**
+     * Transfer relations (mo, rb, frb, etc.) to {@param e}. This will happen when
+     * {@param e} covers this as a new write event in {@link OGNode#addEvents(List)}.
+     * @param e The new write event that will cover this.
+     */
+    public void transferRelationsTo(SharedEvent e) {
+        assert this.isWrite() && e.isWrite();
+        // Mo.
+        if (moAfter != null) {
+            SharedEvent tmp = moAfter;
+            moAfter.removeMoBefore(); // This will let moAfter = null;
+            e.setMoAfter(tmp);
+        }
+        if (moBefore != null) {
+            SharedEvent tmp = moBefore;
+            moBefore.removeMoAfter();
+            e.setMoBefore(tmp);
+        }
+
+        // Rb.
+        List<SharedEvent> removedRbs = new ArrayList<>(readBy);
+        removedRbs.forEach(rb -> {
+            removeReadBy(rb);
+            e.setReadBy(rb);
+        });
+        assert readBy.isEmpty() : "Some Read-By relations remained.";
+
+        // Frb.
+        List<SharedEvent> removedFrbs = new ArrayList<>(fromReadBy);
+        removedFrbs.forEach(frb -> {
+            removeFromReadBy(frb);
+            e.setFromReadBy(frb);
+        });
+        assert fromReadBy.isEmpty() : "Some From-Read-By relations remained.";
+    }
 }

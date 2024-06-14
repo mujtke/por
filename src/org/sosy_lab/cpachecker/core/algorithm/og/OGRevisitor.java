@@ -485,24 +485,23 @@ public class OGRevisitor {
      * @implNote porf only contains po and rf relations.
      */
     public static boolean porf(OGNode A, OGNode B) {
+
         if (A == null || B == null)
             return false;
 
         for (OGNode n : A.getSuccessors()) {
-            if (n == B || porf(n, B))
-                return true;
+            try {
+                if (n == B || porf(n, B))
+                    return true;
+            } catch (StackOverflowError e) {
+                throw new RuntimeException("Stack overflow! Graph is not acyclic!");
+            }
         }
 
         for (OGNode n : A.getReadBy()) {
             if (n == B || porf(n, B))
                 return true;
         }
-
-        // FIXME: using fr or not?
-//        for (OGNode n : A.getFromRead()) {
-//            if (n == B || porf(n, B))
-//                return true;
-//        }
 
         return false;
     }
