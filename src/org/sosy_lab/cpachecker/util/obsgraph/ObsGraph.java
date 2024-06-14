@@ -240,6 +240,9 @@ public class ObsGraph implements Copier<ObsGraph> {
                 // FIXME: How to handle the nodes not in the graph?
             }
 
+            if (nodei == rfNode) // Skip rfNode.
+                continue;
+
             // Same-location write.
             SharedEvent w = nodei.getWriteToSameVar(r);
             if (w == null)
@@ -256,9 +259,6 @@ public class ObsGraph implements Copier<ObsGraph> {
                 porfPres.add(nodei);
             }
 
-            if (nodei == rfNode) // Skip rfNode.
-                continue;
-
             // Otherwise, w should be used for revisiting.
             result.add(w);
         }
@@ -271,6 +271,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     private List<SharedEvent> getSameLocationForWrite(SharedEvent w) {
 
+        // The read events after w may change their read-from in the future, so we
+        // don't consider those rf relations here?
         List<SharedEvent> exclusiveReadEvents = getExclusiveReadEvents(w.getInNode(), w);
         // Storing rfs for exclusive read events.
         List<Pair<SharedEvent, SharedEvent>> removedRfs =
