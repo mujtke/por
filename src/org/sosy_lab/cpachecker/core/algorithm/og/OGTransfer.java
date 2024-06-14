@@ -290,15 +290,12 @@ public class OGTransfer {
             }
         }
 
-        // assert graph != null;
+        assert graph != null;
         if (node != null) {
             graph.visitNode(node, true);
-            if (!newNodeCreated && isConflict(graph, curThd, node))
-                return Pair.of(null, null);
             node.updatePreAndSucState(parState, chState);
             node.setLoopDepth(chOgState.getLoopDepth());
         }
-        assert graph != null;
         graph.setNeedToRevisit(node != null && node.shouldRevisit());
         // we have reached the end of the node, so update the current node for curThd.
         if (node != null)
@@ -994,12 +991,18 @@ public class OGTransfer {
     private void getMoPredecessors(ObsGraph graph,
             List<SharedEvent> toCheckEvents,
             List<Pair<SharedEvent, SharedEvent>> moPredecessors) {
-        if (toCheckEvents == null) return;
+        if (toCheckEvents == null || toCheckEvents.isEmpty())
+            return;
 
-        // Build mo relations for builtMoEvents.
-        OGNode n = graph.getLastNode();
+        OGNode n = graph.getLastNode(),
+                checkNode = toCheckEvents.get(0).getInNode();
+        assert checkNode != null;
         List<SharedEvent> toRemove = new ArrayList<>();
         while (n != null && !toCheckEvents.isEmpty()) {
+            if (n == checkNode) {
+                n = n.getTrAfter();
+                continue;
+            }
             for (SharedEvent w : n.getWs()) {
                 for (SharedEvent w0 : toCheckEvents) {
                     if(w.accessSameVarWith(w0)) {

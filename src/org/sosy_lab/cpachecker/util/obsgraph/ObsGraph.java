@@ -225,13 +225,14 @@ public class ObsGraph implements Copier<ObsGraph> {
         // Remove rfs for exclusive read events.
         exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
 
+        List<OGNode> porfPres = new ArrayList<>();
         // FIXME: if arfNode exclusivePorf aNode, then we cannot revisit a?
         if (exclusivePorf(rfNode, rNode, r)) {
-            restoreDeleteRfs(removedRfs);
-            return result;
+            // restoreDeleteRfs(removedRfs);
+            // return result;
+            porfPres.add(rfNode);
         }
 
-        List<OGNode> porfPres = new ArrayList<>();
         for (int i = nodes.indexOf(rNode) - 1; i >= 0; i--) {
             // FIXME: Which nodes we should consider?
             OGNode nodei = nodes.get(i);
@@ -778,8 +779,8 @@ public class ObsGraph implements Copier<ObsGraph> {
     private void setMoForWrites(Set<SharedEvent> wFlag, SharedEvent nw) {
         Set<SharedEvent> toRemove = new HashSet<>();
         for (SharedEvent w : wFlag) {
-            removeOldMoFor(w);
             if (w.accessSameVarWith(nw)) {
+                removeOldMoFor(w);
                 SharedEvent nwmb = nw.getMoBefore();
                 if (nwmb == null) {      // nwmb == null
                     w.setMoAfter(nw);    // Add new mo for j.

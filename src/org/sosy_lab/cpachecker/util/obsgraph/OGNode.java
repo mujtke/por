@@ -874,11 +874,12 @@ public class OGNode implements Copier<OGNode> {
 
     /**
      * @return events used for checking conflict when transferring graph along the ARG.
-     * @implNote check the writes after the last-handle(LHE) event only?
+     * FIXME: Check the writes after the last-handled(LHE) event only?
      */
     public List<SharedEvent> getToCheckEvents() {
-        return Ws.stream().filter(w -> events.indexOf(w) > LHEIndex)
-                .collect(Collectors.toList());
+//        return Ws.stream().filter(w -> events.indexOf(w) > LHEIndex)
+//                .collect(Collectors.toList());
+        return new ArrayList<>(Ws);
     }
 
     // Tests.
