@@ -1081,4 +1081,9 @@ public class OGTransfer {
 //        ogs.remove(graph.getIdentityHash());
         ogs.remove(index);
     }
+
+    // Debug.
+    private int p(ObsGraph g) {
+        return DebugAndTest.print(g);
+    }
 }

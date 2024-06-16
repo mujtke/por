@@ -518,4 +518,9 @@ public class OGRevisitor {
         String revisitOg = DebugAndTest.getDotStr(Gp);
         revisitOgs.add(revisitOg);
     }
+
+    // Debug.
+    private int p(ObsGraph g) {
+        return DebugAndTest.print(g);
+    }
 }

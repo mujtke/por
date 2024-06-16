@@ -909,4 +909,9 @@ public class ObsGraph implements Copier<ObsGraph> {
 
         return result;
     }
+
+    // Debug.
+    private int p(ObsGraph g) {
+        return DebugAndTest.print(g);
+    }
 }

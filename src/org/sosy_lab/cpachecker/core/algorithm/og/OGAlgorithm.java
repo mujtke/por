@@ -18,6 +18,7 @@ import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
+import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
@@ -405,7 +406,10 @@ public class OGAlgorithm implements Algorithm {
         return result;
     }
 
-    private boolean hasWaitingState() {
-        return !this.waitlist.isEmpty();
+    private boolean hasWaitingState() { return !this.waitlist.isEmpty(); }
+
+    // Just for debugging. Printing a given graph g.
+    private int p(ObsGraph g) {
+        return DebugAndTest.print(g);
     }
 }
