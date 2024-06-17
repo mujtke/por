@@ -8,7 +8,6 @@
 # be verified.
 #
 # Usage: ./run ./test.c
-# NOTE: $pwd == "/home/mujueke/Code/Java/por"
 
 function err_log() {
 	echo -e "$1"
@@ -23,7 +22,9 @@ FILE="$1"
 FZF_EXE=$(which fzf)
 [[ ! -x "$FZF_EXE" ]] && err_log "Missing the executable of fzf."
 
-PWD="/home/mujueke/Code/Java/por"
+SCRIPT_PATH="$(realpath $0)"
+SCRIPT_BASENAME="$(basename $0)"
+PWD="${SCRIPT_PATH%/${SCRIPT_BASENAME}}"
 CONFIG_FILE=""
 ARGS="-spec default -preprocess"
 EXECUTABLE="./scripts/cpa.sh"

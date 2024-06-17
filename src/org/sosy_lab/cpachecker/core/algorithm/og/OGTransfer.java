@@ -394,8 +394,9 @@ public class OGTransfer {
             graph.visitNode(node, true);
             assert !enableDebug || !DebugAndTest.acyclicMo(graph) : "Mo circle found!";
             // After set relations, we need to check the conflict.
-            if (isConflict(graph, curThd, node)) // Conflict exists.
+            if (isConflict(graph, curThd, node)) { // Conflict exists.
                 graph = null;
+            }
         }
         if (graph != null) {
             node.updatePreAndSucState(null, chState);
