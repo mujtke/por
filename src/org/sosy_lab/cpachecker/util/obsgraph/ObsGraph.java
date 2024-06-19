@@ -41,8 +41,7 @@ public class ObsGraph implements Copier<ObsGraph> {
      * This variable is used to record the assumption edges that read from indeterminate
      * assignments. We get loopDepth and pathLength from the {@link OGPORState},
      * specifically, get loopDepth by {@link OGPORState#getLoopDepth()} and pathLength
-     * by {@link OGPORState#getPathLen()}.
-     * tid -> [<assumeEdge, loopDepth, pathLength>, ... ]
+     * by {@link OGPORState#getPathLen()}. * tid -> [<assumeEdge, loopDepth, pathLength>, ... ]
      */
     private final Map<String, List<Triple<CFAEdge, Integer, Integer>>>
             cachedAssumeEdges = new HashMap<>();
@@ -57,6 +56,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     // Based on object's memory address, so this should be different for every graph object.
     private final int identityHash = System.identityHashCode(this);
+    //
+    public final static ObsGraph DUMMY = new ObsGraph();
 
     // Debug: indicating where the graph is created.
     ARGState creationState = null;
@@ -887,10 +888,10 @@ public class ObsGraph implements Copier<ObsGraph> {
     public OGNode getRevisitNode() {
         List<OGNode> nodesToRevisit =
                 nodes.stream().filter(OGNode::shouldRevisit).collect(Collectors.toList());
-        assert nodesToRevisit.size() == 1 : "More than one nodes need to revisit.";
-        OGNode result =nodesToRevisit.get(0);
-//        assert result == lastNode : "The re-visitable node is not the to-max one.";
-        return result;
+        assert nodesToRevisit.size() <= 1 : "More than one nodes need to revisit.";
+        if (nodesToRevisit.isEmpty())
+            return null;
+        return nodesToRevisit.get(0);
     }
 
     /**

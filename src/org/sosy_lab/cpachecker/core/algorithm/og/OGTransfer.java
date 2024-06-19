@@ -388,16 +388,23 @@ public class OGTransfer {
             }
         }
 
+        boolean hasConflict = false;
         if (graph != null) {
             // Even if the node has been added to the graph, we may still need to set
             // relations for the events after lhe.
             graph.visitNode(node, true);
             assert !enableDebug || !DebugAndTest.acyclicMo(graph) : "Mo circle found!";
-            // After set relations, we need to check the conflict.
+            // After setting relations, we need to check the conflict.
             if (isConflict(graph, curThd, node)) { // Conflict exists.
-                graph = null;
+                if (node.shouldRevisit()) {
+                    hasConflict = true;
+                }
+                else {
+                    graph = null;
+                }
             }
         }
+
         if (graph != null) {
             node.updatePreAndSucState(null, chState);
             node.setLoopDepth(chOgState.getLoopDepth());
@@ -408,7 +415,7 @@ public class OGTransfer {
             if (enableDebug)
                 debugActions(graph, parState, chState, edge);
         }
-        result = Pair.of(graph, copiedGraph);
+        result = Pair.of(hasConflict ? ObsGraph.DUMMY : graph, copiedGraph);
 
         return result;
     }
@@ -882,6 +889,10 @@ public class OGTransfer {
             Pair<ObsGraph, ObsGraph> transferResult = singleStepTransfer(graphWrapper,
                     etp, leadState, chState, false);
             ObsGraph chGraph = transferResult.getFirst();
+            // FIXME: if chGraph == ObsGraph.DUMMY?
+            if (chGraph == ObsGraph.DUMMY) {
+                continue;
+            }
             if (chGraph != null) {
                 if (chState.getChildren().isEmpty()) {
                     // FIXME: neither the chState is in the waitlist nor does it have any child.

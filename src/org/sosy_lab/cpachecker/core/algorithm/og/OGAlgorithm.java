@@ -170,6 +170,8 @@ public class OGAlgorithm implements Algorithm {
         // Map from index of graph to CFANode, e.g., i -> N0.
         // FIXME: This is the special handle for indeterminate conditional branches.
         Map<Integer, CFANode> nonDetTable = new HashMap<>();
+        //
+        Set<ObsGraph> blockedGraphs2 = new HashSet<>();
 
         // Adjust precision and split children into two parts if possible.
         for (Iterator<? extends AbstractState> it = nSuccessors.iterator(); it.hasNext();) {
@@ -244,6 +246,11 @@ public class OGAlgorithm implements Algorithm {
 
                 ObsGraph chGraph = transferResult.getFirst(),
                         copiedGraph = transferResult.getSecond();
+                if (chGraph == ObsGraph.DUMMY) {
+                    hasBeenRemoved[i] = true;
+                    blockedGraphs2.add(parGraph);
+                    continue;
+                }
                 if (copiedGraph != null) {
                     nonDetTable.put(i, edge.getPredecessor());
                     // Replace the ith graph with copiedGraph, the former has been transferred,
@@ -278,7 +285,8 @@ public class OGAlgorithm implements Algorithm {
 
         List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
         // FIXME: will there be some graphs get blocked?
-        List<ObsGraph> blockedGraphs = getBlockedGraphs(parGraphs, hasBeenRemoved);
+        // List<ObsGraph> blockedGraphs = getBlockedGraphs(parGraphs, hasBeenRemoved);
+        List<ObsGraph> blockedGraphs = new ArrayList<>(blockedGraphs2);
         if (!blockedGraphs.isEmpty()) {
             logger.log(Level.WARNING,
                     "Blocked graphs found at state s" + parState.getStateId());
