@@ -8,6 +8,7 @@ import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
@@ -65,6 +66,24 @@ public class OGRevisitor {
                 continue;
             result.addAll(revisit(parState, chState, precision, graph));
         }
+    }
+
+    public List<Pair<AbstractState, ObsGraph>> apply(
+            final ReachedSet reachedSet,
+            ObsGraph graph) {
+        OGNode lastNode = graph.getLastNode();
+        assert lastNode != null :
+                "Trying to revisit a graph without last-added node!";
+        ARGState chState = lastNode.getSucState();
+        assert chState != null :
+                "Missing sucState for the re-visitable node!";
+        assert chState.getParents().size() == 1 : "ARG state s" +
+                chState.getStateId() + " has more than one parents!";
+        ARGState parState = chState.getParents().iterator().next();
+        assert reachedSet.contains(chState) :
+                "Missing precision for state s" + chState.getStateId();
+        Precision chPrecision = reachedSet.getPrecision(chState);
+        return new ArrayList<>(revisit(parState, chState, chPrecision, graph));
     }
 
     // parState: indicating where the revisit takes place.

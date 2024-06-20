@@ -303,45 +303,18 @@ public class OGAlgorithm implements Algorithm {
 
         // Revisit and transfer(multi-step).
         List<ObsGraph> graphsForRevisit = getGraphsForRevisit(withGraphs);
-        // Debug.
-        List<ObsGraph> revisitedGraphs = new ArrayList<>();
-        // Perform revisit for graphs if necessary, and fill the results into revisitResult.
-        for (Iterator<Pair<AbstractState, Precision>> it = withGraphs.iterator();
-             it.hasNext();) {
-            Pair<AbstractState, Precision> pair = it.next();
-            ARGState ch = (ARGState) pair.getFirstNotNull();
-            chGraphs = OGMap.get(ch.getStateId());
-            assert chGraphs != null;
+        while (!graphsForRevisit.isEmpty()) {
+            // 1.Revisit.
+            ObsGraph graph = graphsForRevisit.remove(0); // graph for revisit.
+            assert graph.needToRevisit() : "Try to revisit a graph should not be!";
+            revisitResult.addAll(revisitor.apply(reachedSet, graph));
             // Debug.
-            revisitedGraphs.addAll(chGraphs);
-            revisitor.apply(parState, ch, precision, chGraphs, revisitResult);
-        }
-        // Debug, after the revisit, no graph in revisitedGraphs is re-visitable.
-        if (revisitedGraphs.stream().anyMatch(g -> g.getRevisitNode() != null)) {
-            List<ObsGraph> reVisitableGraphs = revisitedGraphs.stream()
-                    .filter(g -> g.getRevisitNode() != null).collect(Collectors.toList());
-            System.out.println("Some graphs still keep re-visitable after the revisit.");
-        }
-
-        // Perform multi-step transfer for all graphs in 'revisitResult'.
-        for (Iterator<Pair<AbstractState, ObsGraph>> it = revisitResult.iterator();
-             it.hasNext();) {
-            Pair<AbstractState, ObsGraph> pair = it.next();
-            ARGState leadState = (ARGState) pair.getFirstNotNull();
-            ObsGraph graph = pair.getSecondNotNull();
-            Pair<AbstractState, ObsGraph> transferResult =
-                    transfer.multiStepTransfer(waitlist, leadState, new ArrayList<>(List.of(graph)));
-            if (transferResult != null) {
-                // TODO: do something here, like print result to log?
-                // FIXME: some graphs in the result may be re-visitable, how to handle them?
-                if (transferResult.getSecond() != null && transferResult.getSecond().needToRevisit()) {
-                    assert false : "Some graphs need a further revisit.";
-                }
-            } else {
-                // TODO: In this case, have some graphs not been transferred to a proper state?
-//                throw new UnsupportedOperationException(
-//                        "Some graph hasn't been transferred to a proper state");
+            if (graph.getRevisitNode() != null) {
+                assert false : "Some graphs keep re-visitable after the revisit!";
             }
+
+            // 2.Transfer.
+            graphsForRevisit.addAll(performMultiStepTransferFor(revisitResult));
         }
 
         return false;
@@ -350,7 +323,48 @@ public class OGAlgorithm implements Algorithm {
     private List<ObsGraph> getGraphsForRevisit(
             List<Pair<AbstractState, Precision>> withGraphs) {
         List<ObsGraph> result = new ArrayList<>();
+        for (Pair<AbstractState, Precision> p : withGraphs) {
+            ARGState state = (ARGState) p.getFirstNotNull();
+            List<ObsGraph> graphs = OGMap.get(state.getStateId());
+            assert graphs != null && !graphs.isEmpty();
+            result.addAll(graphs.stream().filter(ObsGraph::needToRevisit)
+                    .collect(Collectors.toList()));
+        }
+
         return result;
+    }
+
+    /**
+     * Perform multi-step transfer for all graphs in {@param revisitResult}.
+     * @return graphs need to revisit.
+     */
+    private List<ObsGraph> performMultiStepTransferFor(
+            List<Pair<AbstractState, ObsGraph>> revisitResult) {
+        List<ObsGraph> graphsNeedRevisit = new ArrayList<>();
+        while (!revisitResult.isEmpty()) {
+            Pair<AbstractState, ObsGraph> pair = revisitResult.remove(0);
+            ARGState leadState = (ARGState) pair.getFirstNotNull();
+            ObsGraph graph = pair.getSecondNotNull();
+            Pair<AbstractState, ObsGraph> transferResult =
+                    transfer.multiStepTransfer(waitlist, leadState, new ArrayList<>(List.of(graph)));
+            if (transferResult != null) {
+                // FIXME: some graphs in the result may be re-visitable, how to handle them?
+                assert transferResult.getSecond() != null
+                        && transferResult.getFirst() != null;
+                if (transferResult.getSecond().needToRevisit()) {
+                    logger.log(Level.INFO, "The graph that reached s" +
+                            ((ARGState) transferResult.getFirst()).getStateId() +
+                            " after multi-step transfer is still re-visitable.");
+                    graphsNeedRevisit.add(transferResult.getSecond());
+                }
+            } else {
+                // TODO: In this case, have some graphs not been transferred to a proper state?
+                logger.log(Level.WARNING,
+                        "Some graph hasn't been transferred to a proper state.");
+            }
+        }
+
+        return graphsNeedRevisit;
     }
 
     private List<ObsGraph> getBlockedGraphs(
