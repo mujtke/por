@@ -301,6 +301,10 @@ public class OGAlgorithm implements Algorithm {
         addStates(reachedSet, waitlist, noGraphs);
         addStates(reachedSet, waitlist, withGraphs);
 
+        // Revisit and transfer(multi-step).
+        List<ObsGraph> graphsForRevisit = getGraphsForRevisit(withGraphs);
+        // Debug.
+        List<ObsGraph> revisitedGraphs = new ArrayList<>();
         // Perform revisit for graphs if necessary, and fill the results into revisitResult.
         for (Iterator<Pair<AbstractState, Precision>> it = withGraphs.iterator();
              it.hasNext();) {
@@ -308,7 +312,15 @@ public class OGAlgorithm implements Algorithm {
             ARGState ch = (ARGState) pair.getFirstNotNull();
             chGraphs = OGMap.get(ch.getStateId());
             assert chGraphs != null;
+            // Debug.
+            revisitedGraphs.addAll(chGraphs);
             revisitor.apply(parState, ch, precision, chGraphs, revisitResult);
+        }
+        // Debug, after the revisit, no graph in revisitedGraphs is re-visitable.
+        if (revisitedGraphs.stream().anyMatch(g -> g.getRevisitNode() != null)) {
+            List<ObsGraph> reVisitableGraphs = revisitedGraphs.stream()
+                    .filter(g -> g.getRevisitNode() != null).collect(Collectors.toList());
+            System.out.println("Some graphs still keep re-visitable after the revisit.");
         }
 
         // Perform multi-step transfer for all graphs in 'revisitResult'.
@@ -321,6 +333,10 @@ public class OGAlgorithm implements Algorithm {
                     transfer.multiStepTransfer(waitlist, leadState, new ArrayList<>(List.of(graph)));
             if (transferResult != null) {
                 // TODO: do something here, like print result to log?
+                // FIXME: some graphs in the result may be re-visitable, how to handle them?
+                if (transferResult.getSecond() != null && transferResult.getSecond().needToRevisit()) {
+                    assert false : "Some graphs need a further revisit.";
+                }
             } else {
                 // TODO: In this case, have some graphs not been transferred to a proper state?
 //                throw new UnsupportedOperationException(
@@ -329,6 +345,12 @@ public class OGAlgorithm implements Algorithm {
         }
 
         return false;
+    }
+
+    private List<ObsGraph> getGraphsForRevisit(
+            List<Pair<AbstractState, Precision>> withGraphs) {
+        List<ObsGraph> result = new ArrayList<>();
+        return result;
     }
 
     private List<ObsGraph> getBlockedGraphs(

@@ -148,7 +148,7 @@ public class OGTransfer {
                         isSimpleTransfer);
                 break;
             case NOT_IN:
-                result = handleNotInBlock(graphWrapper, edge, parState, chState,
+                result = handleBlockNotIn(graphWrapper, edge, parState, chState,
                         isSimpleTransfer);
         }
 
@@ -183,7 +183,7 @@ public class OGTransfer {
         return coChOgState;
     }
 
-    private Pair<ObsGraph, ObsGraph> handleNotInBlock(
+    private Pair<ObsGraph, ObsGraph> handleBlockNotIn(
             List<ObsGraph> graphWrapper,
             CFAEdge edge,
             ARGState parState,
@@ -292,6 +292,8 @@ public class OGTransfer {
 
         assert graph != null;
         if (node != null) {
+            if (node.getLheIndex() == -2)
+                node.setLHEIndex(-1);
             graph.visitNode(node, true);
             node.updatePreAndSucState(parState, chState);
             node.setLoopDepth(chOgState.getLoopDepth());
@@ -394,6 +396,8 @@ public class OGTransfer {
             // relations for the events after lhe.
             graph.visitNode(node, true);
             assert !enableDebug || !DebugAndTest.acyclicMo(graph) : "Mo circle found!";
+            if (node.getLheIndex() == -2)
+                node.setLHEIndex(-1);
             // After setting relations, we need to check the conflict.
             if (isConflict(graph, curThd, node)) { // Conflict exists.
                 if (node.shouldRevisit()) {
@@ -867,6 +871,10 @@ public class OGTransfer {
             Pair<ObsGraph, ObsGraph> transferResult = singleStepTransfer(graphWrapper,
                     etp, leadState, chState, false);
             ObsGraph chGraph = transferResult.getFirst();
+            // FIXME: if chGraph == ObsGraph.DUMMY?
+            if (chGraph == ObsGraph.DUMMY) {
+                continue;
+            }
             if (chGraph != null) {
                 // Find the target state.
                 List<ObsGraph> chGraphs =

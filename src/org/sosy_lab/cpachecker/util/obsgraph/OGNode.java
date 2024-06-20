@@ -75,7 +75,8 @@ public class OGNode implements Copier<OGNode> {
     // the field inGraph is set as true.
     private boolean hasBeenAddedToGraph = false;
     // Index of the last-handled event. For handled events, we don't handle them again.
-    private int LHEIndex = -1;
+    // private int LHEIndex = -1;
+    private int LHEIndex = -2;
 
     // FIXME: just used for the node that has been added to the graph. For a totally
     //  new node, set as null.
@@ -508,8 +509,38 @@ public class OGNode implements Copier<OGNode> {
         //  And what if nd contains more than one sharedEvent?
     }
 
+    /**
+     * @return Whether the node should be revisited.
+     * FIXME
+     */
     public boolean shouldRevisit() {
-        return !events.isEmpty() && (LHEIndex < events.size() - 1);
+        // FIXME?
+        if (!inGraph)
+            return false;
+        if (events.isEmpty())
+            return false;
+        if (LHEIndex == -2) {
+            // We haven't performed any revisit for the node, and still not meet
+            // the end of the node.
+            return false;
+        }
+
+        // Else, check whether there are some events we should revisit.
+        // FIXME: As we regard an edge atomic, i.e., we always keep all the events that come
+        // form the same edge, so when computing the events need to revisit, if there are some
+        // events locating the same edge with lhe(events.get(LHEIndex)), then we will ignore them.
+        int handledIndex = LHEIndex;
+        if (0 <= LHEIndex && LHEIndex < events.size() - 1) {
+            // Check the events in the same edge with events.get(LHEIndex).
+            for (int i = LHEIndex + 1; i < events.size(); i++) {
+                if (Objects.equals(events.get(i).getInEdge(), events.get(LHEIndex).getInEdge())) {
+                    handledIndex = i;
+                    continue;
+                }
+                break;
+            }
+        }
+        return handledIndex < events.size() - 1;
     }
 
     public int getRefCount(String type, OGNode other) {
