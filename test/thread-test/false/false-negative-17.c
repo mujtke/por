@@ -260,4 +260,3 @@ int main()
   __VERIFIER_assert(main$tmp_guard1);
   return 0;
 }
-

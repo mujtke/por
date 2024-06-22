@@ -111,9 +111,9 @@ public class ObsGraph implements Copier<ObsGraph> {
      */
     public List<SharedEvent> getRE() {
         assert lastNode != null :
-                "Try to revisit a graph which has no last node specified.";
-        if (!lastNode.shouldRevisit())
-            return List.of();
+                "Try to revisit a graph which has no last node specified!";
+//        if (!lastNode.shouldRevisit())
+//            return List.of();
         return lastNode.getRE();
     }
 
@@ -390,6 +390,7 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     /**
      * Judge whether node A should happen before node B in a trace.
+     * FIXME: When graph is cyclic, the method will cause stack overflow.
      */
     public boolean hb(OGNode A, OGNode B) {
         assert A != null && B != null;
@@ -405,6 +406,28 @@ public class ObsGraph implements Copier<ObsGraph> {
 
         for (OGNode n : A.getFromRead()) {
             if (n == B || hb(n, B))
+                return true;
+        }
+
+        return false;
+    }
+
+    public boolean hb(OGNode A, OGNode B, final Set<OGNode> hbnOfA) {
+        assert A != null && B != null;
+        return (hbnOfA.contains(B)
+                || checkHbFor(A.getSuccessors(), B, hbnOfA)
+                || checkHbFor(A.getReadBy(), B, hbnOfA)
+                || checkHbFor(A.getFromRead(), B, hbnOfA));
+    }
+
+    private boolean checkHbFor(List<OGNode> nodes,
+                               OGNode B,
+                               final Set<OGNode> hbnOfA) {
+        for (OGNode n : nodes) {
+            if (hbnOfA.contains(n)) // n has been calculated before.
+                continue;
+            hbnOfA.add(n);
+            if ((n == B) || hb(n, B, hbnOfA))
                 return true;
         }
 
@@ -900,6 +923,9 @@ public class ObsGraph implements Copier<ObsGraph> {
      */
     public List<SharedEvent> getPrevious(SharedEvent e, SharedEvent w) {
         List<SharedEvent> result = new ArrayList<>();
+        List<SharedEvent> exclusiveRs = getExclusiveReadEvents(w.getInNode(), w);
+        List<Pair<SharedEvent, SharedEvent>> removedRfs = getRemovedRfs(exclusiveRs);
+        exclusiveRs.forEach(SharedEvent::removeReadFrom);
         for (OGNode n : nodes) {
             // e.getInNode() must be added before w.getInNode()
             for (SharedEvent ep : n.getEvents()) {
@@ -907,6 +933,7 @@ public class ObsGraph implements Copier<ObsGraph> {
                     result.add(ep);
             }
         }
+        restoreDeleteRfs(removedRfs);
 
         return result;
     }

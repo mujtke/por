@@ -394,4 +394,9 @@ public class SharedEvent implements Copier<SharedEvent> {
         });
         assert fromReadBy.isEmpty() : "Some From-Read-By relations remained.";
     }
+
+    public boolean lessThan(SharedEvent e) {
+        assert inNode == e.inNode;
+        return inNode.getEvents().indexOf(this) < inNode.getEvents().indexOf(e);
+    }
 }

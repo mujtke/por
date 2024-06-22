@@ -303,14 +303,16 @@ public class OGAlgorithm implements Algorithm {
 
         // Revisit and transfer(multi-step).
         List<ObsGraph> graphsForRevisit = getGraphsForRevisit(withGraphs);
-        while (!graphsForRevisit.isEmpty()) {
+        while (!graphsForRevisit.isEmpty() || !revisitResult.isEmpty()) {
             // 1.Revisit.
-            ObsGraph graph = graphsForRevisit.remove(0); // graph for revisit.
-            assert graph.needToRevisit() : "Try to revisit a graph should not be!";
-            revisitResult.addAll(revisitor.apply(reachedSet, graph));
-            // Debug.
-            if (graph.getRevisitNode() != null) {
-                assert false : "Some graphs keep re-visitable after the revisit!";
+            if (!graphsForRevisit.isEmpty()) {
+                ObsGraph graph = graphsForRevisit.remove(0); // graph for revisit.
+                assert graph.needToRevisit() : "Try to revisit a graph should not be!";
+                revisitResult.addAll(revisitor.apply(reachedSet, graph));
+                // Debug.
+                if (graph.getRevisitNode() != null) {
+                    assert false : "Some graphs keep re-visitable after the revisit!";
+                }
             }
 
             // 2.Transfer.

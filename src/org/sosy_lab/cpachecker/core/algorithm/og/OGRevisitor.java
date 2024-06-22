@@ -22,7 +22,6 @@ import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
 
 @Options(prefix = "algorithm.og")
@@ -107,6 +106,8 @@ public class OGRevisitor {
                 a = RE.remove(0);
                 // Update event 'a' as the new last-handled event.
                 a.getInNode().setLastHandledEvent(a);
+                // FIXME: Update the status whether G0 is still re-visitable.
+                G0.setNeedToRevisit(!RE.isEmpty());
                 // events that access the same var with event 'a'.
                 List<SharedEvent> sameLocationA;
                 switch (a.getAType()) {
@@ -154,7 +155,7 @@ public class OGRevisitor {
                             List<SharedEvent> delete =
                                     getDelete(REVISIT_TYPE.WRITE, Gw, rp, ap);
                             List<SharedEvent> deletePlusR = getDeletePlusR(delete, rp);
-                            if (!allMaximallyAdded(Gw, deletePlusR, ap))
+                            if (!allMaximallyAdded(Gw, deletePlusR, ap, rp))
                                 continue;
                             // Else, the check for maximality passes.
                             Gw.removeDelete(delete, rp);
@@ -196,7 +197,7 @@ public class OGRevisitor {
         if (consistent(G)) {
             // If G is consistent, add it to the result.
         } else {
-            if (G.needToRevisit()) {
+            if (G.needToRevisit()) { // FIXME: G.needToRevisit keeps unchanged, so we shouldn't use it.
                 // If G is not consistent but re-visitable, then just add it to the RG,
                 // and waiting for the next revisit.
                 RG.add(G);
@@ -343,16 +344,18 @@ public class OGRevisitor {
 
     /**
      * Checking whether all events in {@param deletePlusR} are added maximally.
+     *
      * @param deletePlusR events need to check.
      */
     private boolean allMaximallyAdded(
             ObsGraph G,
             List<SharedEvent> deletePlusR,
-            SharedEvent w) {
+            SharedEvent w,
+            SharedEvent r) {
         for (SharedEvent e : deletePlusR) {
             List<SharedEvent> previous = G.getPrevious(e, w);
             // e is maximally added?
-            if (!maximallyAdded(previous, e))
+            if (!maximallyAdded(previous, e, w, r))
                 return false;
         }
         return true;
@@ -361,16 +364,22 @@ public class OGRevisitor {
     /**
      * Checking whether e is added maximally by traversing all events in
      * {@param previous}.
+     *
      * @param previous the events must be kept after the revisit?
+     * @param w The event that the revisit performed on.
+     * @param r The event that reads from w after the revisit.
      */
-    private boolean maximallyAdded(List<SharedEvent> previous, SharedEvent e) {
+    private boolean maximallyAdded(List<SharedEvent> previous,
+                                   SharedEvent e,
+                                   SharedEvent w,
+                                   SharedEvent r) {
         boolean eIsWrite = e.getAType() == WRITE;
         SharedEvent ep = eIsWrite ? e : e.getReadFrom();
         assert ep != null : "Cannot find ep for event: " + e;
         for (int i = previous.size() - 1; i >= 0; i--) {
             // Reverse search.
             SharedEvent ee = previous.get(i);
-            if ((ee.getAType() == READ) && eIsWrite && (ee.getReadFrom() == e)) {
+            if (ee.isRead() && eIsWrite && (ee.getReadFrom() == e)) {
                 // \exists r = ee \in previous /\ G.rf(r) = e.
                 return false;
             }
@@ -379,9 +388,11 @@ public class OGRevisitor {
                 return false;
             }
             for (SharedEvent epmo : ep.getAllMoBefore()) {
-                if (previous.contains(epmo) && (epmo.getInNode() != ep.getInNode())) {
+                // FIXME: if epmo locates in w.inNode or r.inNode?
+                boolean cond = previous.contains(epmo);
+                if (cond) {
                     // ep \in previous /\ \exists epmo \in previous s.t. <ep, epmo>
-                    // \in G.mo /\ ep, epmo not in the same block.
+                    // \in G.mo /\ ep, epmo not in the same block (FIXME: with w or r?)
                     return false;
                 }
             }

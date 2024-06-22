@@ -905,11 +905,11 @@ public class OGNode implements Copier<OGNode> {
      * shouldRevisit() return true.
      */
     public List<SharedEvent> getRE() {
-        assert shouldRevisit() :
-                "Trying to get re-visitable events in a node that not re-visitable.";
+//        assert shouldRevisit() :
+//                "Trying to get re-visitable events in a node that not re-visitable.";
         List<SharedEvent> RE = events.stream().filter(e -> events.indexOf(e) > LHEIndex)
                 .collect(Collectors.toList());
-        assert !RE.isEmpty();
+//        assert !RE.isEmpty();
         return RE;
     }
 

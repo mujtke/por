@@ -946,7 +946,7 @@ public class OGTransfer {
             // FIXME: Which relations should we use here to judge if a node that comes
             //  from another thread ought to happen before the curNode?
             // otn.getFromRead().contains(curNode) || porf(otn, curNode) ?
-            if (graph.hb(otn, curNode)) {
+            if (graph.hb(otn, curNode, new HashSet<>())) {
                 return true;
             }
         }
