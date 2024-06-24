@@ -59,6 +59,9 @@ public class ObsGraph implements Copier<ObsGraph> {
     //
     public final static ObsGraph DUMMY = new ObsGraph();
 
+    // FIXME: some read events lose their rfs after revisit.
+    private OGNode dummyNode = null;
+
     // Debug: indicating where the graph is created.
     ARGState creationState = null;
     private static boolean enableDebug = false;
@@ -66,10 +69,22 @@ public class ObsGraph implements Copier<ObsGraph> {
     public void enableDebug(boolean pEnableDebug) {
         enableDebug = pEnableDebug;
     }
+
     public ObsGraph() {
+        //
     }
 
+    public OGNode getDummyNode() {
+        if (dummyNode == null) {
+            dummyNode = new OGNode();
+        }
+        return dummyNode;
+    }
+
+    public void setDummyNode(OGNode pDummyNode) { this.dummyNode = pDummyNode; }
+
     public int getIdentityHash() { return this.identityHash; }
+
     public ARGState getCreationState() {
         return creationState;
     }
@@ -192,6 +207,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         nGraph.lastNode = this.lastNode == null ? null : this.lastNode.deepCopy(memo);
         nGraph.needToRevisit = this.needToRevisit;
         nGraph.traceLen = this.traceLen;
+        nGraph.dummyNode = this.dummyNode != null ? this.dummyNode.deepCopy(memo) : null;
 
         return nGraph;
     }
@@ -507,8 +523,10 @@ public class ObsGraph implements Copier<ObsGraph> {
              if (node.getRs().isEmpty()) continue;
              for (Iterator<SharedEvent> it = node.getRs().iterator(); it.hasNext();) {
                  SharedEvent r = it.next(), w = r.getReadFrom();
-                 // Debug.
-                 if (w == null) continue;
+                 assert w != null : "Missing readFrom when trying to build fr!";
+                 // FIXME
+                 if (w.getAType() == SharedEvent.AccessType.DUMMY)
+                     continue;
                  // Deduce fr caused by r and w.
                  OGNode wNode = w.getInNode();
                  assert wNode.readBy(node) && node.readFrom(wNode);

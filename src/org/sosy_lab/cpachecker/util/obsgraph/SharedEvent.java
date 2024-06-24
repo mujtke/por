@@ -1,14 +1,16 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
 import com.google.common.base.Preconditions;
+import org.sosy_lab.cpachecker.cfa.DummyCFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
+import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.util.dependence.conditional.Var;
 
 import java.util.*;
 
 public class SharedEvent implements Copier<SharedEvent> {
 
-    public enum AccessType { WRITE, READ }
+    public enum AccessType { WRITE, READ, DUMMY }
     private final Var var;
     private final AccessType aType;
 

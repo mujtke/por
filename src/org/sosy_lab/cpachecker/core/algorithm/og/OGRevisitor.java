@@ -6,6 +6,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
+import org.sosy_lab.cpachecker.cfa.DummyCFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
@@ -22,6 +23,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.DUMMY;
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
 
 @Options(prefix = "algorithm.og")
@@ -159,6 +161,7 @@ public class OGRevisitor {
                                 continue;
                             // Else, the check for maximality passes.
                             Gw.removeDelete(delete, rp);
+                            handleLoseRfRs(Gw);
                             Pair<ObsGraph, ObsGraph> GwAndcoGw =
                                     setReadFrom(Gw, rp, ap, REVISIT_TYPE.WRITE, precision);
 
@@ -208,6 +211,8 @@ public class OGRevisitor {
                 // Otherwise, G will get blocked somewhere.
             }
         }
+        if (G.getRE().stream().anyMatch(e -> e.getAType() == DUMMY))
+            return;
 
         AbstractState pivotState = getPivotState(G);
         // Set 'needToRevisit' to false, whether a further revisit is needed is
@@ -218,6 +223,29 @@ public class OGRevisitor {
         G.setCreationState(chState);
         if (isEnableDebug())
             debugActions(G0, G, chState);
+    }
+
+    // FIXME: the case where some read events in the last node of G have no rfs.
+    private boolean handleLoseRfRs(ObsGraph G) {
+        boolean result = false;
+        List<SharedEvent> loseRfRs = G.getRE().stream().filter(e -> e.isRead()
+                                && (e.getReadFrom() == null
+                                || e.getReadFrom().getAType() == DUMMY))
+                .collect(Collectors.toList());
+        if (!loseRfRs.isEmpty()) { // We need to set rf for rs in loseRfRs by continuing to revisit.
+            loseRfRs.forEach(r -> {
+                if (r.getReadFrom() == null) {
+                    SharedEvent dummyWrite = new SharedEvent(null,
+                            DUMMY,
+                            new DummyCFAEdge(null, null));
+                    G.getDummyNode().getEvents().add(dummyWrite);
+                    dummyWrite.setInNode(G.getDummyNode());
+                    r.setReadFrom(dummyWrite);
+                }
+            });
+            result = true;
+        }
+        return result;
     }
 
     /**
