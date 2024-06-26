@@ -419,7 +419,8 @@ public class OGRevisitor {
             }
             for (SharedEvent epmo : ep.getAllMoBefore()) {
                 // FIXME: if epmo locates in w.inNode or r.inNode?
-                boolean cond = previous.contains(epmo);
+                boolean cond = previous.contains(epmo)
+                        && !Objects.equals(epmo.getInNode(), w.getInNode());
                 if (cond) {
                     // ep \in previous /\ \exists epmo \in previous s.t. <ep, epmo>
                     // \in G.mo /\ ep, epmo not in the same block (FIXME: with w or r?)

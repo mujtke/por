@@ -23,7 +23,7 @@ printf "${GREEN}${BOLD}%-30s${CLEAR}%-10s${YELLOW}%-10s${CLEAR}%-10s\n" "File" "
 function runTask() {
 	TEST_FILE="$1"
 	printf "%-30s" "$(basename ${TEST_FILE})"
-	printf "%-10s" "$(grep -v -E '^//|^$|^[\s\t ]*$' "$TEST_FILE" | wc -l)"
+	printf "%-10s" "$(grep -v -E '^//|^$|^[\s\t ]*$' "$TEST_FILE" | wc -l | tr -d ' ')"
 	cd "$workDir"
 	RESULT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
 	-spec default -preprocess \
@@ -37,5 +37,9 @@ function runTask() {
 
 for file in $(find "$targetDir" -iname '*.c'); do
 	#echo -n "$(basename $file): "
+	# Use .i file if existed.
+	if [ -e "${file%.c}.i" ]; then
+		file="${file%.c}.i"
+	fi
 	runTask "$file"
 done
