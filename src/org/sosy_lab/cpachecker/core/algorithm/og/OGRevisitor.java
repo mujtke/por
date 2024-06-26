@@ -238,7 +238,9 @@ public class OGRevisitor {
                     SharedEvent dummyWrite = new SharedEvent(null,
                             DUMMY,
                             new DummyCFAEdge(null, null));
+                    // G.getDummyNode().addEvents(List.of(dummyWrite));
                     G.getDummyNode().getEvents().add(dummyWrite);
+                    G.getDummyNode().getWs().add(dummyWrite);
                     dummyWrite.setInNode(G.getDummyNode());
                     r.setReadFrom(dummyWrite);
                 }

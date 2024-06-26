@@ -90,7 +90,7 @@ public class OGTransfer {
                     cmp2 = nlt.get(hash(e2.hashCode(), e1.hashCode()));
             if (cmp1 == 0 || cmp2 == 0) return 0; // equal.
             if (cmp1 == 1 && cmp2 == -1) return -1; // <
-            return 1; // >, cmp1 == 1 && cmp2 == -1.
+            return 1; // >, cmp1 == -1 && cmp2 == 1.
         }
     }
 
@@ -902,6 +902,10 @@ public class OGTransfer {
                 continue;
             }
             if (chGraph != null) {
+                // FIXME: If chGraph is re-visitable, should we revisit it first?
+                if (chGraph.needToRevisit()) {
+                    return Pair.of(chState, chGraph);
+                }
                 if (chState.getChildren().isEmpty()) {
                     // FIXME: neither the chState is in the waitlist nor does it have any child.
                     // In this case, should we add the chState to the waitlist again?

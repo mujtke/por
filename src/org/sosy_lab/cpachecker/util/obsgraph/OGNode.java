@@ -466,6 +466,12 @@ public class OGNode implements Copier<OGNode> {
                         // Transfer relations owned by sameW to e.
                         sameW.transferRelationsTo(e);
                     }
+                    break;
+
+                case DUMMY:
+                    addEvent(e);
+                    break;
+
                 default:
             }
         });
@@ -477,7 +483,9 @@ public class OGNode implements Copier<OGNode> {
         e.setInNode(this);
         if (e.isRead()) {
             Rs.add(e);
-        } else {
+        } else if (e.isWrite()) {
+            Ws.add(e);
+        } else if (e.isDummy()) {
             Ws.add(e);
         }
     }
