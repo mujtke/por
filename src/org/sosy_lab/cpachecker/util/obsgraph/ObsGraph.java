@@ -367,9 +367,6 @@ public class ObsGraph implements Copier<ObsGraph> {
             SharedEvent a) {
         SharedEvent arf = a.getReadFrom();
         assert arf != null;
-        if (arf.getInNode() != nodei)
-            return OGRevisitor.porf(nodei, aNode);
-        // Else, arf.inNode == nodei.
         a.removeReadFrom();
         if (OGRevisitor.porf(nodei, aNode)) {
             a.setReadFrom(arf);
