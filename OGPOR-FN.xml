@@ -10,7 +10,7 @@
 
 <rundefinition name="SV-COMP22_unreach-call_CPAchecker_OGPOR-BDD">
 	<tasks name="ConcurrencySafety-Main">
-		<includesfile>./results/2024-06-26/FN.set</includesfile>
+		<includesfile>./FN.set</includesfile>
 		<propertyfile>../sv-benchmarks/c/properties/unreach-call.prp</propertyfile>
 		<option name="-config">./config/myAnalysis-concurrency-bdd-ogpor-no-out.properties</option>
 	</tasks>
