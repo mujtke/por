@@ -34,8 +34,8 @@ data = json.load(open(dataJson))
 for row in data:
     wrong = filter(lambda x : x['category'] == 'wrong', row['results'])
     if (list(wrong)):
-        print(row["href"])
-        fnSet.write(re.sub('../', '', row["href"] + "\n", 1))
+        print(re.sub('../', '', row["href"], 1))
+        fnSet.write('../' + row["href"] + "\n")
 
 setFile = (dataDir + "/FN.set").replace('/', '\/')
 os.system(f'sed -i\'.bak\' \'s/\(<includesfile>\).*\(<\/includesfile>\)/\\1{setFile}\\2/\' OGPOR-FN.xml')
