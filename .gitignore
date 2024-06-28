@@ -16,6 +16,7 @@ a.out
 *.dot
 *.pdf 
 *.txt
+*.bak
 
 # /build.xml
 build.xml

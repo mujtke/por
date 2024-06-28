@@ -35,7 +35,7 @@ for row in data:
     wrong = filter(lambda x : x['category'] == 'wrong', row['results'])
     if (list(wrong)):
         print(row["href"])
-        fnSet.write(row["href"] + "\n")
+        fnSet.write(re.sub('../', '', row["href"] + "\n", 1))
 
 setFile = (dataDir + "/FN.set").replace('/', '\/')
 os.system(f'sed -i\'.bak\' \'s/\(<includesfile>\).*\(<\/includesfile>\)/\\1{setFile}\\2/\' OGPOR-FN.xml')
