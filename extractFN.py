@@ -38,4 +38,4 @@ for row in data:
         fnSet.write(row["href"] + "\n")
 
 setFile = (dataDir + "/FN.set").replace('/', '\/')
-os.system(f'sed -i]\'.bak\' \'s/\(<includesfile>\).*\(<\/includesfile>\)/\\1{setFile}\\2/\' OGPOR-FN.xml')
+os.system(f'sed -i\'.bak\' \'s/\(<includesfile>\).*\(<\/includesfile>\)/\\1{setFile}\\2/\' OGPOR-FN.xml')
