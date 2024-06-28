@@ -9,8 +9,8 @@
   <option name="-timelimit">900 s</option>
 
 <rundefinition name="SV-COMP22_unreach-call_CPAchecker_OGPOR-BDD">
-	<tasks name="FN">
-	<includesfile>./results/2024-06-26/FalseNegatives.set</includesfile>
+	<tasks name="ConcurrencySafety-Main">
+		<includesfile>xxx.set</includesfile>
 		<propertyfile>../sv-benchmarks/c/properties/unreach-call.prp</propertyfile>
 		<option name="-config">./config/myAnalysis-concurrency-bdd-ogpor-no-out.properties</option>
 	</tasks>
