@@ -14,7 +14,7 @@ do
 	PREFIX="${YML%/*}"
 	FILE="${PREFIX}/$(awk '/.*input_files.*$/ { print $2 }' $YML | tr -d "'")"
 	EXPECT="$(awk '/.*expected.*$/ { print $2 }' $YML)"
-	RESULT="$($EXECUTABLE "$CONFIG_FILE" $ARGS "$FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3}')"
+	RESULT="$($EXECUTABLE -config "$CONFIG_FILE" $ARGS "$FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3}')"
 	if [ "$RESULT" == "" ]; then
 		RESULT="UNKNOWN"
 	fi
