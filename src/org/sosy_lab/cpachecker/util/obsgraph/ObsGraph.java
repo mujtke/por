@@ -452,42 +452,54 @@ public class ObsGraph implements Copier<ObsGraph> {
      * @param rp the upper bound of the deleted events (not including {@param rp}).
      * FIXME: remove cached assumption edges here?
      */
-     public void removeDelete(List<SharedEvent> delete, SharedEvent rp) {
+    public List<SharedEvent> removeDelete(List<SharedEvent> delete, SharedEvent rp) {
 
-         OGNode rpn = rp.getInNode();
-         // In rpn, some events may get delete, and we need to remove corresponding edges, too.
-         CFAEdge rpe = rp.getInEdge();
-         assert rpn.contains(rpe);
-         int rpeIndex = rpn.getBlockEdges().indexOf(rpe);
-         Set<CFAEdge> edgesToRemove = rpn.getBlockEdges().stream()
-                 .filter(edge -> rpn.getBlockEdges().indexOf(edge) > rpeIndex)
-                 .collect(Collectors.toSet());
-         Set<OGNode> nodesToRemove = new HashSet<>();
+        OGNode rpn = rp.getInNode();
+        // In rpn, some events may get delete, and we need to remove corresponding edges, too.
+        CFAEdge rpe = rp.getInEdge();
+        assert rpn.contains(rpe);
+        int rpeIndex = rpn.getBlockEdges().indexOf(rpe);
+        Set<CFAEdge> edgesToRemove = rpn.getBlockEdges().stream()
+                .filter(edge -> rpn.getBlockEdges().indexOf(edge) > rpeIndex)
+                .collect(Collectors.toSet());
+        Set<OGNode> nodesToRemove = new HashSet<>();
 
-         // remove relations before removing nodes.
-         delete.forEach(e -> {
-             // For e.
-             e.removeAllRelations();
+        List<SharedEvent> loseRfRs = new ArrayList<>();
+        // remove relations before removing nodes.
+        delete.forEach(e -> {
+            // FIXME: If e is a write and some reads not in the 'delete' read from it?
+            // Collect them here.
+            if (e.isWrite()) {
+                e.getReadBy().forEach(rb -> {
+                    // rb will read from null after the removal of the relations of e.
+                    if (!delete.contains(rb))
+                        loseRfRs.add(rb);
+                });
+            }
+            // For e.
+            e.removeAllRelations();
 
-             // For e.inNode.
-             OGNode en = e.getInNode();
-             if (!Objects.equals(rpn, en)) {
-                 // Remove node en.
-                 nodesToRemove.add(en);
-             } else {
-                 // Don't remove node rpn, just remove event e.
-                 rpn.removeEvent(e);
-             }
-         });
+            // For e.inNode.
+            OGNode en = e.getInNode();
+            if (!Objects.equals(rpn, en)) {
+                // Remove node en.
+                nodesToRemove.add(en);
+            } else {
+                // Don't remove node rpn, just remove event e.
+                rpn.removeEvent(e);
+            }
+        });
 
-         rpn.removeEdges(edgesToRemove);
-         nodesToRemove.forEach(OGNode::removeAllRelations);
-         nodes.removeAll(nodesToRemove);
+        rpn.removeEdges(edgesToRemove);
+        nodesToRemove.forEach(OGNode::removeAllRelations);
+        nodes.removeAll(nodesToRemove);
 
-         // Remove the corresponding cached assumption edges because of the removal of
-         // deleted events.
-         removeAssumeEdges(delete, rp);
-     }
+        // Remove the corresponding cached assumption edges because of the removal of
+        // deleted events.
+        removeAssumeEdges(delete, rp);
+
+        return loseRfRs;
+    }
 
     public void deduceFromRead() {
          // Deduce the fr according the po and rf in the graph.

@@ -160,8 +160,8 @@ public class OGRevisitor {
                             if (!allMaximallyAdded(Gw, deletePlusR, ap, rp))
                                 continue;
                             // Else, the check for maximality passes.
-                            Gw.removeDelete(delete, rp);
-                            handleLoseRfRs(Gw);
+                            List<SharedEvent> loseRfRs = Gw.removeDelete(delete, rp);
+                            handleLoseRfRs(Gw, loseRfRs);
                             Pair<ObsGraph, ObsGraph> GwAndcoGw =
                                     setReadFrom(Gw, rp, ap, REVISIT_TYPE.WRITE, precision);
 
@@ -226,12 +226,12 @@ public class OGRevisitor {
     }
 
     // FIXME: the case where some read events in the last node of G have no rfs.
-    private boolean handleLoseRfRs(ObsGraph G) {
+    private boolean handleLoseRfRs(ObsGraph G, List<SharedEvent> loseRfRs) {
         boolean result = false;
-        List<SharedEvent> loseRfRs = G.getRE().stream().filter(e -> e.isRead()
-                                && (e.getReadFrom() == null
-                                || e.getReadFrom().getAType() == DUMMY))
-                .collect(Collectors.toList());
+        // List<SharedEvent> loseRfRs = G.getRE().stream().filter(e -> e.isRead()
+        //                         && (e.getReadFrom() == null
+        //                         || e.getReadFrom().getAType() == DUMMY))
+        //         .collect(Collectors.toList());
         if (!loseRfRs.isEmpty()) { // We need to set rf for rs in loseRfRs by continuing to revisit.
             loseRfRs.forEach(r -> {
                 if (r.getReadFrom() == null) {
@@ -550,18 +550,18 @@ public class OGRevisitor {
         if (A == null || B == null)
             return false;
 
-        for (OGNode n : A.getSuccessors()) {
-            try {
+        try {
+            for (OGNode n : A.getSuccessors()) {
                 if (n == B || porf(n, B))
                     return true;
-            } catch (StackOverflowError e) {
-                throw new RuntimeException("Stack overflow! Graph is not acyclic!");
             }
-        }
 
-        for (OGNode n : A.getReadBy()) {
-            if (n == B || porf(n, B))
-                return true;
+            for (OGNode n : A.getReadBy()) {
+                if (n == B || porf(n, B))
+                    return true;
+            }
+        } catch (StackOverflowError e) {
+            throw new RuntimeException("StackOverflow error found!");
         }
 
         return false;
