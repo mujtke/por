@@ -19,7 +19,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
-import static org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor.porf;
 import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
@@ -997,7 +996,7 @@ public class OGTransfer {
                     if (msucn != curNode
                             &&!msucn.isInGraph()
                             && !rbn.isInGraph()
-                            && porf(msucn, rbn)) {
+                            && graph.porf(msucn, rbn)) {
                         // Conflict found.
                         // msuc should happen before the curNode.
                         return true;

@@ -128,7 +128,7 @@ public class OGRevisitor {
                             // a revisit for a read event, i.e., those in the same node
                             // with and behind 'ap'.
                             List<SharedEvent> delete =
-                                    getDelete(REVISIT_TYPE.READ, Gr, ap, wp);
+                                    Gr.getDelete(REVISIT_TYPE.READ, ap, wp);
                             // Maximality should always hold when revisiting a read.
                             Gr.removeDelete(delete, ap);
                             Pair<ObsGraph, ObsGraph> GrAndcoGr =
@@ -155,7 +155,7 @@ public class OGRevisitor {
                                     rp = (SharedEvent) memo.get(System.identityHashCode(r));
 
                             List<SharedEvent> delete =
-                                    getDelete(REVISIT_TYPE.WRITE, Gw, rp, ap);
+                                    Gw.getDelete(REVISIT_TYPE.WRITE, rp, ap);
                             List<SharedEvent> deletePlusR = getDeletePlusR(delete, rp);
                             if (!allMaximallyAdded(Gw, deletePlusR, ap, rp))
                                 continue;
@@ -483,55 +483,6 @@ public class OGRevisitor {
         return false;
     }
 
-    /**
-     * Get the events that will get removed after the revisit.
-     * @param r the event after this will get remove when rules satisfied.
-     * @param w the event {@param r} read from.
-     * @implNote some statements like X = Y may contain more than one event, for this
-     * case, we regard the statement atomic, i.e., write to X won't get delete when
-     * {@param r} is the read to Y.
-     * NOTE: If the algorithm is correct, then there shouldn't be previous results
-     *  in the deleted events.
-     * A deleted event e should follow these rules:
-     * 1. e is added after {@param r}.
-     * 2. e shouldn't porf {@param w}.
-     * FIXME: the rules above matters.
-     */
-    private List<SharedEvent> getDelete(
-            REVISIT_TYPE type,
-            ObsGraph G,
-            SharedEvent r,
-            SharedEvent w) {
-        List<SharedEvent> delete = new ArrayList<>();
-
-        // Handle the node that r in.
-        OGNode rNode = r.getInNode();
-        List<SharedEvent> events = r.getInNode().getEvents();
-        for (int i = events.indexOf(r) + 1; i < events.size(); i++) {
-            SharedEvent e = events.get(i);
-            if (r.inSameEdgeWith(e))
-                continue;
-            assert rNode.getBlockEdges().indexOf(e.getInEdge()) >
-                    rNode.getBlockEdges().indexOf(r.getInEdge()) :
-                    "Trying to delete an event that shouldn't be!";
-            delete.add(e);
-        }
-
-        // Handle other nodes that added after rNode.
-        if (type == REVISIT_TYPE.WRITE) {
-            int rNodeIdx = G.getNodes().indexOf(r.getInNode()),
-                    wNodeIdx = G.getNodes().indexOf(w.getInNode());
-            for (int i = rNodeIdx + 1; i < wNodeIdx; i++) {
-                OGNode ni = G.getNodes().get(i), nw = G.getNodes().get(wNodeIdx);
-                if (!porf(ni, nw)) {
-                    delete.addAll(ni.getEvents());
-                }
-            }
-        }
-
-        return delete;
-    }
-
     // FIXME: we should consider all events that locate in the same node with r?
     private List<SharedEvent> getDeletePlusR(List<SharedEvent> delete, SharedEvent r) {
         List<SharedEvent> deletePlusR = new ArrayList<>(delete);
@@ -539,32 +490,6 @@ public class OGRevisitor {
                 .filter(r::inSameEdgeWith).collect(Collectors.toList()));
 
         return deletePlusR;
-    }
-
-    /**
-     * @return true if node A is porf-before B.
-     * @implNote porf only contains po and rf relations.
-     */
-    public static boolean porf(OGNode A, OGNode B) {
-
-        if (A == null || B == null)
-            return false;
-
-        try {
-            for (OGNode n : A.getSuccessors()) {
-                if (n == B || porf(n, B))
-                    return true;
-            }
-
-            for (OGNode n : A.getReadBy()) {
-                if (n == B || porf(n, B))
-                    return true;
-            }
-        } catch (StackOverflowError e) {
-            throw new RuntimeException("StackOverflow error found!");
-        }
-
-        return false;
     }
 
     // Debug.

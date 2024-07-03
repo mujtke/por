@@ -368,7 +368,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         SharedEvent arf = a.getReadFrom();
         assert arf != null;
         a.removeReadFrom();
-        if (OGRevisitor.porf(nodei, aNode)) {
+        if (porf(nodei, aNode)) {
             a.setReadFrom(arf);
             return true;
         }
@@ -390,41 +390,55 @@ public class ObsGraph implements Copier<ObsGraph> {
         }
         // Case 2: A != B.
         // If A porf B, then we think a porf b too.
-        return OGRevisitor.porf(A, B);
+        return porf(A, B);
     }
 
     /**
      * Judge whether (A, B) \in porf^+.
+     * @implNote porf only contains po and rf relations.
      */
     public boolean porf(OGNode A, OGNode B) {
         assert A != null && B != null;
-        return OGRevisitor.porf(A, B);
+        // return porf(A, B, enableDebug ? new HashSet<>() : null);
+        return porf(A, B, new HashSet<>());
+    }
+
+    private boolean porf(OGNode A, OGNode B, final Set<OGNode> porfnOfA) {
+        assert A != null && B != null;
+        if (porfnOfA == null) {
+            for (OGNode n : A.getSuccessors()) {
+                if (n == B || porf(n, B, null))
+                    return true;
+            }
+            for (OGNode n : A.getReadBy()) {
+                if (n == B || porf(n, B, null))
+                    return true;
+            }
+            return false;
+        } else {
+            return (porfnOfA.contains(B)
+                    || checkPorfFor(A.getSuccessors(), B, porfnOfA)
+                    || checkPorfFor(A.getReadBy(), B, porfnOfA));
+        }
+    }
+
+    private boolean checkPorfFor(List<OGNode> pNodes,
+                                 OGNode B,
+                                 final Set<OGNode> porfnOfA) {
+        for (OGNode n : pNodes) {
+            if (porfnOfA.contains(n))
+                continue;
+            porfnOfA.add(n);
+            if (n == B || porf(n, B, porfnOfA))
+                return true;
+        }
+        return false;
     }
 
     /**
      * Judge whether node A should happen before node B in a trace.
-     * FIXME: When graph is cyclic, the method will cause stack overflow.
+     * FIXME: How to handle the case in which the graph is cyclic.
      */
-    public boolean hb(OGNode A, OGNode B) {
-        assert A != null && B != null;
-        for (OGNode n : A.getSuccessors()) {
-            if (n == B || hb(n, B))
-                return true;
-        }
-
-        for (OGNode n : A.getReadBy()) {
-            if (n == B || hb(n, B))
-                return true;
-        }
-
-        for (OGNode n : A.getFromRead()) {
-            if (n == B || hb(n, B))
-                return true;
-        }
-
-        return false;
-    }
-
     public boolean hb(OGNode A, OGNode B, final Set<OGNode> hbnOfA) {
         assert A != null && B != null;
         return (hbnOfA.contains(B)
@@ -433,18 +447,65 @@ public class ObsGraph implements Copier<ObsGraph> {
                 || checkHbFor(A.getFromRead(), B, hbnOfA));
     }
 
-    private boolean checkHbFor(List<OGNode> nodes,
+    private boolean checkHbFor(List<OGNode> pNodes,
                                OGNode B,
                                final Set<OGNode> hbnOfA) {
-        for (OGNode n : nodes) {
+        for (OGNode n : pNodes) {
             if (hbnOfA.contains(n)) // n has been calculated before.
                 continue;
             hbnOfA.add(n);
             if ((n == B) || hb(n, B, hbnOfA))
                 return true;
         }
-
         return false;
+    }
+
+    /**
+     * Get the events that will get removed after the revisit.
+     * @param r the event after this will get remove when rules satisfied.
+     * @param w the event {@param r} read from.
+     * @implNote some statements like X = Y may contain more than one event, for this
+     * case, we regard the statement atomic, i.e., write to X won't get delete when
+     * {@param r} is the read to Y.
+     * NOTE: If the algorithm is correct, then there shouldn't be previous results
+     *  in the deleted events.
+     * A deleted event e should follow these rules:
+     * 1. e is added after {@param r}.
+     * 2. e shouldn't porf {@param w}.
+     * FIXME: the rules above matters.
+     */
+    public List<SharedEvent> getDelete(
+            OGRevisitor.REVISIT_TYPE type,
+            SharedEvent r,
+            SharedEvent w) {
+        List<SharedEvent> delete = new ArrayList<>();
+
+        // Handle the node that r in.
+        OGNode rNode = r.getInNode();
+        List<SharedEvent> events = r.getInNode().getEvents();
+        for (int i = events.indexOf(r) + 1; i < events.size(); i++) {
+            SharedEvent e = events.get(i);
+            if (r.inSameEdgeWith(e))
+                continue;
+            assert rNode.getBlockEdges().indexOf(e.getInEdge()) >
+                    rNode.getBlockEdges().indexOf(r.getInEdge()) :
+                    "Trying to delete an event that shouldn't be!";
+            delete.add(e);
+        }
+
+        // Handle other nodes that added after rNode.
+        if (type == OGRevisitor.REVISIT_TYPE.WRITE) {
+            int rNodeIdx = nodes.indexOf(r.getInNode()),
+                    wNodeIdx = nodes.indexOf(w.getInNode());
+            for (int i = rNodeIdx + 1; i < wNodeIdx; i++) {
+                OGNode ni = nodes.get(i), nw = nodes.get(wNodeIdx);
+                if (!porf(ni, nw)) {
+                    delete.addAll(ni.getEvents());
+                }
+            }
+        }
+
+        return delete;
     }
 
     /**
