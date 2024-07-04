@@ -35,7 +35,7 @@ function runTask() {
 	fi
 }
 
-for file in $(find "$targetDir" -iname '*.c'); do
+for file in $(find -s "$targetDir" -iname '*.c'); do
 	#echo -n "$(basename $file): "
 	# Use .i file if existed.
 	if [ -e "${file%.c}.i" ]; then

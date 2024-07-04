@@ -497,12 +497,22 @@ public class ObsGraph implements Copier<ObsGraph> {
         if (type == OGRevisitor.REVISIT_TYPE.WRITE) {
             int rNodeIdx = nodes.indexOf(r.getInNode()),
                     wNodeIdx = nodes.indexOf(w.getInNode());
+            // FIXME: ignore the reads after the w?
+            List<SharedEvent> exclusiveReadEvents =
+                    getExclusiveReadEvents(w.getInNode(), w);
+            // Storing rfs for exclusive read events.
+            List<Pair<SharedEvent, SharedEvent>> removedRfs =
+                    getRemovedRfs(exclusiveReadEvents);
+            // Remove rfs for exclusive read events.
+            exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
             for (int i = rNodeIdx + 1; i < wNodeIdx; i++) {
                 OGNode ni = nodes.get(i), nw = nodes.get(wNodeIdx);
                 if (!porf(ni, nw)) {
                     delete.addAll(ni.getEvents());
                 }
             }
+            // Restoring the removed rfs.
+            restoreDeleteRfs(removedRfs);
         }
 
         return delete;

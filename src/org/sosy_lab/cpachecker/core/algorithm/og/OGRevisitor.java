@@ -23,8 +23,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.DUMMY;
-import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.WRITE;
+import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.*;
 
 @Options(prefix = "algorithm.og")
 public class OGRevisitor {
@@ -211,8 +210,12 @@ public class OGRevisitor {
                 // Otherwise, G will get blocked somewhere.
             }
         }
-        if (G.getRE().stream().anyMatch(e -> e.getAType() == DUMMY))
+
+        if (G.getRE().stream().anyMatch(e -> e.getAType() == READ
+                && e.getReadFrom().getAType() == DUMMY)) {
+            RG.add(G);
             return;
+        }
 
         AbstractState pivotState = getPivotState(G);
         // Set 'needToRevisit' to false, whether a further revisit is needed is
@@ -385,7 +388,7 @@ public class OGRevisitor {
         for (SharedEvent e : deletePlusR) {
             List<SharedEvent> previous = G.getPrevious(e, w);
             // e is maximally added?
-            if (!maximallyAdded(previous, e, w, r))
+            if (!maximallyAdded(G, previous, e, w, r))
                 return false;
         }
         return true;
@@ -395,11 +398,13 @@ public class OGRevisitor {
      * Checking whether e is added maximally by traversing all events in
      * {@param previous}.
      *
+     * @param g
      * @param previous the events must be kept after the revisit?
-     * @param w The event that the revisit performed on.
-     * @param r The event that reads from w after the revisit.
+     * @param w        The event that the revisit performed on.
+     * @param r        The event that reads from w after the revisit.
      */
-    private boolean maximallyAdded(List<SharedEvent> previous,
+    private boolean maximallyAdded(ObsGraph G,
+                                   List<SharedEvent> previous,
                                    SharedEvent e,
                                    SharedEvent w,
                                    SharedEvent r) {
@@ -409,6 +414,7 @@ public class OGRevisitor {
         for (int i = previous.size() - 1; i >= 0; i--) {
             // Reverse search.
             SharedEvent ee = previous.get(i);
+
             if (ee.isRead() && eIsWrite && (ee.getReadFrom() == e)) {
                 // \exists r = ee \in previous /\ G.rf(r) = e.
                 return false;

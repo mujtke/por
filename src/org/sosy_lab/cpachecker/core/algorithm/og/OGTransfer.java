@@ -260,9 +260,9 @@ public class OGTransfer {
                     // which requires coEdge should exist.
                     CFAEdge coARGEdge = getCoEdgeFromARG(parState, edge);
                     // FIXME: we may need to replace the edge.
-                    if (coARGEdge == null)
-                        throw new UnsupportedOperationException(
-                                "Graph gets blocked at s" + parState.getStateId());
+//                    if (coARGEdge == null)
+//                        throw new UnsupportedOperationException(
+//                                "Graph gets blocked at s" + parState.getStateId());
                     // graph = null;
                     return Pair.of(null, null);
                 }
@@ -758,8 +758,10 @@ public class OGTransfer {
             } else {
                 // Replacement won't happen for shared assumption edge because the graph
                 // remembers which edge it has met. Therefore, transfer gets blocked here.
-                throw new UnsupportedOperationException(
-                        "Transfer gets blocked at s" + parState.getStateId());
+//                throw new UnsupportedOperationException(
+//                        "Transfer gets blocked at s" + parState.getStateId());
+                // Debug.
+                node.replaceCoEdge(coCFAEdge, edge);
             }
         } // case (1)
 
