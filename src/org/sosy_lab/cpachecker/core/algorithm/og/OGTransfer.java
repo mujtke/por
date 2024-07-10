@@ -126,6 +126,10 @@ public class OGTransfer {
         // For debugging.
         int parId = parState.getStateId(), chId = chState.getStateId();
         ObsGraph g = graphWrapper.get(0);
+        // Debug.
+        if (DebugAndTest.checkInvalidNodeFor(g)) {
+            System.out.println("Invalid node found!");
+        }
 
         OGPORState chOgState =
                 AbstractStates.extractStateByType(chState, OGPORState.class);
@@ -758,10 +762,8 @@ public class OGTransfer {
             } else {
                 // Replacement won't happen for shared assumption edge because the graph
                 // remembers which edge it has met. Therefore, transfer gets blocked here.
-//                throw new UnsupportedOperationException(
-//                        "Transfer gets blocked at s" + parState.getStateId());
-                // Debug.
-                node.replaceCoEdge(coCFAEdge, edge);
+                throw new UnsupportedOperationException(
+                        "Transfer gets blocked at s" + parState.getStateId());
             }
         } // case (1)
 

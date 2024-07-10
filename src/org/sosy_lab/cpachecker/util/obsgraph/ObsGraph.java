@@ -472,7 +472,7 @@ public class ObsGraph implements Copier<ObsGraph> {
      * A deleted event e should follow these rules:
      * 1. e is added after {@param r}.
      * 2. e shouldn't porf {@param w}.
-     * FIXME: the rules above matters.
+     * FIXME: the rules above matter.
      */
     public List<SharedEvent> getDelete(
             OGRevisitor.REVISIT_TYPE type,

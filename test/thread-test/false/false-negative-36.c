@@ -18,48 +18,38 @@ extern void __VERIFIER_atomic_end();
 int cnt = 0;
 
 
-int p0_EAX = 0;
+int p0 = 0;
 
 
-int p2_EAX = 0;
-
-
-int x = 0;
+int p2 = 0;
 
 
 int y = 0;
 
 
-void * P0(void *arg)
+void *P0(void *arg)
 {
   __VERIFIER_atomic_begin();
-  p0_EAX = y;
-
-  // x = x;
+  p0 = y;
   cnt = cnt + 1;
   __VERIFIER_atomic_end();
   return 0;
 }
 
-
-
-void * P1(void *arg)
+void *P1(void *arg)
 {
   __VERIFIER_atomic_begin();
   y = 1;
-  // x = x;
-  cnt = cnt + 1;
+  cnt = 1;
   __VERIFIER_atomic_end();
   return 0;
 }
 
-void * P2(void *arg)
+void *P2(void *arg)
 {
-  p2_EAX = y;
-
   __VERIFIER_atomic_begin();
+  p2 = y;
   y = 2;
-  // x = x;
   cnt = cnt + 1;
   __VERIFIER_atomic_end();
 
@@ -69,19 +59,19 @@ void * P2(void *arg)
 
 int main()
 {
-	__VERIFIER_atomic_begin();
+
   pthread_t t1828;
   pthread_create(&t1828, NULL, P0, NULL);
   pthread_t t1829;
   pthread_create(&t1829, NULL, P1, NULL);
   pthread_t t1830;
   pthread_create(&t1830, NULL, P2, NULL);
-  __VERIFIER_atomic_end();
+
 
   __VERIFIER_atomic_begin();
   if (cnt != 3)
 	  abort();
-  if (y == 2 && p0_EAX == 2 &&  p2_EAX == 1) {
+  if (p0 == 2 &&  p2 == 1) {
 ERROR: reach_error();
   }
   __VERIFIER_atomic_end();

@@ -5,6 +5,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.BDDState;
@@ -266,7 +267,7 @@ public class DebugAndTest {
         return false;
     }
 
-    // Detecting whether there some duplicated graphs in the given ARG state.
+    // Detecting whether there are some duplicated graphs in the given ARG state.
     public static boolean testRedundancy(ARGState state,
             Map<Integer, Map<Integer, String>> fullOGMap) {
         int stateNum = state.getStateId();
@@ -285,6 +286,13 @@ public class DebugAndTest {
         }
 
         return false;
+    }
+
+    // Given a graph, detect whether it contains any node without any events.
+    public static boolean checkInvalidNodeFor(ObsGraph graph) {
+        List<OGNode> nodes = graph.getNodes();
+        return nodes.stream().anyMatch(n -> (n.getRs().isEmpty() && n.getWs().isEmpty())
+                && (n.getTrAfter() != null || n.getTrBefore() != null));
     }
 
     // Detecting whether the transfer of some graphs gets blocked somewhere.

@@ -199,7 +199,7 @@ public class OGRevisitor {
         if (consistent(G)) {
             // If G is consistent, add it to the result.
         } else {
-            if (G.needToRevisit()) { // FIXME: G.needToRevisit keeps unchanged, so we shouldn't use it.
+            if (G.needToRevisit()) {
                 // If G is not consistent but re-visitable, then just add it to the RG,
                 // and waiting for the next revisit.
                 RG.add(G);
@@ -386,6 +386,12 @@ public class OGRevisitor {
             SharedEvent w,
             SharedEvent r) {
         for (SharedEvent e : deletePlusR) {
+            // FIXME: If e locates in the same node with r, and e > r, then we don't
+            // check the maximality for e?
+            if ((e.getInNode() == r.getInNode()) && G.lessThan(r, e)) {
+                continue;
+            }
+
             List<SharedEvent> previous = G.getPrevious(e, w);
             // e is maximally added?
             if (!maximallyAdded(G, previous, e, w, r))
@@ -398,7 +404,7 @@ public class OGRevisitor {
      * Checking whether e is added maximally by traversing all events in
      * {@param previous}.
      *
-     * @param g
+     * @param G
      * @param previous the events must be kept after the revisit?
      * @param w        The event that the revisit performed on.
      * @param r        The event that reads from w after the revisit.
