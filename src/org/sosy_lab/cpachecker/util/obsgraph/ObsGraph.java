@@ -288,15 +288,6 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     private List<SharedEvent> getSameLocationForWrite(SharedEvent w) {
 
-        // The read events after w may change their read-from in the future, so we
-        // don't consider those rf relations here?
-        List<SharedEvent> exclusiveReadEvents = getExclusiveReadEvents(w.getInNode(), w);
-        // Storing rfs for exclusive read events.
-        List<Pair<SharedEvent, SharedEvent>> removedRfs =
-                getRemovedRfs(exclusiveReadEvents);
-        // Remove rfs for exclusive read events.
-        exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
-
         List<SharedEvent> result = new ArrayList<>();
         for (int i = nodes.indexOf(w.getInNode()) - 1; i >= 0; i--) {
             // FIXME: Which nodes we should consider?
@@ -331,8 +322,6 @@ public class ObsGraph implements Copier<ObsGraph> {
             }
             result.add(r);
         }
-
-        restoreDeleteRfs(removedRfs);
 
         return result;
     }

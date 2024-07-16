@@ -1,5 +1,6 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
+import de.uni_freiburg.informatik.ultimate.util.datastructures.relation.LinkedHashRelation;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -77,6 +78,8 @@ public class OGNode implements Copier<OGNode> {
     // Index of the last-handled event. For handled events, we don't handle them again.
     // private int LHEIndex = -1;
     private int LHEIndex = -2;
+    private int LHRIndex = -1;
+    private int LHWIndex = -1;
 
     // FIXME: just used for the node that has been added to the graph. For a totally
     //  new node, set as null.
@@ -131,6 +134,8 @@ public class OGNode implements Copier<OGNode> {
         nNode.threadLoc.putAll(this.threadLoc); /* Deep copy */
         nNode.inGraph = this.inGraph;
         nNode.LHEIndex = this.LHEIndex;
+        nNode.LHRIndex = this.LHRIndex;
+        nNode.LHWIndex = this.LHWIndex;
         nNode.lastVisitedEdge = this.lastVisitedEdge;
         nNode.hasBeenAddedToGraph = this.hasBeenAddedToGraph;
 
@@ -141,7 +146,6 @@ public class OGNode implements Copier<OGNode> {
         // The left part will need to be copied in a deep way.
         /* events */
         this.events.forEach(e -> nNode.events.add(e.deepCopy(memo)));
-        nNode.LHEIndex = this.LHEIndex;
         /* Rs & Ws. */
         this.Rs.forEach(r -> nNode.Rs.add(r.deepCopy(memo)));
         this.Ws.forEach(w -> nNode.Ws.add(w.deepCopy(memo)));
@@ -380,8 +384,29 @@ public class OGNode implements Copier<OGNode> {
             // LHEIndex >= 0 means we have updated it, i.e., the node is not totally new.
             // Else, LHEIndex = -1, the node is totally new, deleting an event won't
             // change the LHEIndex.
+            // NOTE: LHEIndex == LHRIndex/LHWIndex?
+            assert LHEIndex == LHRIndex || LHEIndex == LHWIndex
+                    : "Incorrect LHEIndex found!";
+            if (LHEIndex == LHRIndex) {
+                LHRIndex--;
+                if (i == LHWIndex) { // e must be a write event.
+                    assert e.isWrite();
+                    LHWIndex = getNewIndex(i, e);
+                }
+                if (i < LHWIndex)
+                    LHWIndex--;
+            } else { // LHEIndex == LHWIndex
+                LHWIndex--;
+                if (i == LHRIndex) { // e must be a read event.
+                    assert e.isRead();
+                    LHRIndex = getNewIndex(i, e);
+                }
+                if (i < LHRIndex)
+                    LHRIndex--;
+            }
             LHEIndex--;
         }
+
         events.remove(e);
         // Don't forget to remove event from Rs or Ws.
         if (e.isRead()) {
@@ -389,6 +414,17 @@ public class OGNode implements Copier<OGNode> {
         } else {
             Ws.remove(e);
         }
+    }
+
+    private int getNewIndex(int i, SharedEvent e) {
+        int newIndex = -1;
+        for (int j = i - 1; j >= 0; j--) {
+            if (events.get(j).getAType() == e.getAType()) {
+                newIndex = j;
+                break;
+            }
+        }
+        return newIndex;
     }
 
     public void removeEdges(Collection<CFAEdge> toRemove) {
@@ -405,18 +441,23 @@ public class OGNode implements Copier<OGNode> {
         return (LHEIndex >= 0 && LHEIndex < events.size()) ? events.get(LHEIndex) : null;
     }
 
-    public int getLheIndex() {
-        return LHEIndex;
-    }
+    public int getLheIndex() { return LHEIndex; }
+    public int getLhrIndex() { return LHRIndex; }
+    public int getLhwIndex() { return LHWIndex; }
 
-    public void setLastHandledEvent(SharedEvent lastHandledEvent) {
-        assert events.contains(lastHandledEvent) :
+    public void setLastHandledEvent(SharedEvent e) {
+        assert events.contains(e) :
                 "Cannot set the event not in the node as the new last-handled event";
-        int newLHEIndex = events.indexOf(lastHandledEvent);
-        assert newLHEIndex == LHEIndex + 1 :
-                "Index error when setting new last-handled event, expect " + (LHEIndex + 1)
-                + ", but " + newLHEIndex + " given.";
+        int newLHEIndex = events.indexOf(e);
         this.LHEIndex = newLHEIndex;
+        // FIXME: set LHR and LHW here?
+        if (e.isRead()) {
+            assert newLHEIndex > LHRIndex;
+            LHRIndex = newLHEIndex;
+        } else {
+            assert newLHEIndex > LHWIndex;
+            LHWIndex = newLHEIndex;
+        }
     }
 
     public boolean contains(CFAEdge edge) {
@@ -519,7 +560,6 @@ public class OGNode implements Copier<OGNode> {
 
     /**
      * @return Whether the node should be revisited.
-     * FIXME
      */
     public boolean shouldRevisit() {
         // FIXME?
@@ -534,21 +574,7 @@ public class OGNode implements Copier<OGNode> {
         }
 
         // Else, check whether there are some events we should revisit.
-        // FIXME: As we regard an edge atomic, i.e., we always keep all the events that come
-        // form the same edge, so when computing the events need to revisit, if there are some
-        // events locating the same edge with lhe(events.get(LHEIndex)), then we will ignore them.
-        int handledIndex = LHEIndex;
-        if (0 <= LHEIndex && LHEIndex < events.size() - 1) {
-            // Check the events in the same edge with events.get(LHEIndex).
-            for (int i = LHEIndex + 1; i < events.size(); i++) {
-                if (Objects.equals(events.get(i).getInEdge(), events.get(LHEIndex).getInEdge())) {
-                    handledIndex = i;
-                    continue;
-                }
-                break;
-            }
-        }
-        return handledIndex < events.size() - 1;
+        return (LHWIndex < events.size() - 1) && (LHRIndex < events.size() -1);
     }
 
     public int getRefCount(String type, OGNode other) {
@@ -620,17 +646,23 @@ public class OGNode implements Copier<OGNode> {
                 && !threadLoc.containsKey(pNode.getInThread());
     }
 
+    // FIXME
     // Get the read events that need to visit when we are visiting the corresponding node.
     public void getRsNeedToVisit(@NonNull Set<SharedEvent> rFlag) {
         Rs.forEach(e -> {
-            if (events.indexOf(e) > LHEIndex && e.getReadFrom() == null)
+//            if (events.indexOf(e) > LHEIndex && e.getReadFrom() == null)
+            if (events.indexOf(e) > LHRIndex && e.getReadFrom() == null)
                 rFlag.add(e);
         });
     }
 
     // Get the write events that need to visit.
     public void getWsNeedToVisit(@NonNull Set<SharedEvent> wFlag) {
-        wFlag.addAll(Ws);
+//        wFlag.addAll(Ws);
+        Ws.forEach(e -> {
+            if (events.indexOf(e) > LHWIndex)
+                wFlag.add(e);
+        });
     }
 
     public Set<OGNode> getAllMoPredecessors() {
@@ -654,44 +686,6 @@ public class OGNode implements Copier<OGNode> {
         return result;
     }
 
-    // FIXME
-    // Remove the events after e0.
-    // Used in revisiting.
-    public void removeEventAfter(SharedEvent e0) {
-        assert events.contains(e0)  : "When removing events for revisiting of a read, " +
-                "the read(" + e0 +  ") not in the node: " + this;
-        // FIXME: set e0 as the lhe of this node?
-        LHEIndex = events.indexOf(e0) != LHEIndex ? events.indexOf(e0) : LHEIndex;
-
-        // Remove events and relations.
-        List<SharedEvent> rmEvents = new ArrayList<>();
-        for (int i = LHEIndex + 1; i < events.size(); i++) {
-            SharedEvent e = events.get(i);
-            // FIXME: remove events whose inEdge is equal to or after the e0.inEdge?
-            if (blockEdges.indexOf(e.getInEdge()) >= blockEdges.indexOf(e0.getInEdge())) {
-                rmEvents.add(e);
-                e.removeAllRelations();
-            }
-        }
-        rmEvents.forEach(this::removeEvent);
-
-        // Remove edges.
-        assert blockEdges.contains(e0.getInEdge()) : "Revisited read's inEdge must " +
-                "locate in the block edges: " + e0.getInEdge();
-        List<CFAEdge> rmEdges = new ArrayList<>();
-        for (int i = blockEdges.indexOf(e0.getInEdge()) + 1; i < blockEdges.size(); i++) {
-            rmEdges.add(blockEdges.get(i));
-        }
-        blockEdges.removeAll(rmEdges);
-    }
-
-    // Remove events that come from the edge.
-    public void removeEventsFromEdge(CFAEdge edge) {
-        Predicate<SharedEvent> filter = e -> Objects.equals(edge, e.getInEdge());
-        List<SharedEvent> toRemove = events.stream().filter(filter).collect(Collectors.toList());
-        toRemove.forEach(this::removeEvent);
-    }
-
     public boolean hasBeenAddedToGraph() {
         return hasBeenAddedToGraph;
     }
@@ -707,9 +701,9 @@ public class OGNode implements Copier<OGNode> {
             addEvents(sharedEvents);
     }
 
-    public void setLHEIndex(int pLHEIndex) {
-        LHEIndex = pLHEIndex;
-    }
+    public void setLHEIndex(int pLHEIndex) { LHEIndex = pLHEIndex; }
+    public void setLHRIndex(int pLHRIndex) { LHRIndex = pLHRIndex; }
+    public void setLHWIndex(int pLHWIndex) { LHWIndex = pLHWIndex; }
 
     public List<OGNode> getHappenBefore() { return happenBefore; }
 
@@ -908,16 +902,25 @@ public class OGNode implements Copier<OGNode> {
     }
 
     /**
+     * FIXME
      * @return list of the events that need to revisit.
      * @implNote When calling this method, the node should be re-visitable, i.e.,
      * shouldRevisit() return true.
      */
     public List<SharedEvent> getRE() {
-//        assert shouldRevisit() :
-//                "Trying to get re-visitable events in a node that not re-visitable.";
-        List<SharedEvent> RE = events.stream().filter(e -> events.indexOf(e) > LHEIndex)
-                .collect(Collectors.toList());
-//        assert !RE.isEmpty();
+        List<SharedEvent> RE = new ArrayList<>(),
+                RR = new ArrayList<>(),
+                RW = new ArrayList<>();
+        for (int i = 0; i < events.size(); i++) {
+            SharedEvent e = events.get(i);
+            if (e.isRead() && i > LHRIndex)
+                RR.add(e);
+            if (e.isWrite() && i > LHWIndex)
+                RW.add(e);
+        }
+        RE.addAll(RR);
+        // Write events should be after read ones.
+        RE.addAll(RW);
         return RE;
     }
 

@@ -130,6 +130,8 @@ public class OGRevisitor {
                                     Gr.getDelete(REVISIT_TYPE.READ, ap, wp);
                             // Maximality should always hold when revisiting a read.
                             Gr.removeDelete(delete, ap);
+                            // FIXME: The next revisit cannot be performed until the node become complete.
+                            Gr.setNeedToRevisit(false);
                             Pair<ObsGraph, ObsGraph> GrAndcoGr =
                                     setReadFrom(Gr, ap, wp, REVISIT_TYPE.READ, precision);
 
@@ -211,6 +213,7 @@ public class OGRevisitor {
             }
         }
 
+        // FIXME
         if (G.getRE().stream().anyMatch(e -> e.getAType() == READ
                 && e.getReadFrom().getAType() == DUMMY)) {
             RG.add(G);
