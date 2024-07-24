@@ -388,23 +388,35 @@ public class OGNode implements Copier<OGNode> {
             assert LHEIndex == LHRIndex || LHEIndex == LHWIndex
                     : "Incorrect LHEIndex found!";
             if (LHEIndex == LHRIndex) {
-                LHRIndex--;
-                if (i == LHWIndex) { // e must be a write event.
-                    assert e.isWrite();
-                    LHWIndex = getNewIndex(i, e);
-                }
-                if (i < LHWIndex)
-                    LHWIndex--;
-            } else { // LHEIndex == LHWIndex
-                LHWIndex--;
-                if (i == LHRIndex) { // e must be a read event.
-                    assert e.isRead();
+                if (i == LHRIndex) {
                     LHRIndex = getNewIndex(i, e);
-                }
-                if (i < LHRIndex)
+                    // In this case, LHWIndex keeps unchanged.
+                } else { // i < LHRIndex.
                     LHRIndex--;
+                    if (i == LHWIndex) { // e must be a write event.
+                        assert e.isWrite();
+                        LHWIndex = getNewIndex(i, e);
+                    } else if (i < LHWIndex)
+                        LHWIndex--;
+                    // else, i > LHWIndex, LHWIndex keeps unchanged.
+                }
+            } else { // LHEIndex == LHWIndex
+                if (i == LHWIndex) {
+                    LHWIndex = getNewIndex(i, e);
+                    // In this case, LHRIndex keeps unchanged.
+                } else {
+                    LHWIndex--;
+                    if (i == LHRIndex) { // e must be a read event.
+                        assert e.isRead();
+                        LHRIndex = getNewIndex(i, e);
+                    } else if (i < LHRIndex)
+                        LHRIndex--;
+                    // else, i < LHRIndex, LHRIndex keeps unchanged.
+                }
             }
-            LHEIndex--;
+            assert LHRIndex != LHWIndex;
+            // LHEIndex = max(LHRIndex, LHWIndex)
+            LHEIndex = Math.max(LHRIndex, LHWIndex);
         }
 
         events.remove(e);
@@ -458,6 +470,7 @@ public class OGNode implements Copier<OGNode> {
             assert newLHEIndex > LHWIndex;
             LHWIndex = newLHEIndex;
         }
+        assert LHWIndex != LHRIndex;
     }
 
     public boolean contains(CFAEdge edge) {

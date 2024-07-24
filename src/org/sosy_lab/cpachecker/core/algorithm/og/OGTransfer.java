@@ -319,6 +319,8 @@ public class OGTransfer {
             if (conflict1 == ConflictType.TEMP) {
                 assert node.shouldRevisit();
                 if (conflictMo) { // FIXME
+                    graph.setNeedToRevisit(true);
+                    graphWrapper.clear();
                     return Pair.of(ObsGraph.DUMMY, null);
                 }
             }
@@ -1077,7 +1079,11 @@ public class OGTransfer {
                 checkNode = toCheckEvents.get(0).getInNode();
         assert checkNode != null;
         List<SharedEvent> toRemove = new ArrayList<>();
+        int i = 0;
         while (n != null && !toCheckEvents.isEmpty()) {
+            if (i > 100) {
+                break;
+            }
             if (n == checkNode) {
                 n = n.getTrAfter();
                 continue;
@@ -1095,6 +1101,7 @@ public class OGTransfer {
             toCheckEvents.removeAll(toRemove);
             toRemove.clear();
             n = n.getTrAfter();
+            i++;
         }
     }
 

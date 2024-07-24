@@ -36,10 +36,10 @@ function runTask() {
 }
 
 function pass() {
-	for n in {16,18,26,33,36}; do
+	for n in {15,16,18,26,33,36}; do
 		reg=".*$n.*"
 		if [[ "$1" =~ $reg ]]; then
-			return 1
+			return 0
 		fi
 	done
 	return 0
