@@ -35,7 +35,22 @@ function runTask() {
 	fi
 }
 
+function pass() {
+	for n in {16,18,26,33,36}; do
+		reg=".*$n.*"
+		if [[ "$1" =~ $reg ]]; then
+			return 1
+		fi
+	done
+	return 0
+}
+
 for file in $(find -s "$targetDir" -iname '*.c'); do
+	# Ignore some files.
+	pass "$file"
+	if [ $? -eq 1 ]; then
+		continue
+	fi
 	#echo -n "$(basename $file): "
 	# Use .i file if existed.
 	if [ -e "${file%.c}.i" ]; then

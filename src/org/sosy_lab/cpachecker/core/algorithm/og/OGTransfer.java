@@ -24,6 +24,12 @@ import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
 public class OGTransfer {
 
+    public enum ConflictType {
+        NONE, /* Has no conflict */
+        TRUE, /* Conflict is certain */
+        TEMP, /* Conflict is temporary */
+    }
+
     private final Map<Integer, List<ObsGraph>> OGMap;
     private final Map<Integer, List<SharedEvent>> edgeVarMap;
     private final NLTComparator nltcmp = new NLTComparator();
@@ -204,7 +210,7 @@ public class OGTransfer {
 
         List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
         int edgeType = getEdgeType(sharedEvents, edge);
-        boolean newNodeCreated = false;
+        ConflictType conflict1 = ConflictType.NONE;
         Pair<ObsGraph, ObsGraph> result = null;
 
         if (edgeType == 0) { // Local non-assumption edge.
@@ -235,8 +241,12 @@ public class OGTransfer {
                 // In this case, we must check the conflict.
                 assert node.contains(edge) :
                         "A simple node must contains its only edge!";
-                if (isConflict(graph, curThd, node))
+                conflict1 = hasConflict(graph, curThd, node);
+                if (conflict1 == ConflictType.TRUE) {
                     return Pair.of(null, null);
+                }
+                // Otherwise, we need to check the mo-deduced conflict
+                // if ConflictType.TEMP detected.
             } else if (hasUnmetNode(graph)) { // Node == null and there are unmet nodes.
                 // Transfer requires no unmet nodes.
                 return Pair.of(null, null);
@@ -250,14 +260,15 @@ public class OGTransfer {
                 node.addEvents(sharedEvents);
                 graph.addNode(node);
                 // Indicate there is no need to check the conflict.
-                newNodeCreated = true;
             }
             // edgeType = 2
         } else { // Shared assumption edge.
             if (node != null) {
                 // FIXME: check the conflict first?
-                if (isConflict(graph, curThd, node))
+                conflict1 = hasConflict(graph, curThd, node);
+                if (conflict1 == ConflictType.TRUE) {
                     return Pair.of(null, null);
+                }
                 boolean edgeInNode = node.contains(edge);
                 if (!edgeInNode) { // The node doesn't contain the edge.
                     // In this case, we should transfer the graph along the coEdge,
@@ -289,17 +300,28 @@ public class OGTransfer {
                         chState);
                 node.addEvents(sharedEvents);
                 graph.addNode(node);
-                newNodeCreated = true;
             }
         }
 
         assert graph != null;
         if (node != null) {
+            boolean conflictMo = hasMoConflict(graph, curThd, node);
+            if (conflictMo && node.shouldRevisit())
+                conflict1 = ConflictType.TEMP;
+            if (conflict1 != ConflictType.TEMP && conflictMo) {
+                return Pair.of(null, null);
+            }
             if (node.getLheIndex() == -2)
                 node.setLHEIndex(-1);
             graph.visitNode(node, true);
             node.updatePreAndSucState(parState, chState);
             node.setLoopDepth(chOgState.getLoopDepth());
+            if (conflict1 == ConflictType.TEMP) {
+                assert node.shouldRevisit();
+                if (conflictMo) { // FIXME
+                    return Pair.of(ObsGraph.DUMMY, null);
+                }
+            }
         }
         graph.setNeedToRevisit(node != null && node.shouldRevisit());
         // we have reached the end of the node, so update the current node for curThd.
@@ -393,23 +415,25 @@ public class OGTransfer {
             }
         }
 
-        boolean hasConflict = false;
+        ConflictType conflict1 = ConflictType.NONE;
         if (graph != null) {
+            // FIXME: the check here is necessary? At the start point, we should have
+            // performed the check.
+            conflict1 = hasConflict(graph, curThd, node);
+            if (conflict1 == ConflictType.TRUE) { // Conflict exists.
+                return Pair.of(null, null);
+            }
             // Even if the node has been added to the graph, we may still need to set
             // relations for the events after lhe.
             graph.visitNode(node, true);
+            boolean conflictMo = hasMoConflict(graph, curThd, node);
+            if (conflictMo && node.shouldRevisit())
+                conflict1 = ConflictType.TEMP;
+            if (conflict1 != ConflictType.TEMP && conflictMo)
+                return Pair.of(null, null);
             assert !enableDebug || !DebugAndTest.acyclicMo(graph) : "Mo circle found!";
             if (node.getLheIndex() == -2)
                 node.setLHEIndex(-1);
-            // After setting relations, we need to check the conflict.
-            if (isConflict(graph, curThd, node)) { // Conflict exists.
-                if (node.shouldRevisit()) {
-                    hasConflict = true;
-                }
-                else {
-                    graph = null;
-                }
-            }
         }
 
         if (graph != null) {
@@ -422,8 +446,11 @@ public class OGTransfer {
             if (enableDebug)
                 debugActions(graph, parState, chState, edge);
         }
-        result = Pair.of(hasConflict ? ObsGraph.DUMMY : graph, copiedGraph);
+        if (conflict1 == ConflictType.TEMP) {
+            return Pair.of(ObsGraph.DUMMY, null);
+        }
 
+        result = Pair.of(graph, copiedGraph);
         return result;
     }
 
@@ -613,6 +640,8 @@ public class OGTransfer {
         OGNode node = graph.getCurrentNode(curThd);
         List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
         int edgeType = getEdgeType(sharedEvents, edge);
+        ConflictType conflict1 = ConflictType.NONE;
+        boolean conflictMo = false;
         Pair<ObsGraph, ObsGraph> result = null;
 
         if (edgeType == 0) { // Local non-assumption edge.
@@ -624,8 +653,12 @@ public class OGTransfer {
                 // NOTE: here is an implicit strong assumption: block start edge contains
                 //  no writes.
                 // Check the conflict.
-                if (isConflict(graph, curThd, node))
+                conflict1 = hasConflict(graph, curThd, node);
+                conflictMo = hasMoConflict(graph, curThd, node);
+                if (conflict1 == ConflictType.TRUE
+                        || (conflict1 == ConflictType.NONE && conflictMo))
                     return Pair.of(null, null);
+                // Otherwise, conflict1 = TEMP || (conflict1 == NONE && conflictMo = false).
             }
             else { // node == null.
                 // We start a new node and enter it if no conflicts exist.
@@ -645,8 +678,12 @@ public class OGTransfer {
         } else if (edgeType == 2) { // Shared non-assumption edge.
             if (node != null) {
                 assert !node.isSimpleNode() && node.contains(edge);
-                if (isConflict(graph, curThd, node))
+                conflict1 = hasConflict(graph, curThd, node);
+                conflictMo = hasMoConflict(graph, curThd, node);
+                if (conflict1 == ConflictType.TRUE
+                        || (conflict1 == ConflictType.NONE && conflictMo))
                     return Pair.of(null, null);
+                // conflict1 == TEMP || (conflict1 == NONE && conflictMo == false)
             } else { // Node == null.
                 if (hasUnmetNode(graph)) {
                     return Pair.of(null, null);
@@ -932,16 +969,16 @@ public class OGTransfer {
     }
 
     /**
+     * FIXME
      * Detect whether a node conflicts with a graph. No conflict means we could add the
      * node to the trace. A trace corresponds to an actual execution sequence of the
      * nodes in the graph. So, one graph may have more than one trace.
      * It's regarded as a conflict if there are nodes from other threads happen before the
      * node of the current thread.
-     * @return true, if conflicted.
-     * @implNote we check conflict only if the node is complete.
-     * FIXME: or just check whether the graph is consistent?
+     * @return type of the conflict.
+     * @implNote we check conflict when we just reach the node, or the node becomes complete.
      */
-    private boolean isConflict(ObsGraph graph, String curThd, OGNode curNode) {
+    private ConflictType hasConflict(ObsGraph graph, String curThd, OGNode curNode) {
         //
         Set<OGNode> otherThdNodes = new HashSet<>();
         graph.getNodeTable().forEach((k, v) -> {
@@ -949,15 +986,31 @@ public class OGTransfer {
                 otherThdNodes.add(v);
         });
 
+        boolean hasCycle = false;
         for (OGNode otn : otherThdNodes) {
             // FIXME: Which relations should we use here to judge if a node that comes
             //  from another thread ought to happen before the curNode?
-            // otn.getFromRead().contains(curNode) || porf(otn, curNode) ?
             if (graph.hb(otn, curNode, new HashSet<>())) {
-                return true;
+                if (graph.hb(curNode, otn, new HashSet<>())) // hb cycle found.
+                    hasCycle = true;
+                else
+                    return ConflictType.TRUE;
             }
         }
 
+        if (hasCycle && curNode.hasEventsNeedRevisit())
+            return ConflictType.TEMP;
+
+        return ConflictType.NONE;
+    }
+
+    /**
+     * Detecting possible mo-deduced conflicts.
+     * FIXME: This is done after the curNode becomes complete, i.e., we have
+     *  visited the curNode for updating its relations.
+     * @return true if any conflict detected.
+     */
+    private boolean hasMoConflict(ObsGraph graph, String curThd, OGNode curNode) {
         // Check mo-deduced conflicts.
         List<SharedEvent> toCheckEvents = curNode.getToCheckEvents();
         // Get mo predecessors of the events to check.

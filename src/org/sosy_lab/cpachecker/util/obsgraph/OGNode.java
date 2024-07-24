@@ -574,7 +574,23 @@ public class OGNode implements Copier<OGNode> {
         }
 
         // Else, check whether there are some events we should revisit.
-        return (LHWIndex < events.size() - 1) && (LHRIndex < events.size() -1);
+        return hasEventsNeedRevisit();
+    }
+
+    public boolean hasEventsNeedRevisit() {
+        assert LHEIndex != -2;
+        for (int i = 0; i < events.size(); i++) {
+             if (events.get(i).isRead() && i > LHRIndex) {
+                 // One read event is re-visitable, at least.
+                 return true;
+             }
+             if (events.get(i).isWrite() && i > LHWIndex) {
+                 // One write event is re-visitable, at least.
+                 return true;
+             }
+        }
+
+        return false;
     }
 
     public int getRefCount(String type, OGNode other) {
@@ -658,11 +674,7 @@ public class OGNode implements Copier<OGNode> {
 
     // Get the write events that need to visit.
     public void getWsNeedToVisit(@NonNull Set<SharedEvent> wFlag) {
-//        wFlag.addAll(Ws);
-        Ws.forEach(e -> {
-            if (events.indexOf(e) > LHWIndex)
-                wFlag.add(e);
-        });
+        wFlag.addAll(Ws);
     }
 
     public Set<OGNode> getAllMoPredecessors() {

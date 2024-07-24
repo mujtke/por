@@ -474,11 +474,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         List<SharedEvent> events = r.getInNode().getEvents();
         for (int i = events.indexOf(r) + 1; i < events.size(); i++) {
             SharedEvent e = events.get(i);
-            if (r.inSameEdgeWith(e))
-                continue;
-            assert rNode.getBlockEdges().indexOf(e.getInEdge()) >
-                    rNode.getBlockEdges().indexOf(r.getInEdge()) :
-                    "Trying to delete an event that shouldn't be!";
+//            if (r.inSameEdgeWith(e))
+//                continue;
             delete.add(e);
         }
 
@@ -546,7 +543,9 @@ public class ObsGraph implements Copier<ObsGraph> {
                 nodesToRemove.add(en);
             } else {
                 // Don't remove node rpn, just remove event e.
-                rpn.removeEvent(e);
+                // FIXME: Don't delete the events that locate in the same node with rp?
+                if(!Objects.equals(e.getInEdge(), rpe))
+                    rpn.removeEvent(e);
             }
         });
 

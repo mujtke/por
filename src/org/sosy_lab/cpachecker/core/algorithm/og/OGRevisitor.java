@@ -389,12 +389,6 @@ public class OGRevisitor {
             SharedEvent w,
             SharedEvent r) {
         for (SharedEvent e : deletePlusR) {
-            // FIXME: If e locates in the same node with r, and e > r, then we don't
-            // check the maximality for e?
-            if ((e.getInNode() == r.getInNode()) && G.lessThan(r, e)) {
-                continue;
-            }
-
             List<SharedEvent> previous = G.getPrevious(e, w);
             // e is maximally added?
             if (!maximallyAdded(G, previous, e, w, r))
@@ -501,8 +495,12 @@ public class OGRevisitor {
     // FIXME: we should consider all events that locate in the same node with r?
     private List<SharedEvent> getDeletePlusR(List<SharedEvent> delete, SharedEvent r) {
         List<SharedEvent> deletePlusR = new ArrayList<>(delete);
-        deletePlusR.addAll(r.getInNode().getEvents().stream()
-                .filter(r::inSameEdgeWith).collect(Collectors.toList()));
+//        deletePlusR.addAll(r.getInNode().getEvents().stream()
+//                .filter(r::inSameEdgeWith).collect(Collectors.toList()));
+        for (SharedEvent e : r.getInNode().getEvents()) {
+            if (!delete.contains(e))
+                deletePlusR.add(e);
+        }
 
         return deletePlusR;
     }
