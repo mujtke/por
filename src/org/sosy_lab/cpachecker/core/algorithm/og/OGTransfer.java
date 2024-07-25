@@ -1002,6 +1002,8 @@ public class OGTransfer {
 
         if (hasCycle && curNode.hasEventsNeedRevisit())
             return ConflictType.TEMP;
+        if (hasCycle && !curNode.hasEventsNeedRevisit())
+            return ConflictType.TRUE;
 
         return ConflictType.NONE;
     }

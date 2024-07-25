@@ -254,7 +254,11 @@ public class ObsGraph implements Copier<ObsGraph> {
             // FIXME: Which nodes we should consider?
             OGNode nodei = nodes.get(i);
             if (!nodei.isInGraph()) {
-                // FIXME: How to handle the nodes not in the graph?
+                // How to handle the nodes not in the graph?
+                // FIXME: when trying to obtain candidates for a read event r, ignore
+                // node that not in the graph, because the value of the write events in
+                // such node is uncertain.
+                continue;
             }
 
             if (nodei == rfNode) // Skip rfNode.
