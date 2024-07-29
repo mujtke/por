@@ -1,5 +1,33 @@
 #!/usr/bin/env bash
 
+ARCH=$(arch)
+if [ "$ARCH" == "arm64" ]; then
+	sig="KILL"
+elif [ "$ARCH" == "x86_64" ]; then
+	sig=9
+else
+	echo "Unknown architecture." && exit 0
+fi
+
+taskNum=0
+function CtrlC_Handler {
+	PID=$(pgrep -n java ogpor)
+	kill -s $ARCH $PID > /dev/null 2>&1
+	((taskNum--))
+	if [ $taskNum -lt 0 ]; then
+		exit 0
+	fi
+}
+
+function CtrlD_Handler {
+	echo "ctrl_d(or ctrl_\ on macos) pressed, quit."
+	taskNum=0
+	CtrlC_Handler
+}
+
+trap CtrlC_Handler SIGINT
+trap CtrlD_Handler SIGQUIT
+
 if [[ ! -d "$1" ]]; then
 	echo "Dir $1 does not exist!"
 fi
@@ -26,8 +54,8 @@ function runTask() {
 	printf "%-10s" "$(grep -v -E '^//|^$|^[\s\t ]*$' "$TEST_FILE" | wc -l | tr -d ' ')"
 	cd "$workDir"
 	RESULT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
-	-spec default -preprocess \
-	"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')
+		-spec default -preprocess \
+		"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')
 	if [[ "$RESULT" =~ FALSE.* || "$RESULT" == TRUE.* ]]; then
 		printf "%-10s\n" "$RESULT"
 	else
@@ -36,7 +64,7 @@ function runTask() {
 }
 
 function pass() {
-	for n in {15,16,18,26,33,36}; do
+	for n in {8,}; do
 		reg=".*$n.*"
 		if [[ "$1" =~ $reg ]]; then
 			return 0
@@ -45,6 +73,7 @@ function pass() {
 	return 0
 }
 
+taskNum=$(find -s "$targetDir" -iname '*.c' | wc -l | tr -d ' ')
 for file in $(find -s "$targetDir" -iname '*.c'); do
 	# Ignore some files.
 	pass "$file"
