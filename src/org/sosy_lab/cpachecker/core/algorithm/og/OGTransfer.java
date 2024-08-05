@@ -304,14 +304,14 @@ public class OGTransfer {
 
         assert graph != null;
         if (node != null) {
+            conflict = hasConflictForBlockNotIn(graph, curThd, node, conflict);
+            if (conflict == ConflictType.TRUE)
+                return Pair.of(null, null);
             if (node.getLheIndex() == -2)
                 node.setLHEIndex(-1);
             graph.visitNode(node, true);
-            conflict = hasConflictForBlockNotIn(graph, curThd, node, conflict);
             node.updatePreAndSucState(parState, chState);
             node.setLoopDepth(chOgState.getLoopDepth());
-            if (conflict == ConflictType.TRUE)
-                return Pair.of(null, null);
         }
         graph.setNeedToRevisit(node != null && node.shouldRevisit());
         // we have reached the end of the node, so update the current node for curThd.
