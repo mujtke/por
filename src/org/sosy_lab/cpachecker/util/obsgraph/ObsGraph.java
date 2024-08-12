@@ -499,6 +499,7 @@ public class ObsGraph implements Copier<ObsGraph> {
                 OGNode ni = nodes.get(i), nw = nodes.get(wNodeIdx);
                 if (!porf(ni, nw)) {
                     delete.addAll(ni.getEvents());
+                    // FIXME: ni may have no event?
                 }
             }
             // Restoring the removed rfs.
@@ -556,6 +557,15 @@ public class ObsGraph implements Copier<ObsGraph> {
         rpn.removeEdges(edgesToRemove);
         nodesToRemove.forEach(OGNode::removeAllRelations);
         nodes.removeAll(nodesToRemove);
+        // Remove all isolated nodes, i.e, the node that has no pre/suc after
+        // removing the 'nodesToRemove' and no event.
+        for (Iterator<OGNode> it = nodes.iterator(); it.hasNext();) {
+            OGNode n = it.next();
+            if (n.getPredecessor() == null && n.getSuccessors().isEmpty()) {
+                assert n.getEvents().isEmpty() : "Incorrect isolated node found!";
+                it.remove();
+            }
+        }
 
         // Remove the corresponding cached assumption edges because of the removal of
         // deleted events.
