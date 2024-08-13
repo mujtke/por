@@ -166,21 +166,16 @@ void * P0(void *arg)
 
 void * P1(void *arg)
 {
-  __VERIFIER_atomic_begin();
   x = 2;
-  __VERIFIER_atomic_end();
 
   __VERIFIER_atomic_begin();
   p1_EAX = x;
   y = y;
   p1_EBX = y;
-  __VERIFIER_atomic_end();
-
-  __VERIFIER_atomic_begin();
   cnt = cnt + 1;
   __VERIFIER_atomic_end();
-}
 
+}
 
 
 void * P2(void *arg)
@@ -212,9 +207,6 @@ int main()
   __VERIFIER_atomic_begin();
   if (cnt != 3)
 	  abort();
-  __VERIFIER_atomic_end();
-
-  __VERIFIER_atomic_begin();
   /* Program proven to be relaxed for X86, model checker says YES. */
   if (x == 2 && p1_EAX == 2 && p1_EBX == 0 && p2_EAX == 1 && p2_EBX == 0)
 	  ERROR: reach_error();
