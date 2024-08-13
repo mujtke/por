@@ -132,10 +132,6 @@ public class OGTransfer {
         // For debugging.
         int parId = parState.getStateId(), chId = chState.getStateId();
         ObsGraph g = graphWrapper.get(0);
-        // Debug.
-        if (DebugAndTest.checkInvalidNodeFor(g)) {
-            System.out.println("Invalid node found!");
-        }
 
         OGPORState chOgState =
                 AbstractStates.extractStateByType(chState, OGPORState.class);
@@ -1023,18 +1019,19 @@ public class OGTransfer {
                 otherThdNodes.add(v);
         });
 
-        boolean hasCycle = false;
+        boolean hasCycle = false, hasHbPredecessor = false;
         for (OGNode otn : otherThdNodes) {
             // FIXME: Which relations should we use here to judge if a node that comes
             //  from another thread ought to happen before the curNode?
             if (graph.hb(otn, curNode, new HashSet<>())) {
+                hasHbPredecessor = true;
                 if (graph.hb(curNode, otn, new HashSet<>())) // hb cycle found.
                     hasCycle = true;
-                else
-                    return ConflictType.TRUE;
             }
         }
 
+        if (!hasCycle && hasHbPredecessor)
+            return ConflictType.TRUE;
         if (hasCycle && curNode.hasEventsNeedRevisit())
             return ConflictType.TEMP;
         if (hasCycle && !curNode.hasEventsNeedRevisit())
