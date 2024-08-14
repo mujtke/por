@@ -1019,18 +1019,24 @@ public class OGTransfer {
                 otherThdNodes.add(v);
         });
 
-        boolean hasCycle = false, hasHbPredecessor = false;
+        boolean hasCycle = false, hasHbPre = false, hasPorfPre = false;
         for (OGNode otn : otherThdNodes) {
             // FIXME: Which relations should we use here to judge if a node that comes
             //  from another thread ought to happen before the curNode?
+            if (graph.porf(otn, curNode)) {
+                hasPorfPre = true;
+                break;
+            }
             if (graph.hb(otn, curNode, new HashSet<>())) {
-                hasHbPredecessor = true;
+                hasHbPre = true;
                 if (graph.hb(curNode, otn, new HashSet<>())) // hb cycle found.
                     hasCycle = true;
             }
         }
 
-        if (!hasCycle && hasHbPredecessor)
+        if (hasPorfPre)
+            return ConflictType.TRUE;
+        if (!hasCycle && hasHbPre)
             return ConflictType.TRUE;
         if (hasCycle && curNode.hasEventsNeedRevisit())
             return ConflictType.TEMP;
