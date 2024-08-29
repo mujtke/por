@@ -626,6 +626,30 @@ public class ObsGraph implements Copier<ObsGraph> {
          }
      }
 
+    /**
+     * Deduce fr relation for write events in {@param wFlagForFr}.
+     * @implNote we have built mo relation for write events in {@param wFlagForFr}, and we
+     * will backtrack along mo to build fr for each event in @{wFlagForFr}.
+     */
+     public void deduceFromReadForEvents(Set<SharedEvent> wFlagForFr) {
+        for (SharedEvent w : wFlagForFr) {
+//            assert w.getFromReadBy().isEmpty() :
+//                    "Try to build fr for a event that we have done that before.";
+            // Backtracking along the mo.
+            SharedEvent mpe = w.getMoAfter();
+            while (mpe != null) {
+                if (porf(mpe, w)) {
+                    for (SharedEvent r : mpe.getReadBy()) {
+                        if (!w.getFromReadBy().contains(r)
+                                && !Objects.equals(r.getInNode(), w.getInNode()))
+                            w.setFromReadBy(r);
+                    }
+                }
+                mpe = mpe.getMoAfter();
+            }
+        }
+     }
+
     public boolean lessThanOrEqual(SharedEvent e1, SharedEvent e2) {
         assert e1 != null && e2 != null;
         return e1 == e2 || this.lessThan(e1, e2);
@@ -952,6 +976,8 @@ public class ObsGraph implements Copier<ObsGraph> {
         Set<SharedEvent> rFlag = new HashSet<>(), wFlag = new HashSet<>();
         node.getRsNeedToVisit(rFlag);
         node.getWsNeedToVisit(wFlag);
+        // Used for building fr.
+        Set<SharedEvent> wFlagForFr = new HashSet<>(wFlag);
         // Indicate whether we have found the predecessor(po) of the node.
         boolean preFlag = node.getPredecessor() != null;
         // Till now, the node hasn't been added to the graph, so we choose the last
@@ -990,6 +1016,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
         // Update info for the node and graph if the node has terminated.
         if (isTerminated) {
+            // Build fr info for events in wFlag.
+            deduceFromReadForEvents(wFlagForFr);
             node.setInGraph(true);
             if (lastNode != null) {
                 lastNode.setTrBefore(node);
