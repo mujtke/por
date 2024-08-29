@@ -167,6 +167,21 @@ public class SharedEvent implements Copier<SharedEvent> {
         }
     }
 
+    public void removeFromReadBy() {
+        Iterator<SharedEvent> it = fromReadBy.iterator();
+        while (it.hasNext()) {
+            SharedEvent frb = it.next();
+            it.remove();
+            assert frb.fromRead.contains(this) : "Try to remove a fr not existed.";
+            frb.fromRead.remove(this);
+            OGNode frbNode = frb.getInNode();
+            if (inNode.getRefCount("frb", frbNode) < 1) {
+                inNode.removeFromReadBy(frbNode);
+                frbNode.removeFromRead(inNode);
+            }
+        }
+    }
+
     /**
      * Similarly, when add (a, b) to rf, fr or mo, just call a.setReadFrom(b) or
      * b.setReadBy(a) once. And all method defined on {@link SharedEvent} will

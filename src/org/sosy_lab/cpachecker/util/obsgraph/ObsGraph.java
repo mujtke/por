@@ -7,6 +7,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
+import org.sosy_lab.cpachecker.cpa.usage.refinement.SharedRefiner;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
@@ -241,6 +242,14 @@ public class ObsGraph implements Copier<ObsGraph> {
                 getRemovedRfs(exclusiveReadEvents);
         // Remove rfs for exclusive read events.
         exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
+        // Similarly, maybe we shouldn't consider fr relations for write events after
+        // event r.
+        List<SharedEvent> exclusiveWriteEvents = getExclusiveWriteEvents(rNode, r);
+        // Storing frbs for exclusive write events.
+        List<Pair<SharedEvent, SharedEvent>> removedFrbs =
+                getRemovedFrbs(exclusiveWriteEvents);
+        // Remove frbs for exclusive write events.
+        exclusiveWriteEvents.forEach(SharedEvent::removeFromReadBy);
 
         List<OGNode> porfPres = new ArrayList<>();
         // FIXME: if arfNode exclusivePorf aNode, then we cannot revisit a?
@@ -286,6 +295,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
         // Restoring the rfs removed before if necessary.
         restoreDeleteRfs(removedRfs);
+        // Restoring the frbs removed before.
+        restoreDeleteFrbs(removedFrbs);
 
         return result;
     }
@@ -338,10 +349,28 @@ public class ObsGraph implements Copier<ObsGraph> {
                 .collect(Collectors.toList());
     }
 
+    private List<SharedEvent> getExclusiveWriteEvents(OGNode rNode, SharedEvent r) {
+        assert rNode.getEvents().contains(r);
+        int rIndex = rNode.getEvents().indexOf(r);
+//        return rNode.getWs().stream()
+//                .filter(e -> rNode.getEvents().indexOf(e) > rIndex)
+//                .collect(Collectors.toList());
+        return new ArrayList<>(rNode.getWs());
+    }
+
     private List<Pair<SharedEvent, SharedEvent>> getRemovedRfs(
             List<SharedEvent> exclusiveReadEvents) {
         return exclusiveReadEvents.stream().map(e ->
                 Pair.of(e, e.getReadFrom())).collect(Collectors.toList());
+    }
+
+    private List<Pair<SharedEvent, SharedEvent>> getRemovedFrbs(
+            List<SharedEvent> exclusiveWriteEvents) {
+        List<Pair<SharedEvent, SharedEvent>> removedFrbs = new ArrayList<>();
+        exclusiveWriteEvents.forEach(w -> {
+            w.getFromReadBy().forEach(frb -> removedFrbs.add(Pair.of(w, frb)));
+        });
+        return removedFrbs;
     }
 
     private void restoreDeleteRfs(List<Pair<SharedEvent, SharedEvent>> removedRfs) {
@@ -349,6 +378,15 @@ public class ObsGraph implements Copier<ObsGraph> {
             removedRfs.forEach(rfpair -> {
                 SharedEvent r = rfpair.getFirstNotNull(), rf = rfpair.getSecondNotNull();
                 r.setReadFrom(rf);
+            });
+        }
+    }
+
+    private void restoreDeleteFrbs(List<Pair<SharedEvent, SharedEvent>> removedFrbs) {
+        if (removedFrbs != null) {
+            removedFrbs.forEach(frbpair -> {
+                SharedEvent w = frbpair.getFirstNotNull(), frb = frbpair.getSecondNotNull();
+                w.setFromReadBy(frb);
             });
         }
     }
@@ -361,7 +399,11 @@ public class ObsGraph implements Copier<ObsGraph> {
         SharedEvent arf = a.getReadFrom();
         assert arf != null;
         a.removeReadFrom();
-        if (porf(nodei, aNode)) {
+//        if (porf(nodei, aNode)) {
+//            a.setReadFrom(arf);
+//            return true;
+//        }
+        if (hb(nodei, aNode, new HashSet<>())) {
             a.setReadFrom(arf);
             return true;
         }
