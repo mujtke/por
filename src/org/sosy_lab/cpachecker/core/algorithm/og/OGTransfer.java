@@ -442,8 +442,7 @@ public class OGTransfer {
         if (graph != null) {
             node.updatePreAndSucState(null, chState);
             node.setLoopDepth(chOgState.getLoopDepth());
-            graph.setNeedToRevisit(node.shouldRevisit());
-            // having reached the end of the node, update the current node for curThd.
+            graph.setNeedToRevisit(node.shouldRevisit()); // having reached the end of the node, update the current node for curThd.
             graph.updateCurrentNodeTable(curThd, node);
             graphWrapper.clear();
             if (enableDebug)
