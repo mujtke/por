@@ -8,6 +8,7 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
@@ -919,9 +920,12 @@ public class OGTransfer {
      *                     the container has no graph anymore, which means the graph has
      *                     been transferred, then there is no need to handle the left
      *                     states.
-     * @return pair of the target state and the graph.
+     * @return pair of the target state and graph.
+     * return triple of the state, graph and flag whether we should continue transfer
+     * the graph, i.e., the state is not the target.
      */
-    public Pair<AbstractState, ObsGraph> multiStepTransfer(Vector<AbstractState> waitlist,
+//    public Pair<AbstractState, ObsGraph> multiStepTransfer(Vector<AbstractState> waitlist,
+    public Triple<AbstractState, ObsGraph, Boolean> multiStepTransfer(Vector<AbstractState> waitlist,
             ARGState leadState,
             List<ObsGraph> graphWrapper) {
         assert graphWrapper.size() == 1 : "Only one graph in graphWrapper is allowed.";
@@ -945,9 +949,11 @@ public class OGTransfer {
             ObsGraph chGraph = transferResult.getFirst();
             // FIXME: if chGraph == ObsGraph.DUMMY?
             if (chGraph == ObsGraph.DUMMY) {
-                continue;
+                // continue;
+                return Triple.of(chState, ObsGraph.DUMMY, false);
             }
             if (chGraph != null) {
+                // NOTE: if chGraph is re-visitable? This case will be handled after returning.
                 // Find the target state.
                 List<ObsGraph> chGraphs =
                         OGMap.computeIfAbsent(chState.getStateId(),
@@ -956,7 +962,8 @@ public class OGTransfer {
                 // Adjust the waitlist to ensure chState will be explored before its
                 // siblings that has no graphs.
                 adjustWaitlist(OGMap, waitlist, chState);
-                return Pair.of(chState, chGraph);
+                // return Pair.of(chState, chGraph);
+                return Triple.of(chState, chGraph, false);
             }
         }
 
@@ -971,12 +978,13 @@ public class OGTransfer {
             ObsGraph chGraph = transferResult.getFirst();
             // FIXME: if chGraph == ObsGraph.DUMMY?
             if (chGraph == ObsGraph.DUMMY) {
-                continue;
+                // continue;
+                return Triple.of(chState, ObsGraph.DUMMY, false);
             }
             if (chGraph != null) {
                 // FIXME: If chGraph is re-visitable, should we revisit it first?
                 if (chGraph.needToRevisit()) {
-                    return Pair.of(chState, chGraph);
+                    return Triple.of(chState, chGraph, true);
                 }
                 if (chState.getChildren().isEmpty()) {
                     // FIXME: neither the chState is in the waitlist nor does it have any child.
@@ -988,7 +996,8 @@ public class OGTransfer {
                             OGMap.computeIfAbsent(chState.getStateId(),
                                     k -> new ArrayList<>());
                     chGraphs.add(chGraph);
-                    return Pair.of(chState, chGraph);
+                    // return Pair.of(chState, chGraph);
+                    return Triple.of(chState, chGraph, false);
                 }
                 // Else, find target state recursively.
                 List<ObsGraph> newGraphWrapper = new ArrayList<>();

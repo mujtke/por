@@ -1108,6 +1108,29 @@ public class ObsGraph implements Copier<ObsGraph> {
         return result;
     }
 
+    // Set the last node revisited.
+    public void setLastNodeRevisited() {
+        assert lastNode != null : "Missing last node.";
+        boolean hasSetLHR = false, hasSetLHW = false;
+        for (int i = lastNode.getEvents().size() - 1; i >= 0; i--) {
+            if (hasSetLHR && hasSetLHW)
+                break;
+            if (lastNode.getEvents().get(i).isRead()) {
+                if (hasSetLHR) continue;
+                lastNode.setLHRIndex(i);
+                hasSetLHR = true;
+                continue;
+            }
+            if (lastNode.getEvents().get(i).isWrite()) {
+                if (hasSetLHW) continue;
+                lastNode.setLHWIndex(i);
+                hasSetLHW = true;
+            }
+        }
+        if (!lastNode.getEvents().isEmpty())
+            lastNode.setLHWIndex(lastNode.getEvents().size() - 1);
+    }
+
     // Debug.
     private int p(ObsGraph g) {
         return DebugAndTest.print(g);

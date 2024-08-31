@@ -16,6 +16,7 @@ import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
+import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
@@ -347,17 +348,35 @@ public class OGAlgorithm implements Algorithm {
             Pair<AbstractState, ObsGraph> pair = revisitResult.remove(0);
             ARGState leadState = (ARGState) pair.getFirstNotNull();
             ObsGraph graph = pair.getSecondNotNull();
-            Pair<AbstractState, ObsGraph> transferResult =
+//            Pair<AbstractState, ObsGraph> transferResult =
+//                    transfer.multiStepTransfer(waitlist, leadState, new ArrayList<>(List.of(graph)));
+            Triple<AbstractState, ObsGraph, Boolean> transferResult =
                     transfer.multiStepTransfer(waitlist, leadState, new ArrayList<>(List.of(graph)));
             if (transferResult != null) {
                 // FIXME: some graphs in the result may be re-visitable, how to handle them?
-                assert transferResult.getSecond() != null
-                        && transferResult.getFirst() != null;
-                if (transferResult.getSecond().needToRevisit()) {
-                    logger.log(Level.INFO, "The graph that reached s" +
+                assert transferResult.getFirst() != null
+                        && transferResult.getSecond() != null
+                        && transferResult.getThird() != null;
+                if (transferResult.getSecond() == ObsGraph.DUMMY) {
+                    assert graph.needToRevisit() : "Blocked but not re-visitable graph found!";
+                    logger.log(Level.INFO, "Blocked but re-visitable graph found at s" +
                             ((ARGState) transferResult.getFirst()).getStateId() +
-                            " after multi-step transfer is still re-visitable.");
-                    graphsNeedRevisit.add(transferResult.getSecond());
+                            " during the multi-step transfer.");
+                    graphsNeedRevisit.add(graph);
+                    assert !transferResult.getThird() : "Shouldn't transfer a blocked graph.";
+                } else {
+                    if (transferResult.getSecond().needToRevisit()) {
+                        logger.log(Level.INFO, "The graph that reached s" +
+                                ((ARGState) transferResult.getFirst()).getStateId() +
+                                " after multi-step transfer is still re-visitable.");
+                        graphsNeedRevisit.add(transferResult.getSecond().deepCopy(new HashMap<>()));
+                        // FIXME: set lastNode of transferResult.getSecond() re-visited.
+                        transferResult.getSecond().setLastNodeRevisited();
+                    }
+                    if (transferResult.getThird()) { // We should continue to transfer the graph.
+                        revisitResult.add(Pair.of(transferResult.getFirst(),
+                                transferResult.getSecond()));
+                    }
                 }
             } else {
                 // TODO: In this case, have some graphs not been transferred to a proper state?
@@ -366,6 +385,9 @@ public class OGAlgorithm implements Algorithm {
             }
         }
 
+        // Debug.
+        if (graphsNeedRevisit.stream().anyMatch(g -> !g.needToRevisit()))
+            System.out.println("");
         return graphsNeedRevisit;
     }
 
