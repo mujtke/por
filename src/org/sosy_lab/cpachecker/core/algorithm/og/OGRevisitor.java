@@ -96,6 +96,7 @@ public class OGRevisitor {
         List<ObsGraph> RG = new ArrayList<>();
         RG.add(g);
 
+
         while (!RG.isEmpty()) {
             ObsGraph G0 = RG.remove(0);
 
