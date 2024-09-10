@@ -530,13 +530,13 @@ public class ObsGraph implements Copier<ObsGraph> {
             int rNodeIdx = nodes.indexOf(r.getInNode()),
                     wNodeIdx = nodes.indexOf(w.getInNode());
             // FIXME: ignore the reads after the w?
-            List<SharedEvent> exclusiveReadEvents =
-                    getExclusiveReadEvents(w.getInNode(), w);
+//            List<SharedEvent> exclusiveReadEvents =
+//                    getExclusiveReadEvents(w.getInNode(), w);
             // Storing rfs for exclusive read events.
-            List<Pair<SharedEvent, SharedEvent>> removedRfs =
-                    getRemovedRfs(exclusiveReadEvents);
+//            List<Pair<SharedEvent, SharedEvent>> removedRfs =
+//                    getRemovedRfs(exclusiveReadEvents);
             // Remove rfs for exclusive read events.
-            exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
+//            exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
             for (int i = rNodeIdx + 1; i < wNodeIdx; i++) {
                 OGNode ni = nodes.get(i), nw = nodes.get(wNodeIdx);
                 if (!porf(ni, nw)) {
@@ -545,7 +545,7 @@ public class ObsGraph implements Copier<ObsGraph> {
                 }
             }
             // Restoring the removed rfs.
-            restoreDeleteRfs(removedRfs);
+//            restoreDeleteRfs(removedRfs);
         }
 
         return delete;
@@ -1093,17 +1093,19 @@ public class ObsGraph implements Copier<ObsGraph> {
      */
     public List<SharedEvent> getPrevious(SharedEvent e, SharedEvent w) {
         List<SharedEvent> result = new ArrayList<>();
-        List<SharedEvent> exclusiveRs = getExclusiveReadEvents(w.getInNode(), w);
-        List<Pair<SharedEvent, SharedEvent>> removedRfs = getRemovedRfs(exclusiveRs);
-        exclusiveRs.forEach(SharedEvent::removeReadFrom);
+//        List<SharedEvent> exclusiveRs = getExclusiveReadEvents(w.getInNode(), w);
+//        List<Pair<SharedEvent, SharedEvent>> removedRfs = getRemovedRfs(exclusiveRs);
+//        exclusiveRs.forEach(SharedEvent::removeReadFrom);
         for (OGNode n : nodes) {
+            // FIXME
+            // if (e.getInNode() != n && !n.isInGraph()) continue;
             // e.getInNode() must be added before w.getInNode()
             for (SharedEvent ep : n.getEvents()) {
                 if (lessThanOrEqual(ep, e) || porf(ep, w))
                     result.add(ep);
             }
         }
-        restoreDeleteRfs(removedRfs);
+//        restoreDeleteRfs(removedRfs);
 
         return result;
     }

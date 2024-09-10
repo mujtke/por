@@ -415,6 +415,23 @@ public class OGRevisitor {
         boolean eIsWrite = e.getAType() == WRITE;
         SharedEvent ep = eIsWrite ? e : e.getReadFrom();
         assert ep != null : "Cannot find ep for event: " + e;
+
+        if (!previous.contains(ep)) {
+            // e' \not\in previous.
+            return false;
+        }
+
+        for (SharedEvent epmo : ep.getAllMoBefore()) {
+            // FIXME: if epmo locates in w.inNode or r.inNode?
+            boolean cond = previous.contains(epmo)
+                    && !Objects.equals(epmo.getInNode(), w.getInNode());
+            if (cond) {
+                // ep \in previous /\ \exists epmo \in previous s.t. <ep, epmo>
+                // \in G.mo /\ ep, epmo not in the same block (FIXME: with w or r?)
+                return false;
+            }
+        }
+
         for (int i = previous.size() - 1; i >= 0; i--) {
             // Reverse search.
             SharedEvent ee = previous.get(i);
@@ -422,20 +439,6 @@ public class OGRevisitor {
             if (ee.isRead() && eIsWrite && (ee.getReadFrom() == e)) {
                 // \exists r = ee \in previous /\ G.rf(r) = e.
                 return false;
-            }
-            if (!previous.contains(ep)) {
-                // e' \not\in previous.
-                return false;
-            }
-            for (SharedEvent epmo : ep.getAllMoBefore()) {
-                // FIXME: if epmo locates in w.inNode or r.inNode?
-                boolean cond = previous.contains(epmo)
-                        && !Objects.equals(epmo.getInNode(), w.getInNode());
-                if (cond) {
-                    // ep \in previous /\ \exists epmo \in previous s.t. <ep, epmo>
-                    // \in G.mo /\ ep, epmo not in the same block (FIXME: with w or r?)
-                    return false;
-                }
             }
         }
         return true;

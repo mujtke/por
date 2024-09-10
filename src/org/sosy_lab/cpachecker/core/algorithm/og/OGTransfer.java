@@ -832,8 +832,9 @@ public class OGTransfer {
             } else {
                 // Replacement won't happen for shared assumption edge because the graph
                 // remembers which edge it has met. Therefore, transfer gets blocked here.
-                throw new UnsupportedOperationException(
-                        "Transfer gets blocked at s" + parState.getStateId());
+                return Pair.of(null, null);
+//                throw new UnsupportedOperationException(
+//                        "Transfer gets blocked at s" + parState.getStateId());
             }
         } // case (1)
 
