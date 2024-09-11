@@ -1137,4 +1137,10 @@ public class ObsGraph implements Copier<ObsGraph> {
     private int p(ObsGraph g) {
         return DebugAndTest.print(g);
     }
+
+    public boolean addNodeBefore(OGNode n1, OGNode n2) {
+        assert nodes.contains(n1) && nodes.contains(n2) :
+                "The graph misses some nodes.";
+        return nodes.indexOf(n1) < nodes.indexOf(n2);
+    }
 }
