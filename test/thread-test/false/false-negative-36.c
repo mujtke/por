@@ -33,7 +33,6 @@ void *P0(void *arg)
   p0 = y;
   cnt = cnt + 1;
   __VERIFIER_atomic_end();
-  return 0;
 }
 
 void *P1(void *arg)
@@ -42,7 +41,6 @@ void *P1(void *arg)
   y = 1;
   cnt = 1;
   __VERIFIER_atomic_end();
-  return 0;
 }
 
 void *P2(void *arg)
@@ -52,8 +50,6 @@ void *P2(void *arg)
   y = 2;
   cnt = cnt + 1;
   __VERIFIER_atomic_end();
-
-  return 0;
 }
 
 

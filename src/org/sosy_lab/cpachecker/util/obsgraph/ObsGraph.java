@@ -5,6 +5,7 @@ import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
+import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.cpa.usage.refinement.SharedRefiner;
@@ -37,6 +38,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     // Record the current hold node for each thread: tid -> node.
     private final Map<String, OGNode> nodeTable = new HashMap<>();
+    // Visiting node.
+    private OGNode visitingNode;
 
     /**
      * This variable is used to record the assumption edges that read from indeterminate
@@ -63,6 +66,9 @@ public class ObsGraph implements Copier<ObsGraph> {
     // FIXME: some read events lose their rfs after revisit.
     private OGNode dummyNode = null;
 
+    // A temporary structure for indicating there are some circles in the graph.
+    Map<OGNode, List<OGNode>> circles = new HashMap<>();
+
     // Debug: indicating where the graph is created.
     ARGState creationState = null;
     private static boolean enableDebug = false;
@@ -81,6 +87,10 @@ public class ObsGraph implements Copier<ObsGraph> {
         }
         return dummyNode;
     }
+
+    public void setVisitingNode(OGNode node) { this.visitingNode = node; }
+
+    public OGNode getVisitingNode() { return this.visitingNode; }
 
     public void setDummyNode(OGNode pDummyNode) { this.dummyNode = pDummyNode; }
 
@@ -194,6 +204,9 @@ public class ObsGraph implements Copier<ObsGraph> {
         // Node table.
         this.nodeTable.forEach((k, v) ->
                 nGraph.nodeTable.put(k, v == null ? null : v.deepCopy(memo)));
+        // VisitingNode.
+        if (this.visitingNode != null)
+            nGraph.visitingNode = this.visitingNode.deepCopy(memo);
         // CachedAssumeEdges.
         this.cachedAssumeEdges.forEach((k, v) -> {
             List<Triple<CFAEdge, Integer, Integer>> nList = new ArrayList<>();
@@ -209,6 +222,7 @@ public class ObsGraph implements Copier<ObsGraph> {
         nGraph.needToRevisit = this.needToRevisit;
         nGraph.traceLen = this.traceLen;
         nGraph.dummyNode = this.dummyNode != null ? this.dummyNode.deepCopy(memo) : null;
+        // Don't copy circles.
 
         return nGraph;
     }
@@ -468,6 +482,10 @@ public class ObsGraph implements Copier<ObsGraph> {
                 return true;
         }
         return false;
+    }
+
+    public boolean hb(OGNode A, OGNode B) {
+        return hb(A, B, new HashSet<>());
     }
 
     /**
@@ -1131,6 +1149,206 @@ public class ObsGraph implements Copier<ObsGraph> {
         }
         if (!lastNode.getEvents().isEmpty())
             lastNode.setLHWIndex(lastNode.getEvents().size() - 1);
+    }
+
+    public boolean hasCircleFor(OGNode n0) {
+        // FIXME
+        return circles.containsKey(n0);
+    }
+
+    public void visitSort(List<OGNode> ns) {
+        // Clear old circles.
+        circles.clear();
+        sort(ns);
+    }
+
+    private void sort(List<OGNode> ns) {
+        // Precondition: all nodes in @ns has been ordered by adding order.
+        if (ns.size() <= 1)
+            return;
+
+        List<OGNode> less = new ArrayList<>(),
+                greater = new ArrayList<>();
+        OGNode pivotNode = ns.get(0);
+        for (int i = 1; i < ns.size(); i++) {
+            if (visitLess(ns.get(i), pivotNode))
+                less.add(ns.get(i));
+            else
+                greater.add(ns.get(i));
+        }
+
+        sort(less);
+        sort(greater);
+
+        // Merge.
+        int i = 0;
+        for (int j = 0; j < less.size(); j++)
+            ns.set(i++, less.get(j));
+        ns.set(i++, pivotNode);
+        for (int j = 0; j < greater.size(); j++)
+            ns.set(i++, greater.get(j));
+        assert i == ns.size();
+    }
+
+    private boolean visitLess(OGNode n1, OGNode n2) {
+        // FIXME
+        boolean less_porf = porf(n1, n2);
+        boolean greater_porf = porf(n2, n1);
+        boolean less_hb = hb(n1, n2);
+        boolean greater_hb = hb(n2, n1);
+        boolean less_mo = hasMoConflict(n1.getInThread(), n2);
+        boolean greater_mo = hasMoConflict(n2.getInThread(), n1);
+        if ((less_porf || less_hb || less_mo)
+                && (greater_porf || greater_hb || greater_mo)) {
+            // Circle found.
+            List<OGNode> circleNodes =
+                    circles.computeIfAbsent(n1, n -> new ArrayList<>());
+            circleNodes.add(n2);
+            if (n1.hasEventsNeedRevisit()) return true;
+            else if (n2.hasEventsNeedRevisit()) return false;
+        }
+
+        return less_porf || less_hb || less_mo;
+    }
+
+    /**
+     * FIXME
+     * Detect whether a node conflicts with a graph. No conflict means we could add the
+     * node to the trace. A trace corresponds to an actual execution sequence of the
+     * nodes in the graph. So, one graph may have more than one trace.
+     * It's regarded as a conflict if there are nodes from other threads happen before the
+     * node of the current thread.
+     * @return type of the conflict.
+     * @implNote we check conflict when we just reach the node, or the node becomes complete.
+     */
+    public OGTransfer.ConflictType hasConflict(String curThd, OGNode curNode,
+                                                ARGState parState, ARGState chState) {
+        // Get the current nodes of all threads.
+        List<OGNode> ns = nodeTable.values().stream()
+                .filter(Objects::nonNull).collect(Collectors.toList());
+        assert ns.contains(curNode);
+
+        // Sorting nodes by adding order <.
+        ns.sort((n1, n2) -> addNodeBefore(n1, n2) ? -1 : 1);
+        // Sorting nodes by visiting order <_visit.
+        visitSort(ns);
+
+        if (ns.indexOf(curNode) == 0) {
+            // Has a cycle?
+            if (hasCircleFor(curNode))
+                return OGTransfer.ConflictType.TEMP;
+        } else {
+            return OGTransfer.ConflictType.TRUE;
+        }
+
+        return OGTransfer.ConflictType.NONE;
+    }
+
+    /**
+     * Detecting possible mo-deduced conflicts.
+     * FIXME: This is done after the curNode becomes complete, i.e., we have
+     *  visited the curNode for updating its relations.
+     * @param targetThd TODO.
+     * @return true if any mo-conflict detected.
+     */
+    public boolean hasMoConflict(String targetThd, OGNode curNode) {
+        // Check mo-deduced conflicts.
+        List<SharedEvent> toCheckEvents = curNode.getToCheckEvents();
+        // Get mo predecessors of the events to check.
+        List<Pair<SharedEvent, SharedEvent>> moPredecessors = new ArrayList<>();
+        getMoPredecessors(toCheckEvents, moPredecessors);
+
+        // Find possible conflict.
+        for (Pair<SharedEvent, SharedEvent> pair : moPredecessors) {
+            SharedEvent ce = pair.getFirstNotNull(),    // Checked event.
+                    mpe = pair.getSecondNotNull(),      // Direct mo predecessor of ce.
+                    msuc = mpe.getMoBefore();           // Direct mo successor of mpe.
+            // 1. There exists r (mperb) reads from mpe, but r.inNode is not the graph.
+            // In this case, conflict exists, because it requires that r.inNode happen
+            // before the curNode, but the former hasn't been in the graph yet.
+            while (mpe != null) {
+                // Check conflict.
+                // FIXME: it's enough to use 'readBy' only?
+                for (SharedEvent mperb : mpe.getReadBy()) {
+                    OGNode mperbn = mperb.getInNode();
+                    assert mperbn != null;
+                    if (targetThd != null
+                            && !Objects.equals(mperbn.getInThread(), targetThd)) {
+                        // Not the target thread, just skip.
+                        continue;
+                    }
+                    if (mperbn != curNode
+                            && !mperbn.isInGraph()) { //
+                        // Conflict found.
+                        return true;
+                    }
+                }
+                mpe = mpe.getMoAfter();
+            }
+
+            // 2. There exists wsuc is a mo-descendant of the mpe, s.t., for some rs
+            // that reads from ce: 1) msuc porf r
+            //                     2) msuc.inNode is not in the graph.
+            //                     3) r.inNode is not in the graph.
+            // In this case, conflict exists, because it requires that msuc.inNode happen
+            // before the curNode, but the former hasn't been in the graph yet.
+            for (SharedEvent rb : ce.getReadBy()) {
+                while (msuc != null) {
+                    // In this case, wsuc, ce and r locate different nodes respectively.
+                    OGNode msucn = msuc.getInNode(), rbn = rb.getInNode();
+                    if (targetThd != null
+                            && !Objects.equals(msucn.getInThread(), targetThd)) {
+                        // Not the target thread, just skip.
+                        msuc = msuc.getMoBefore();
+                        continue;
+                    }
+                    if (msucn != curNode
+                            &&!msucn.isInGraph()
+                            && !rbn.isInGraph()
+                            && porf(msucn, rbn)) {
+                        // Conflict found.
+                        // msuc should happen before the curNode.
+                        return true;
+                    }
+                    msuc = msuc.getMoBefore();
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // Get all direct mo-predecessors of events in toCheckEvents.
+    private void getMoPredecessors(List<SharedEvent> toCheckEvents,
+                                   List<Pair<SharedEvent, SharedEvent>> moPredecessors) {
+        if (toCheckEvents == null || toCheckEvents.isEmpty())
+            return;
+
+        OGNode n = lastNode,
+                checkNode = toCheckEvents.get(0).getInNode();
+        assert checkNode != null;
+        List<SharedEvent> toRemove = new ArrayList<>();
+        int i = 0;
+        while (n != null && !toCheckEvents.isEmpty()) {
+            if (n == checkNode) {
+                n = n.getTrAfter();
+                continue;
+            }
+            for (SharedEvent w : n.getWs()) {
+                for (SharedEvent w0 : toCheckEvents) {
+                    if(w.accessSameVarWith(w0)) {
+                        moPredecessors.add(Pair.of(w0, w)); // Find the moPredecessor of
+                        // w0.
+                        toRemove.add(w0);
+                    }
+                }
+            }
+
+            toCheckEvents.removeAll(toRemove);
+            toRemove.clear();
+            n = n.getTrAfter();
+            i++;
+        }
     }
 
     // Debug.
