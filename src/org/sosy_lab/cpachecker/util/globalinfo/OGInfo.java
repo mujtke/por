@@ -18,106 +18,106 @@ import java.util.*;
 @Options(prefix = "utils.globalInfo.OGInfo")
 public class OGInfo {
 
-    /**
-     * Store the states num and list<og>. One state may own more than one og,
-     * so we use list to store them.
-     */
-    private final Map<Integer, List<ObsGraph>> OGMap;
+  /**
+   * Store the states num and list<og>. One state may own more than one og,
+   * so we use list to store them.
+   */
+  private final Map<Integer, List<ObsGraph>> OGMap;
 
-    // For debugging.
-    // StateId -> [ (graphId, graphStr), ... ]
-    private final Map<Integer, List<Pair<Integer, String>>> fullOGMap;
-    // StateId -> { graphId -> graphStr (produced in revisit) }
-    private final Map<Integer, Map<Integer, List<String>>> revisitOGMap;
+  // For debugging.
+  // StateId -> [ (graphId, graphStr), ... ]
+  private final Map<Integer, List<Pair<Integer, String>>> fullOGMap;
+  // StateId -> { graphId -> graphStr (produced in revisit) }
+  private final Map<Integer, Map<Integer, List<String>>> revisitOGMap;
 
-    private final OGTransfer transfer;
+  private final OGTransfer transfer;
 
-    private final OGRevisitor revisitor;
+  private final OGRevisitor revisitor;
 
-    // <next table.
-    private final HashMap<Integer, Integer> nlt;
+  // <next table.
+  private final HashMap<Integer, Integer> nlt;
 
-    public HashMap<Integer, List<SharedEvent>> getEdgeVarMap() {
-        return edgeVarMap;
+  public HashMap<Integer, List<SharedEvent>> getEdgeVarMap() {
+    return edgeVarMap;
+  }
+
+  // edge-sharedVars map.
+  private HashMap<Integer, List<SharedEvent>> edgeVarMap;
+
+  // The first graph used to initialize the OGMap.
+  private final ObsGraph initialGraph;
+
+  @Option(secure = true,
+          description = "this option is enabled iff we use OGPORCPA.")
+  private boolean useOG = false;
+
+  @Option(secure = true,
+          description = "switch for debugging.")
+  private boolean enableDebug = false;
+
+  public OGInfo(final Configuration pConfig,
+                final ConfigurableProgramAnalysis pCpa,
+                final CFA pCfa,
+                final LogManager pLogger)
+          throws InvalidConfigurationException {
+    pConfig.inject(this);
+    if (useOG) {
+      OGMap = new HashMap<>();
+      // Put an empty graph into the first state.
+      initialGraph = new ObsGraph();
+      OGMap.put(0, new ArrayList<>(Collections.singleton(initialGraph)));
+      edgeVarMap = new HashMap<>();
+      fullOGMap = new HashMap<>();
+      revisitOGMap = new HashMap<>();
+      transfer = new OGTransfer(OGMap, edgeVarMap);
+      revisitor = new OGRevisitor(pConfig, pCfa, pLogger);
+      nlt = new HashMap<>();
+      enableDebug();
+    } else {
+      initialGraph = null;
+      OGMap = null;
+      edgeVarMap = null;
+      fullOGMap = null;
+      revisitOGMap = null;
+      transfer = null;
+      revisitor = null;
+      nlt = null;
     }
+  }
 
-    // edge-sharedVars map.
-    private HashMap<Integer, List<SharedEvent>> edgeVarMap;
+  private void enableDebug() {
+    if (initialGraph != null)
+      initialGraph.enableDebug(enableDebug);
+    if (transfer != null)
+      transfer.enableDebug(enableDebug);
+    if (revisitor != null)
+      revisitor.enableDebug(enableDebug);
+  }
 
-    // The first graph used to initialize the OGMap.
-    private final ObsGraph initialGraph;
+  public Map<Integer, List<ObsGraph>> getOGMap() {
+    return OGMap;
+  }
 
-    @Option(secure = true,
-            description = "this option is enabled iff we use OGPORCPA.")
-    private boolean useOG = false;
+  public OGTransfer getTransfer() {
+    return transfer;
+  }
 
-    @Option(secure = true,
-    description = "switch for debugging.")
-    private boolean enableDebug = false;
+  public OGRevisitor getRevisitor() {
+    return revisitor;
+  }
 
-    public OGInfo(final Configuration pConfig,
-                  final ConfigurableProgramAnalysis pCpa,
-                  final CFA pCfa,
-                  final LogManager pLogger)
-            throws InvalidConfigurationException {
-        pConfig.inject(this);
-        if (useOG) {
-            OGMap = new HashMap<>();
-            // Put an empty graph into the first state.
-            initialGraph = new ObsGraph();
-            OGMap.put(0, new ArrayList<>(Collections.singleton(initialGraph)));
-            edgeVarMap = new HashMap<>();
-            fullOGMap = new HashMap<>();
-            revisitOGMap = new HashMap<>();
-            transfer = new OGTransfer(OGMap, edgeVarMap);
-            revisitor = new OGRevisitor(pConfig, pCfa, pLogger);
-            nlt = new HashMap<>();
-            enableDebug();
-        } else {
-            initialGraph = null;
-            OGMap = null;
-            edgeVarMap = null;
-            fullOGMap = null;
-            revisitOGMap = null;
-            transfer = null;
-            revisitor = null;
-            nlt = null;
-        }
-    }
+  public Map<Integer, List<Pair<Integer, String>>> getFullOGMap() {
+    return fullOGMap;
+  }
 
-    private void enableDebug() {
-        if (initialGraph != null)
-            initialGraph.enableDebug(enableDebug);
-        if (transfer != null)
-            transfer.enableDebug(enableDebug);
-        if (revisitor != null)
-            revisitor.enableDebug(enableDebug);
-    }
+  public Map<Integer, Map<Integer, List<String>>> getRevisitOGMap() {
+    return revisitOGMap;
+  }
+  public HashMap<Integer, Integer> getNlt() {
+    return nlt;
+  }
 
-    public Map<Integer, List<ObsGraph>> getOGMap() {
-        return OGMap;
-    }
-
-    public OGTransfer getTransfer() {
-        return transfer;
-    }
-
-    public OGRevisitor getRevisitor() {
-       return revisitor;
-    }
-
-    public Map<Integer, List<Pair<Integer, String>>> getFullOGMap() {
-        return fullOGMap;
-    }
-
-    public Map<Integer, Map<Integer, List<String>>> getRevisitOGMap() {
-        return revisitOGMap;
-    }
-    public HashMap<Integer, Integer> getNlt() {
-        return nlt;
-    }
-
-    public boolean isEnableDebug() {
-        return enableDebug;
-    }
+  public boolean isEnableDebug() {
+    return enableDebug;
+  }
 }
