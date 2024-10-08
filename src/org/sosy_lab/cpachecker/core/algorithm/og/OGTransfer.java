@@ -29,7 +29,7 @@ public class OGTransfer {
     NONE, /* Has no conflict */
     TRUE, /* Conflict is certain */
     TEMP, /* Conflict is temporary */
-    ORDER, /* Conflict caused by order of adding nodes */
+    BLOCKED, /* Conflict because of missing re-visitable events */
   }
   Set<OGNode> orderConflictSet = new HashSet<>();
   // Storing the nodes <next node.
@@ -227,11 +227,6 @@ public class OGTransfer {
     ConflictType conflict = ConflictType.NONE;
     Pair<ObsGraph, ObsGraph> result = null;
 
-    if (graph.getVisitingNode() != null
-            && !Objects.equals(node, graph.getVisitingNode())) {
-      return Pair.of(null, null);
-    }
-
     if (edgeType == 0) { // Local non-assumption edge.
       //
       node = null; // We still don't meet the node.
@@ -260,7 +255,7 @@ public class OGTransfer {
         // In this case, we must check the conflict.
         assert node.contains(edge) :
                 "A simple node must contains its only edge!";
-        conflict = graph.hasConflict(curThd, node, parState, chState);
+        conflict = graph.hasConflict(node);
         if (conflict == ConflictType.TRUE) {
           return Pair.of(null, null);
         }
@@ -284,7 +279,7 @@ public class OGTransfer {
     } else { // Shared assumption edge.
       if (node != null) {
         // FIXME: check the conflict first?
-        conflict = graph.hasConflict(curThd, node, parState, chState);
+        conflict = graph.hasConflict(node);
         if (conflict == ConflictType.TRUE) {
           return Pair.of(null, null);
         }
@@ -323,15 +318,14 @@ public class OGTransfer {
 
     assert graph != null;
     if (node != null) {
-      conflict = hasConflictForBlockNotIn(graph, curThd, node, conflict);
-      if (conflict == ConflictType.TRUE)
-        return Pair.of(null, null);
       if (node.getLheIndex() == -2)
         node.setLHEIndex(-1);
       graph.visitNode(node, true);
+      conflict = hasConflictForBlockNotIn(graph, curThd, node, conflict);
       node.updatePreAndSucState(parState, chState);
       node.setLoopDepth(chOgState.getLoopDepth());
     }
+
     graph.setNeedToRevisit(node != null && node.shouldRevisit());
     // we have reached the end of the node, so update the current node for curThd.
     if (node != null)
@@ -341,6 +335,8 @@ public class OGTransfer {
       debugActions(graph, parState, chState, edge);
     if (conflict == ConflictType.TEMP)
       return Pair.of(ObsGraph.DUMMY, null);
+    else if (conflict == ConflictType.BLOCKED)
+      return Pair.of(null, null);
     result = Pair.of(graph, copiedGraph);
 
     return result;
@@ -351,19 +347,17 @@ public class OGTransfer {
           String curThd,
           OGNode node,
           ConflictType conflict) {
-    assert conflict != ConflictType.TRUE;
+    conflict = graph.hasConflict(node);
     if (conflict == ConflictType.TEMP) {
-      return node.hasEventsNeedRevisit() ?
-              ConflictType.TEMP : ConflictType.TRUE;
-    }
-    else if (conflict == ConflictType.NONE) { // conflict == NONE
-      if (graph.hasMoConflict(null, node)) {
-        return node.hasEventsNeedRevisit() ?
-                ConflictType.TEMP : ConflictType.TRUE;
-      }
+      conflict = node.hasEventsNeedRevisit() ?
+              ConflictType.TEMP : ConflictType.BLOCKED;
     }
 
-    return ConflictType.NONE;
+    if (conflict == ConflictType.TRUE) {
+      throw new UnsupportedOperationException("Visited a node shouldn't be.");
+    }
+
+    return conflict;
   }
 
   private Pair<ObsGraph, ObsGraph> handleBlockTerminated(
@@ -448,18 +442,12 @@ public class OGTransfer {
 
     ConflictType conflict = ConflictType.NONE;
     if (graph != null) {
-      // conflict = hasConflict(graph, curThd, node, parState, chState);
-      if (conflict == ConflictType.TRUE) { // Conflict exists.
-        return Pair.of(null, null);
-      }
       // Even if the node has been added to the graph, we may still need to set
       // relations for the events after lhe.
       graph.visitNode(node, true);
-      // Check mo conflict after having visited the node.
-      conflict = hasConflictForBlockTerminated(graph, curThd, node, conflict);
-//            if (conflict == ConflictType.TRUE)
-//                return Pair.of(null, null);
       assert !enableDebug || !DebugAndTest.acyclicMo(graph) : "Mo circle found!";
+      // Check possible conflict after having visited the node.
+      conflict = hasConflictForBlockTerminated(graph, curThd, node, conflict);
       if (node.getLheIndex() == -2)
         node.setLHEIndex(-1);
     }
@@ -469,17 +457,13 @@ public class OGTransfer {
       node.setLoopDepth(chOgState.getLoopDepth());
       graph.setNeedToRevisit(node.shouldRevisit()); // having reached the end of the node, update the current node for curThd.
       graph.updateCurrentNodeTable(curThd, node);
-      // The only place to set visiting node as null.
-      if (graph.getVisitingNode() != null)
-        graph.setVisitingNode(null);
       graphWrapper.clear();
       if (enableDebug)
         debugActions(graph, parState, chState, edge);
     }
-    if (conflict == ConflictType.TEMP) {
+    if (conflict == ConflictType.TEMP)
       return Pair.of(ObsGraph.DUMMY, null);
-    }
-    if (conflict == ConflictType.TRUE)
+    else if (conflict == ConflictType.BLOCKED)
       return Pair.of(null, null);
 
     result = Pair.of(graph, copiedGraph);
@@ -491,19 +475,16 @@ public class OGTransfer {
           String curThd,
           OGNode node,
           ConflictType conflict) {
-    assert conflict != ConflictType.TRUE;
+    conflict = graph.hasConflict(node);
     if (conflict == ConflictType.TEMP) {
-      return node.hasEventsNeedRevisit() ?
-              ConflictType.TEMP : ConflictType.TRUE;
+      conflict = node.hasEventsNeedRevisit() ?
+              ConflictType.TEMP : ConflictType.BLOCKED;
     }
-    else if (conflict == ConflictType.NONE) { // conflict == NONE
-      if (graph.hasMoConflict(null, node)) {
-        return node.hasEventsNeedRevisit() ?
-                ConflictType.TEMP : ConflictType.TRUE;
-      }
+    if (conflict == ConflictType.TRUE) {
+      throw new UnsupportedOperationException("Visited a node shouldn't be.");
     }
 
-    return ConflictType.NONE;
+    return conflict;
   }
 
   private Pair<ObsGraph, ObsGraph> handleBlockContinue(
@@ -696,11 +677,6 @@ public class OGTransfer {
     boolean conflictMo = false;
     Pair<ObsGraph, ObsGraph> result = null;
 
-    if (graph.getVisitingNode() != null
-            && Objects.equals(node, graph.getRevisitNode())) {
-      return Pair.of(null, null);
-    }
-
     if (edgeType == 0) { // Local non-assumption edge.
       if (node != null) {
         // Only complex node can contain a block start edge. Besides, the node
@@ -769,8 +745,7 @@ public class OGTransfer {
           OGNode node,
           ARGState parState,
           ARGState chState) {
-    ConflictType conflict =
-            graph.hasConflict(curThd, node, parState, chState);
+    ConflictType conflict = graph.hasConflict(node);
     switch (conflict) {
       case TRUE:
         return true;

@@ -495,9 +495,10 @@ public class ObsGraph implements Copier<ObsGraph> {
   public boolean hb(OGNode A, OGNode B, final Set<OGNode> hbnOfA) {
     assert A != null && B != null;
     return (hbnOfA.contains(B)
-            || checkHbFor(A.getSuccessors(), B, hbnOfA)
-            || checkHbFor(A.getReadBy(), B, hbnOfA)
-            || checkHbFor(A.getFromRead(), B, hbnOfA));
+        || checkHbFor(A.getSuccessors(), B, hbnOfA)
+        || checkHbFor(A.getReadBy(), B, hbnOfA)
+        || checkHbFor(A.getFromRead(), B, hbnOfA)
+        || checkHbFor(A.getWBefore(), B, hbnOfA));
   }
 
   private boolean checkHbFor(List<OGNode> pNodes,
@@ -645,7 +646,7 @@ public class ObsGraph implements Copier<ObsGraph> {
       for (j = 0; j < n; j++) {
         OGNode nodei = nodes.get(i), nodej = nodes.get(j);
         if (nodei.getSuccessors().contains(nodej) /* po */
-                || nodei.getReadBy().contains(nodej) /* rf */) {
+            || nodei.getReadBy().contains(nodej) /* rf */) {
           porf[i][j] = true;
         }
       }
@@ -661,51 +662,107 @@ public class ObsGraph implements Copier<ObsGraph> {
       }
     }
 
-    for (OGNode node : nodes) {
-      if (node.getRs().isEmpty()) continue;
-      for (Iterator<SharedEvent> it = node.getRs().iterator(); it.hasNext();) {
-        SharedEvent r = it.next(), w = r.getReadFrom();
-        assert w != null : "Missing readFrom when trying to build fr!";
-        // FIXME
-        if (w.getAType() == SharedEvent.AccessType.DUMMY)
-          continue;
-        // Deduce fr caused by r and w.
-        OGNode wNode = w.getInNode();
-        assert wNode.readBy(node) && node.readFrom(wNode);
-        for (int m = 0; m < n; m++) {
-          if (porf[nodes.indexOf(wNode)][m] && m != nodes.indexOf(node)) {
-            // if wNode porf nodes[m] and nodes[m] != node (wNode must
-            // porf node, and a node cannot fr itself.
-            OGNode frn = nodes.get(m);
-            SharedEvent frnw = frn.getWriteToSameVar(r);
-            if (frnw == null) continue;
-            r.setFromRead(frnw);
+    // Deduce write-before.
+    for (i = 0; i < n; i++) {
+      OGNode ni = nodes.get(i);
+      for (SharedEvent w1 : ni.getWs()) {
+        for (j = 0; j < n; j++) {
+          if (j == i) continue;
+          OGNode nj = nodes.get(j);
+          SharedEvent w2 = nj.getWriteToSameVar(w1);
+          if (w2 == null) continue;
+          // Else, w1 may wb w2.
+          if (porf[i][j]) {
+            w1.setWriteBefore(w2);
+            continue;
+          }
+          int fi = i;
+          if (w2.getReadBy().stream().anyMatch(w2rb ->
+              porf[fi][nodes.indexOf(w2rb.getInNode())])) {
+            w1.setWriteBefore(w2);
           }
         }
       }
     }
+
+    // Deduce from-read.
+    for (i = 0; i < n; i++) {
+      OGNode ni = nodes.get(i);
+      for (SharedEvent r : ni.getRs()) {
+        SharedEvent w = r.getReadFrom();
+        assert w != null : "Missing readFrom when trying to build fr!";
+        // FIXME
+        if (w.getAType() == SharedEvent.AccessType.DUMMY) continue;
+        // Deduce fr caused by r and w.
+        OGNode wNode = w.getInNode();
+        assert wNode.readBy(ni) && ni.readFrom(wNode);
+        for (j = 0; j < n; j++) {
+          if (j == i) continue;
+          OGNode nj = nodes.get(j);
+          if (wNode.writeBefore(nj)) {
+            // If wNode write before nj.
+            SharedEvent frnw = nj.getWriteToSameVar(r);
+            if (frnw != null)
+              r.setFromRead(frnw);
+          }
+        }
+      }
+    }
+
+//    for (OGNode node : nodes) {
+//      if (node.getRs().isEmpty()) continue;
+//      for (Iterator<SharedEvent> it = node.getRs().iterator(); it.hasNext();) {
+//        SharedEvent r = it.next(), w = r.getReadFrom();
+//        assert w != null : "Missing readFrom when trying to build fr!";
+//        // FIXME
+//        if (w.getAType() == SharedEvent.AccessType.DUMMY)
+//          continue;
+//        // Deduce fr caused by r and w.
+//        OGNode wNode = w.getInNode();
+//        assert wNode.readBy(node) && node.readFrom(wNode);
+//        for (int m = 0; m < n; m++) {
+//          if (porf[nodes.indexOf(wNode)][m] && m != nodes.indexOf(node)) {
+//            // if wNode porf nodes[m] and nodes[m] != node (wNode must
+//            // porf node, and a node cannot fr itself.
+//            OGNode frn = nodes.get(m);
+//            SharedEvent frnw = frn.getWriteToSameVar(r);
+//            if (frnw == null) continue;
+//            r.setFromRead(frnw);
+//          }
+//        }
+//      }
+//    }
   }
 
   /**
+   * FIXME
    * Deduce fr relation for write events in {@param wFlagForFr}.
    * @implNote we have built mo relation for write events in {@param wFlagForFr}, and we
    * will backtrack along mo to build fr for each event in @{wFlagForFr}.
    */
   public void deduceFromReadForEvents(Set<SharedEvent> wFlagForFr) {
+    // Deduce fr with only mo and rf.
     for (SharedEvent w : wFlagForFr) {
-//            assert w.getFromReadBy().isEmpty() :
-//                    "Try to build fr for a event that we have done that before.";
-      // Backtracking along the mo.
+      // Part1: Backtracking along the mo.
       SharedEvent mpe = w.getMoAfter();
       while (mpe != null) {
-        if (porf(mpe, w)) {
-          for (SharedEvent r : mpe.getReadBy()) {
-            if (!w.getFromReadBy().contains(r)
-                    && !Objects.equals(r.getInNode(), w.getInNode()))
-              w.setFromReadBy(r);
-          }
+        for (SharedEvent r : mpe.getReadBy()) {
+          if (r.getInNode().isInGraph()
+              && !w.getFromReadBy().contains(r)
+              && !Objects.equals(r.getInNode(), w.getInNode()))
+            w.setFromReadBy(r);
         }
         mpe = mpe.getMoAfter();
+      }
+
+      // Part2: go ahead along the mo.
+      SharedEvent r = w.getInNode().getReadToSameVar(w);
+      if (r == null) continue;
+      SharedEvent msuc = w.getMoBefore();
+      while (msuc != null) {
+        if (!r.getFromRead().contains(msuc))
+          r.setFromRead(msuc);
+        msuc = msuc.getMoBefore();
       }
     }
   }
@@ -1192,14 +1249,9 @@ public class ObsGraph implements Copier<ObsGraph> {
 
   private boolean visitLess(OGNode n1, OGNode n2) {
     // FIXME
-    boolean less_porf = porf(n1, n2);
-    boolean greater_porf = porf(n2, n1);
-    boolean less_hb = hb(n1, n2);
-    boolean greater_hb = hb(n2, n1);
-    boolean less_mo = hasMoConflict(n1.getInThread(), n2);
-    boolean greater_mo = hasMoConflict(n2.getInThread(), n1);
-    if ((less_porf || less_hb || less_mo)
-            && (greater_porf || greater_hb || greater_mo)) {
+    boolean hbLess = hb(n1, n2);
+    boolean hbGreater = hb(n2, n1);
+    if (hbLess && hbGreater) {
       // Circle found.
       List<OGNode> circleNodes =
               circles.computeIfAbsent(n1, n -> new ArrayList<>());
@@ -1208,7 +1260,7 @@ public class ObsGraph implements Copier<ObsGraph> {
       else if (n2.hasEventsNeedRevisit()) return false;
     }
 
-    return less_porf || less_hb || less_mo;
+    return hbLess;
   }
 
   /**
@@ -1221,24 +1273,26 @@ public class ObsGraph implements Copier<ObsGraph> {
    * @return type of the conflict.
    * @implNote we check conflict when we just reach the node, or the node becomes complete.
    */
-  public OGTransfer.ConflictType hasConflict(String curThd, OGNode curNode,
-                                             ARGState parState, ARGState chState) {
+  public OGTransfer.ConflictType hasConflict(OGNode curNode) {
     // Get the current nodes of all threads.
     List<OGNode> ns = nodeTable.values().stream()
             .filter(Objects::nonNull).collect(Collectors.toList());
-    assert ns.contains(curNode);
+    // ns may not contain curNode if ns is empty, which means curNode is a newly created node.
+    assert ns.contains(curNode) || ns.isEmpty();
 
     // Sorting nodes by adding order <.
     ns.sort((n1, n2) -> addNodeBefore(n1, n2) ? -1 : 1);
     // Sorting nodes by visiting order <_visit.
     visitSort(ns);
 
-    if (ns.indexOf(curNode) == 0) {
-      // Has a cycle?
-      if (hasCircleFor(curNode))
-        return OGTransfer.ConflictType.TEMP;
-    } else {
-      return OGTransfer.ConflictType.TRUE;
+    if (ns.contains(curNode)) {
+      if (ns.indexOf(curNode) == 0) {
+        // Has a cycle?
+        if (hasCircleFor(curNode))
+          return OGTransfer.ConflictType.TEMP;
+      } else {
+        return OGTransfer.ConflictType.TRUE;
+      }
     }
 
     return OGTransfer.ConflictType.NONE;

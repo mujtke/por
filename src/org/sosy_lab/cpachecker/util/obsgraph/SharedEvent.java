@@ -325,7 +325,7 @@ public class SharedEvent implements Copier<SharedEvent> {
   public void setFromReadBy(SharedEvent frb) {
     assert frb != null;
     assert !frb.fromRead.contains(this) && !fromReadBy.contains(frb) :
-            "It's not allowed to add a new fr relation when there has been one!";
+        "It's not allowed to add a new fr relation when there has been one!";
     fromReadBy.add(frb);
     frb.fromRead.add(this);
     OGNode frbNode = frb.getInNode();
@@ -333,6 +333,19 @@ public class SharedEvent implements Copier<SharedEvent> {
       inNode.setFromReadBy(frbNode);
     if (!frbNode.fromRead(inNode))
       frbNode.setFromRead(inNode);
+  }
+
+  public void setWriteBefore(SharedEvent wb) {
+    assert wb != null;
+    assert !wb.wAfter.contains(this) && !wBefore.contains(wb) :
+        "It's not allowed to add a new wb relation when there has been one!";
+    wBefore.add(wb);
+    wb.wAfter.add(this);
+    OGNode wbn = wb.getInNode();
+    if (!inNode.writeBefore(wbn))
+      inNode.setWriteBefore(wbn);
+    if (!wbn.writeAfter(inNode))
+      wbn.setWriteAfter(inNode);
   }
 
   public List<SharedEvent> getReadBy() {

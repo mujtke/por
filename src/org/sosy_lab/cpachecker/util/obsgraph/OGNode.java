@@ -797,6 +797,26 @@ public class OGNode implements Copier<OGNode> {
     return moAfter.contains(node) && node.moBefore.contains(this);
   }
 
+  public void setWriteBefore(OGNode wbn) {
+    assert wbn != null;
+    wBefore.add(wbn);
+  }
+
+  public void setWriteAfter(OGNode wan) {
+    assert wan != null;
+    wAfter.add(wan);
+  }
+
+  public boolean writeBefore(OGNode node) {
+    assert node != null;
+    return wBefore.contains(node) && node.wAfter.contains(this);
+  }
+
+  public boolean writeAfter(OGNode node) {
+    assert node != null;
+    return wAfter.contains(node) && node.wBefore.contains(this);
+  }
+
   public void setMoBefore(OGNode mbNode) {
     assert mbNode != null;
     moBefore.add(mbNode);
