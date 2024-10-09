@@ -389,33 +389,38 @@ public class OGNode implements Copier<OGNode> {
       if (LHEIndex == LHRIndex) {
         if (i == LHRIndex) {
           LHRIndex = getNewIndex(i, e);
-          // In this case, LHWIndex keeps unchanged.
+          // In this case, LHWIndex != i.
+          if (i < LHWIndex) LHWIndex--;
+          // else, i > LHWIndex, LHWIndex keeps unchanged.
         } else { // i < LHRIndex.
           LHRIndex--;
           if (i == LHWIndex) { // e must be a write event.
             assert e.isWrite();
             LHWIndex = getNewIndex(i, e);
-          } else if (i < LHWIndex)
-            LHWIndex--;
+          } else if (i < LHWIndex) LHWIndex--;
           // else, i > LHWIndex, LHWIndex keeps unchanged.
         }
-      } else { // LHEIndex == LHWIndex
+        LHWIndex = LHRIndex;
+      }
+      else { // LHEIndex == LHWIndex
         if (i == LHWIndex) {
           LHWIndex = getNewIndex(i, e);
-          // In this case, LHRIndex keeps unchanged.
-        } else {
+          // In this case, LHRIndex != i;
+          if (i < LHRIndex) LHRIndex--;
+          // else, i > LHRIndex, LHRIndex keeps unchanged.
+        } else { // i < LHWIndex
           LHWIndex--;
           if (i == LHRIndex) { // e must be a read event.
             assert e.isRead();
             LHRIndex = getNewIndex(i, e);
           } else if (i < LHRIndex)
             LHRIndex--;
-          // else, i < LHRIndex, LHRIndex keeps unchanged.
+          // else, i > LHRIndex, LHRIndex keeps unchanged.
         }
+        LHEIndex = LHWIndex;
       }
       assert LHRIndex != LHWIndex;
-      // LHEIndex = max(LHRIndex, LHWIndex)
-      LHEIndex = Math.max(LHRIndex, LHWIndex);
+      // LHEIndex = Math.max(LHRIndex, LHWIndex);
     }
 
     events.remove(e);

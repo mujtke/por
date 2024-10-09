@@ -214,13 +214,6 @@ public class OGRevisitor {
       }
     }
 
-    // FIXME
-    if (G.getRE().stream().anyMatch(e -> e.getAType() == READ
-            && e.getReadFrom().getAType() == DUMMY)) {
-      RG.add(G);
-      return;
-    }
-
     AbstractState pivotState = getPivotState(G);
     // Set 'needToRevisit' to false, whether a further revisit is needed is
     // specified in the future.
