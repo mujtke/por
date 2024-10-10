@@ -53,7 +53,7 @@ function run_with_provided_configuration() {
 	read -p "* (1) ogpor with output
   (2) ogpor with no output
   (3) pcdpor with output
-  (4) pcdpor with n output
+  (4) pcdpor with no output
   (5) original bdd analysis
 Select a configuration that you would like to use(<Enter> with *): "
 	case "$REPLY" in

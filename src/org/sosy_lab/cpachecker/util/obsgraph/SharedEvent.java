@@ -61,12 +61,18 @@ public class SharedEvent implements Copier<SharedEvent> {
   // Remove rf, fr and mo for this event.
   public void removeAllRelations() {
     List<SharedEvent> toRemove;
-    // Rf
+    // Rf.
     if (readFrom != null)
       removeReadFrom();
     toRemove = new ArrayList<>(readBy);
     toRemove.forEach(this::removeReadBy);
     // readBy.forEach(this::removeReadBy);
+
+    // Wb.
+    toRemove = new ArrayList<>(wBefore);
+    toRemove.forEach(this::removeWriteBefore);
+    toRemove = new ArrayList<>(wAfter);
+    toRemove.forEach(this::removeWriteAfter);
 
     // Fr.
     toRemove = new ArrayList<>(fromRead);
@@ -95,7 +101,7 @@ public class SharedEvent implements Copier<SharedEvent> {
    */
   public void removeMoAfter() {
     assert moAfter != null && moAfter.moBefore == this :
-            "Trying to remove a relation not exists!";
+            "Trying to remove a relation does not exist!";
     OGNode maInNode = moAfter.inNode;
     moAfter.moBefore = null;
     moAfter = null;
@@ -107,7 +113,7 @@ public class SharedEvent implements Copier<SharedEvent> {
 
   public void removeMoBefore() {
     assert moBefore != null && moBefore.moAfter == this :
-            "Trying to remove a relation not exists!";
+            "Trying to remove a relation does not exist!";
     OGNode mbInNode = moBefore.inNode;
     moBefore.moAfter = null;
     moBefore = null;
@@ -119,7 +125,7 @@ public class SharedEvent implements Copier<SharedEvent> {
 
   public void removeReadFrom() {
     assert readFrom != null && readFrom.readBy.contains(this) :
-            "Trying to remove a relation not exists!";
+            "Trying to remove a relation does not exist!";
     OGNode rfNode = readFrom.getInNode();
     readFrom.readBy.remove(this);
     readFrom = null;
@@ -131,7 +137,7 @@ public class SharedEvent implements Copier<SharedEvent> {
 
   public void removeReadBy(SharedEvent rb) {
     assert rb != null && readBy.contains(rb) && rb.readFrom == this :
-            "Trying to remove a relation not exists!";
+            "Trying to remove a relation does not exist!";
     readBy.remove(rb);
     rb.readFrom = null;
     OGNode rbNode = rb.getInNode();
@@ -141,10 +147,36 @@ public class SharedEvent implements Copier<SharedEvent> {
     }
   }
 
+  public void removeWriteBefore(SharedEvent wb) {
+    assert wb != null && wBefore.contains(wb)
+        && wb.wAfter.contains(this) :
+        "Trying to remove a relation does not exist!";
+    wBefore.remove(wb);
+    wb.wAfter.remove(this);
+    OGNode wbNode = wb.getInNode();
+    if (inNode.getRefCount("wb", wbNode) < 1) {
+      inNode.removeWriteBefore(wbNode);
+      wbNode.removeWriteAfter(inNode);
+    }
+  }
+
+  public void removeWriteAfter(SharedEvent wa) {
+    assert wa != null && wAfter.contains(wa)
+        && wa.wBefore.contains(this) :
+        "Trying to remove a relation does not exist!";
+    wAfter.remove(wa);
+    wa.wBefore.remove(this);
+    OGNode waNode = wa.getInNode();
+    if (inNode.getRefCount("wa", waNode) < 1) {
+      inNode.removeWriteAfter(waNode);
+      waNode.removeWriteBefore(inNode);
+    }
+  }
+
   public void removeFromRead(SharedEvent fr) {
     assert fr != null && fromRead.contains(fr)
             && fr.getFromReadBy().contains(this) :
-            "Trying to remove a relation not exists!";
+            "Trying to remove a relation does not exist!";
     fromRead.remove(fr);
     fr.fromReadBy.remove(this);
     OGNode frNode = fr.getInNode();
@@ -157,7 +189,7 @@ public class SharedEvent implements Copier<SharedEvent> {
   public void removeFromReadBy(SharedEvent frb) {
     assert frb != null && fromReadBy.contains(frb)
             && frb.getFromRead().contains(this) :
-            "Trying to remove a relation not exists!";
+            "Trying to remove a relation does not exist!";
     fromReadBy.remove(frb);
     frb.fromRead.remove(this);
     OGNode frbNode = frb.getInNode();
@@ -172,7 +204,7 @@ public class SharedEvent implements Copier<SharedEvent> {
     while (it.hasNext()) {
       SharedEvent frb = it.next();
       it.remove();
-      assert frb.fromRead.contains(this) : "Try to remove a fr not existed.";
+      assert frb.fromRead.contains(this) : "Try to remove a fr does not exist.";
       frb.fromRead.remove(this);
       OGNode frbNode = frb.getInNode();
       if (inNode.getRefCount("frb", frbNode) < 1) {
@@ -245,6 +277,8 @@ public class SharedEvent implements Copier<SharedEvent> {
     nEvent.moBefore = this.moBefore != null ? this.moBefore.deepCopy(memo) : null;
 
     /* Write before: no copy. */
+    this.wBefore.forEach(wb -> nEvent.wBefore.add(wb.deepCopy(memo)));
+    this.wAfter.forEach(wa -> nEvent.wAfter.add(wa.deepCopy(memo)));
 
     /* From read. */
     this.fromRead.forEach(fr -> nEvent.fromRead.add(fr.deepCopy(memo)));

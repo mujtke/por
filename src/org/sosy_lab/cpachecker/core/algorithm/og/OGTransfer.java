@@ -147,6 +147,8 @@ public class OGTransfer {
     // For debugging.
     int parId = parState.getStateId(), chId = chState.getStateId();
     ObsGraph g = graphWrapper.get(0);
+//    assert enableDebug && DebugAndTest.findEmtpyRf(g).isEmpty();
+//    assert enableDebug && DebugAndTest.hasInvalidLheFor(g).isEmpty();
 
     OGPORState chOgState =
             AbstractStates.extractStateByType(chState, OGPORState.class);

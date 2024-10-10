@@ -271,7 +271,8 @@ public class OGRevisitor {
             "Revisiting requires that the read event must read from some value.";
     // Remove the old rf.
     r.removeReadFrom();
-    // Clear the old fr.
+    // Clear the old wb & fr.
+    G.clearWb();
     G.clearFR();
 
     // When setting read-from relation, we may get a new graph because of the indeterminacy.

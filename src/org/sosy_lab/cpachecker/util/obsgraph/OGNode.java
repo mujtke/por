@@ -159,10 +159,11 @@ public class OGNode implements Copier<OGNode> {
     this.readFrom.forEach(rf -> nNode.readFrom.add(rf.deepCopy(memo)));
     this.readBy.forEach(rb -> nNode.readBy.add(rb.deepCopy(memo)));
 
-    /* Modification order: no copy. */
+    /* Modification order */
     this.moBefore.forEach(mb -> nNode.moBefore.add(mb.deepCopy(memo)));
     this.moAfter.forEach(ma -> nNode.moAfter.add(ma.deepCopy(memo)));
-    /* Write before: no copy. */
+
+    /* Write before */
     this.wBefore.forEach(wb -> nNode.wBefore.add(wb.deepCopy(memo)));
     this.wAfter.forEach(wa -> nNode.wAfter.add(wa.deepCopy(memo)));
 
@@ -378,37 +379,60 @@ public class OGNode implements Copier<OGNode> {
   public void removeEvent(SharedEvent e) {
     assert events.contains(e) && (Rs.contains(e) || Ws.contains(e)) :
             "Trying to remove a event not in the node!";
+    updateLheAsOneBefore(e);
+    events.remove(e);
+    // Don't forget to remove event from Rs or Ws.
+    if (e.isRead()) {
+      Rs.remove(e);
+    } else {
+      Ws.remove(e);
+    }
+  }
+
+  public void updateLheAsOneBefore(SharedEvent e) {
     int i = events.indexOf(e);
-    if (LHEIndex >= 0 && i <= LHEIndex) {
+    if (LHEIndex >= 0 && (i <= LHRIndex || i <= LHWIndex)) {
       // LHEIndex >= 0 means we have updated it, i.e., the node is not totally new.
       // Else, LHEIndex = -1, the node is totally new, deleting an event won't
       // change the LHEIndex.
       // NOTE: LHEIndex == LHRIndex/LHWIndex?
       assert LHEIndex == LHRIndex || LHEIndex == LHWIndex
-              : "Incorrect LHEIndex found!";
+          : "Incorrect LHEIndex found!";
       if (LHEIndex == LHRIndex) {
         if (i == LHRIndex) {
+          assert e.isRead();
           LHRIndex = getNewIndex(i, e);
           // In this case, LHWIndex != i.
           if (i < LHWIndex) LHWIndex--;
           // else, i > LHWIndex, LHWIndex keeps unchanged.
-        } else { // i < LHRIndex.
+        }
+        else if (i < LHRIndex) { // i < LHRIndex.
           LHRIndex--;
           if (i == LHWIndex) { // e must be a write event.
             assert e.isWrite();
             LHWIndex = getNewIndex(i, e);
-          } else if (i < LHWIndex) LHWIndex--;
-          // else, i > LHWIndex, LHWIndex keeps unchanged.
+          } else if (i < LHWIndex) {
+            LHWIndex--;
+          }
         }
-        LHWIndex = LHRIndex;
+        else { // i > LHRIndex, LHRIndex keeps unchanged.
+          if (i == LHWIndex) {
+            assert e.isWrite();
+            LHWIndex = getNewIndex(i, e);
+          } else { // Else, i must < LHWIndex.
+            LHWIndex--;
+          }
+        }
+        LHEIndex = LHRIndex;
       }
       else { // LHEIndex == LHWIndex
         if (i == LHWIndex) {
+          assert e.isWrite();
           LHWIndex = getNewIndex(i, e);
-          // In this case, LHRIndex != i;
           if (i < LHRIndex) LHRIndex--;
           // else, i > LHRIndex, LHRIndex keeps unchanged.
-        } else { // i < LHWIndex
+        }
+        else if (i < LHWIndex) { // i < LHWIndex
           LHWIndex--;
           if (i == LHRIndex) { // e must be a read event.
             assert e.isRead();
@@ -417,19 +441,19 @@ public class OGNode implements Copier<OGNode> {
             LHRIndex--;
           // else, i > LHRIndex, LHRIndex keeps unchanged.
         }
-        LHEIndex = LHWIndex;
+        else { // i > LHWIndex, LHWIndex keeps unchanged.
+          if (i == LHRIndex) {
+            assert e.isRead();
+            LHRIndex = getNewIndex(i, e);
+          } else {
+            LHRIndex--;
+          }
+        }
+        LHEIndex = LHWIndex >= 0 ? LHWIndex : LHRIndex;
       }
       assert LHRIndex != LHWIndex;
-      // LHEIndex = Math.max(LHRIndex, LHWIndex);
     }
-
-    events.remove(e);
-    // Don't forget to remove event from Rs or Ws.
-    if (e.isRead()) {
-      Rs.remove(e);
-    } else {
-      Ws.remove(e);
-    }
+    assert LHEIndex == LHRIndex || LHEIndex == LHWIndex;
   }
 
   private int getNewIndex(int i, SharedEvent e) {
@@ -471,6 +495,7 @@ public class OGNode implements Copier<OGNode> {
       assert newLHEIndex > LHRIndex;
       LHRIndex = newLHEIndex;
     } else {
+      assert e.isWrite();
       assert newLHEIndex > LHWIndex;
       LHWIndex = newLHEIndex;
     }
@@ -638,6 +663,19 @@ public class OGNode implements Copier<OGNode> {
               refCount++;
         break;
 
+      case "wb":
+        for (SharedEvent w : Ws)
+          for (SharedEvent wb : w.getWBefore())
+            if (other.Ws.contains(wb))
+              refCount++;
+        break;
+      case "wa":
+        for (SharedEvent w : Ws)
+          for (SharedEvent wa : w.getWAfter())
+            if (other.Ws.contains(wa))
+              refCount++;
+        break;
+
       case "ma":
         for (SharedEvent w : Ws)
           if (other.Ws.contains(w.getMoAfter()))
@@ -770,6 +808,16 @@ public class OGNode implements Copier<OGNode> {
   public void removeFromReadBy(OGNode frbNode) {
     assert frbNode != null && fromReadBy.contains(frbNode);
     fromReadBy.remove(frbNode);
+  }
+
+  public void removeWriteBefore(OGNode wbNode) {
+    assert wbNode != null && wBefore.contains(wbNode);
+    wBefore.remove(wbNode);
+  }
+
+  public void removeWriteAfter(OGNode waNode) {
+    assert waNode != null && wAfter.contains(waNode);
+    wAfter.remove(waNode);
   }
 
   public boolean readBy(OGNode node) {
@@ -927,24 +975,15 @@ public class OGNode implements Copier<OGNode> {
     successors.clear();
 
     // rf.
-//        readFrom.forEach(rf -> rf.removeReadBy(this));
-//        readFrom.clear();
-//        readBy.forEach(rb -> rb.removeReadFrom(this));
-//        readBy.clear();
     assert readFrom.isEmpty() && readBy.isEmpty();
 
+    // wb.
+    assert wBefore.isEmpty() && wAfter.isEmpty();
+
     // fr.
-//        fromRead.forEach(fr -> fr.removeFromReadBy(this));
-//        fromRead.clear();
-//        fromReadBy.forEach(frb -> frb.removeFromRead(this));
-//        fromReadBy.clear();
     assert fromRead.isEmpty() && fromReadBy.isEmpty();
 
     // mo.
-//        moBefore.forEach(mb -> mb.removeMoAfter(this));
-//        moBefore.clear();
-//        moAfter.forEach(ma -> ma.removeMoBefore(this));
-//        moAfter.clear();
     assert moBefore.isEmpty() && moAfter.isEmpty();
 
     // Remove to in another place.

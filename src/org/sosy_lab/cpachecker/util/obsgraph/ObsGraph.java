@@ -589,6 +589,7 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     List<SharedEvent> loseRfRs = new ArrayList<>();
     // remove relations before removing nodes.
+    Collections.reverse(delete);
     delete.forEach(e -> {
       // FIXME: If e is a write and some reads not in the 'delete' read from it?
       // Collect them here.
@@ -609,9 +610,13 @@ public class ObsGraph implements Copier<ObsGraph> {
         nodesToRemove.add(en);
       } else {
         // Don't remove node rpn, just remove event e.
-        // FIXME: Don't delete the events that locate in the same node with rp?
         if(!Objects.equals(e.getInEdge(), rpe))
           rpn.removeEvent(e);
+        else {
+          // FIXME: Don't delete the events that locate in the same node with rp?
+          // But we still need to update the lhe?
+          rpn.updateLheAsOneBefore(e);
+        }
       }
     });
 
@@ -986,6 +991,17 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
   }
 
+  public void clearWb() {
+    // Remove all from-read relations.
+    // FIXME: a more effective way to do this?
+    for (OGNode node : nodes) {
+      for (SharedEvent w : node.getWs()) {
+        List<SharedEvent> toRemove = new ArrayList<>(w.getWBefore());
+        toRemove.forEach(w::removeWriteBefore);
+      }
+    }
+  }
+
   public void clearFR() {
     // Remove all from-read relations.
     // TODO: a more effective way to do this?
@@ -1205,7 +1221,7 @@ public class ObsGraph implements Copier<ObsGraph> {
       }
     }
     if (!lastNode.getEvents().isEmpty())
-      lastNode.setLHWIndex(lastNode.getEvents().size() - 1);
+      lastNode.setLHEIndex(lastNode.getEvents().size() - 1);
   }
 
   public boolean hasCircleFor(OGNode n0) {

@@ -236,6 +236,27 @@ public class DebugAndTest {
     });
   }
 
+  // Test for detecting empty rf relation.
+  public static List<OGNode> findEmtpyRf(ObsGraph g) {
+    return g.getNodes().stream().filter(n ->
+        n.getRs().stream().anyMatch(r -> r.getReadFrom() == null)
+            && ((n.getLhrIndex() == n.getEvents().size() - 1)
+            || (n.getLhwIndex() == n.getEvents().size() - 1))
+            && !n.isInGraph()
+            && n.getWs().stream().anyMatch(w -> !w.getWAfter().isEmpty())
+    ).collect(Collectors.toList());
+  }
+
+  // Test for LHEIndex.
+  public static List<OGNode> hasInvalidLheFor(ObsGraph g) {
+    return g.getNodes().stream().filter(n ->
+        ((n.getLhrIndex() >=0 || n.getLhwIndex() >= 0)
+            && (n.getLheIndex() != n.getLhrIndex() && n.getLheIndex() != n.getLhwIndex()))
+            || (n.getLhwIndex() >= 0 && n.getLhwIndex() < n.getEvents().size() && !n.getEvents().get(n.getLhwIndex()).isWrite())
+            || (n.getLhrIndex() >= 0 && n.getLhrIndex() < n.getEvents().size() && !n.getEvents().get(n.getLhrIndex()).isRead()))
+        .collect(Collectors.toList());
+  }
+
   // Test po relation.
   public static boolean testPO(ObsGraph g) {
     boolean hasPredecessor, hasSuccessor;
