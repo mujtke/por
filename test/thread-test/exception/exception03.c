@@ -1,17 +1,33 @@
+// The pthread relative.
+typedef unsigned pthread_t;
+typedef unsigned pthread_mutex_t;
+#define NULL ((void *) 0)
+extern void pthread_create(pthread_t *, void *, void *(*)(void *), void *);
+extern void pthread_mutex_lock(pthread_t *);
+extern void pthread_mutex_unlock(pthread_t *);
+extern void pthread_mutex_init(pthread_mutex_t *, int);
+extern void pthread_join(pthread_t , int);
+extern void pthread_mutex_destroy(pthread_mutex_t *);
+
+// Assertions.
+extern void assert(int);
+extern void abort(void);
+extern void reach_error();
+
+// Atomic block.
+extern void __VERIFIER_atomic_begin();
+extern void __VERIFIER_atomic_end();
 extern void abort(void);
 void assume_abort_if_not(int cond) {
   if(!cond) {abort();}
 }
 extern _Bool __VERIFIER_nondet_bool(void);
 extern void abort(void);
-#include <assert.h>
 void reach_error() { assert(0); }
 void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; return; }
 extern void __VERIFIER_atomic_begin();
 extern void __VERIFIER_atomic_end();
 
-#include <assert.h>
-#include <pthread.h>
 #ifndef TRUE
 #define TRUE (_Bool)1
 #endif

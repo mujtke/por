@@ -453,7 +453,7 @@ public class OGNode implements Copier<OGNode> {
       }
       assert LHRIndex != LHWIndex;
     }
-    assert LHEIndex == LHRIndex || LHEIndex == LHWIndex;
+    assert LHEIndex == -2 || LHEIndex == LHRIndex || LHEIndex == LHWIndex;
   }
 
   private int getNewIndex(int i, SharedEvent e) {
