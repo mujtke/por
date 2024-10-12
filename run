@@ -43,7 +43,8 @@ function get_configuration() {
 Continue (any key) or exit(q)? "
 			[[ "$REPLY" == "q" ]] && exit 1
 		else
-			echo "$(realpath --relative-to=../ $valid_config)"
+			# echo "$(realpath --relative-to=../ $valid_config)"
+			echo "$(realpath $valid_config)"
 			exit 0
 		fi
 	done
