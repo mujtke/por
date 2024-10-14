@@ -4,9 +4,20 @@ TEST_FILE="$(realpath $1)"
 
 cd "$HOME/Code/Java/por"
 
-OGPOR=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
-	-spec default -preprocess \
-	"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')
+OGPOR_OUT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
+	-spec default -preprocess "$TEST_FILE" 2> /dev/null &)
+OGPOR_PID=$!
+
+PCDPOR_OUT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-pcdpor-no-out.properties \
+	-spec default -preprocess "$TEST_FILE" 2> /dev/null &)
+PCDPOR_PID=$!
+
+wait $OGPOR_PID $PCDPOR_PID
+
+OGPOR_RESULT=$(grep 'Verification result:' <<< $OGPOR_OUT | awk '{ print $3 }')
+OGPOR_STATES_NUM=$(grep 'explored states:' <<< $OGPOR_OUT | awk '{ print $3 }')
+PCDPOR_RESULT=$(grep 'Verification result:' <<< $PCDPOR_OUT | awk '{ print $3 }')
+PCDPOR_STATES_NUM=$(grep 'explored states:' <<< $PCDPOR_OUT | awk '{ print $3 }')
 
 if [[ $OGPOR == "TRUE." ]]; then
 	OGPOR="\033[32m$OGPOR\033[0m" 
@@ -16,10 +27,6 @@ else
 	OGPOR="ERROR."
 fi
 
-PCDPOR=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-pcdpor-no-out.properties \
-	-spec default -preprocess \
-	"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')
-
 if [[ $PCDPOR == "TRUE." ]]; then
 	PCDPOR="\033[32m$PCDPOR\033[0m" 
 elif [[ $PCDPOR == "FALSE." ]]; then
@@ -28,5 +35,6 @@ else
 	PCDPOR="ERROR."
 fi
 
-printf "OGPOR: \t\t$OGPOR\n"
-printf "PCDPOR: \t$PCDPOR\n"
+printf "       %-8s%-8s\n" "Result" "Explored States"
+printf "OGPOR  %-8s%-8s\n" "$OGPOR_RESULT" "$OGPOR_STATES_NUM"
+printf "PCDPOR %-8s%-8s\n" "$PCDPOR_RESULT" "$PCDPOR_STATES_NUM"

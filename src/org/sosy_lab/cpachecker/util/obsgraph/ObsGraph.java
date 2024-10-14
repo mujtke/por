@@ -539,8 +539,8 @@ public class ObsGraph implements Copier<ObsGraph> {
     List<SharedEvent> events = r.getInNode().getEvents();
     for (int i = events.indexOf(r) + 1; i < events.size(); i++) {
       SharedEvent e = events.get(i);
-//            if (r.inSameEdgeWith(e))
-//                continue;
+      if (r.isRead() && r.inSameEdgeWith(e))
+        continue;
       delete.add(e);
     }
 
