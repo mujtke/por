@@ -97,6 +97,7 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
             throws CPATransferException, InterruptedException {
 
         OGPORState parOGState = (OGPORState) state;
+        parOGState.setWillExit(cfaEdge);
 
         if (OGMap.get(parOGState.getSid()) == null) {
             return Set.of();

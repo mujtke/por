@@ -67,6 +67,15 @@ public class OGPORState implements AbstractState, Graphable {
     // tid -> parent's tid
     private final Map<String, String> parentThread = new HashMap<>();
 
+    // After this state the main thread will exit.
+    private boolean willExit = false;
+
+    public boolean willExit() { return this.willExit; }
+
+    public void setWillExit(CFAEdge cfaEdge) {
+        this.willExit |= isEndOfMainFunction(cfaEdge) || isTerminatingEdge(cfaEdge);
+    }
+
     public int getSid() { return sid; }
 
     public void setSid(int sid) { this.sid = sid; }
@@ -403,7 +412,7 @@ public class OGPORState implements AbstractState, Graphable {
     }
 
     /** the whole program will terminate after this edge */
-    private static boolean isTerminatingEdge(CFAEdge edge) {
+    public static boolean isTerminatingEdge(CFAEdge edge) {
         if (edge.getSuccessor() instanceof CFATerminationNode) {
             return true;
         } else if (edge instanceof CStatementEdge) { // Call of 'abort()'.
@@ -438,7 +447,7 @@ public class OGPORState implements AbstractState, Graphable {
     }
 
     /** the whole program will terminate after this edge */
-    private static boolean isEndOfMainFunction(CFAEdge edge) {
+    public static boolean isEndOfMainFunction(CFAEdge edge) {
         return Objects.equals(cfa.getMainFunction().getExitNode(), edge.getSuccessor());
     }
 

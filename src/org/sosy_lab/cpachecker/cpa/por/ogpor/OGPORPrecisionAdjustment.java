@@ -10,6 +10,8 @@ import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult;
 import org.sosy_lab.cpachecker.core.reachedset.UnmodifiableReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
+import org.sosy_lab.cpachecker.util.AbstractStates;
+import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
 
 import java.util.*;
 
@@ -33,6 +35,15 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         assert state instanceof OGPORState && fullState instanceof ARGState;
         OGPORState chOgState = (OGPORState) state;
         chOgState.setSid(((ARGState) fullState).getStateId());
+
+        // Handle the early termination of the main thread.
+        assert ((ARGState) fullState).getParents().size() == 1;
+        ARGState parARGState = ((ARGState) fullState).getParents().iterator().next();
+        OGPORState parOgState = AbstractStates.extractStateByType(parARGState, OGPORState.class);
+        assert parOgState != null;
+        if (parOgState.willExit()) {
+            return Optional.empty();
+        }
 
         return Optional.of(PrecisionAdjustmentResult.create(state,
                 precision, PrecisionAdjustmentResult.Action.CONTINUE));

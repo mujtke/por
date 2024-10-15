@@ -182,7 +182,7 @@ public class OGAlgorithm implements Algorithm {
         Optional<PrecisionAdjustmentResult>  precisionAdjustmentOptional =
                 precisionAdjustment.prec(s, precision, reachedSet,
                         Functions.identity(), s);
-        assert precisionAdjustmentOptional.isPresent();
+        if (precisionAdjustmentOptional.isEmpty()) continue;
         precAdjustmentResult = precisionAdjustmentOptional.orElseThrow();
       } finally {
         // Stop time for precision adjustment.
