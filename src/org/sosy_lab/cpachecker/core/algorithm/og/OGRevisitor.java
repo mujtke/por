@@ -162,8 +162,7 @@ public class OGRevisitor {
               if (!allMaximallyAdded(Gw, deletePlusR, ap, rp))
                 continue;
               // Else, the check for maximality passes.
-              List<SharedEvent> loseRfRs = Gw.removeDelete(delete, rp);
-              handleLoseRfRs(Gw, loseRfRs);
+              Gw.removeDelete(delete, rp);
               Pair<ObsGraph, ObsGraph> GwAndcoGw =
                       setReadFrom(Gw, rp, ap, REVISIT_TYPE.WRITE, precision);
 
@@ -223,31 +222,6 @@ public class OGRevisitor {
     G.setCreationState(chState);
     if (isEnableDebug())
       debugActions(G0, G, chState);
-  }
-
-  // FIXME: the case where some read events in the last node of G have no rfs.
-  private boolean handleLoseRfRs(ObsGraph G, List<SharedEvent> loseRfRs) {
-    boolean result = false;
-    // List<SharedEvent> loseRfRs = G.getRE().stream().filter(e -> e.isRead()
-    //                         && (e.getReadFrom() == null
-    //                         || e.getReadFrom().getAType() == DUMMY))
-    //         .collect(Collectors.toList());
-    if (!loseRfRs.isEmpty()) { // We need to set rf for rs in loseRfRs by continuing to revisit.
-      loseRfRs.forEach(r -> {
-        if (r.getReadFrom() == null) {
-          SharedEvent dummyWrite = new SharedEvent(null,
-                  DUMMY,
-                  new DummyCFAEdge(null, null));
-          // G.getDummyNode().addEvents(List.of(dummyWrite));
-          G.getDummyNode().getEvents().add(dummyWrite);
-          G.getDummyNode().getWs().add(dummyWrite);
-          dummyWrite.setInNode(G.getDummyNode());
-          r.setReadFrom(dummyWrite);
-        }
-      });
-      result = true;
-    }
-    return result;
   }
 
   /**

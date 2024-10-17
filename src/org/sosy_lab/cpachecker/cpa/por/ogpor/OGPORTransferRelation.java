@@ -107,6 +107,11 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
             edgeVarMap.put(cfaEdge.hashCode(), extractor.extractSharedVarsInfo(cfaEdge));
         }
 
+        return Set.of(createOGState(parOGState, cfaEdge));
+    }
+
+    private OGPORState createOGState(OGPORState parOGState, CFAEdge cfaEdge) {
+
         OGPORState chOGState = new OGPORState(parOGState.getPathLen() + 1, cfaEdge);
         // initialize some fields of chOGState by using parOGState's. We will update
         // them in 'strengthen' method if needed.
@@ -116,8 +121,9 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         chOGState.setCaas(parOGState.getCaas());
         chOGState.setThreads(parOGState.getThreads());
         chOGState.setParentThread(parOGState.getParentThread());
+        chOGState.setBlockedThreads(parOGState.getBlockedThreads());
 
-        return Set.of(chOGState);
+        return chOGState;
     }
 
     @Override

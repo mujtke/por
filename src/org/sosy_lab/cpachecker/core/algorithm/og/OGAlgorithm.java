@@ -13,7 +13,6 @@ import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.exceptions.CPAEnabledAnalysisPropertyViolationException;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
-import org.sosy_lab.cpachecker.exceptions.UnsupportedCodeException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
@@ -23,10 +22,8 @@ import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
 import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
-import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import static java.util.Objects.hash;
-import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.dumpToJson;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.dumpToJson2;
 
 import java.util.*;
@@ -145,7 +142,7 @@ public class OGAlgorithm implements Algorithm {
 
     // debug.
     int curStateId = ((ARGState) state).getStateId();
-    Collection<? extends AbstractState>  successors;
+    Collection<? extends AbstractState> successors;
     try {
       successors = transferRelation.getAbstractSuccessors(state, precision);
 
@@ -157,32 +154,43 @@ public class OGAlgorithm implements Algorithm {
       return false;
 
     ARGState parState = (ARGState) state, chState;
-    List<? extends AbstractState> nSuccessors = reorder(parState, successors);
-
-    List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),
-            noGraphs = new ArrayList<>();
+    successors = reorder(parState, successors);
     List<ObsGraph> parGraphs = OGMap.get(parState.getStateId()), chGraphs = null;
     assert parGraphs != null && !parGraphs.isEmpty() :
-            "Require one graph at least but not found in s" + parState.getStateId() + "!";
+        "Require one graph at least but not found in s" + parState.getStateId() + "!";
+    List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
 
+    if (exitEarly(parState)) {
+      if (shouldRollback(parState)) {
+        handleRollback(parGraphs, revisitResult);
+        // When we should go back, we won't visit successors any longer.
+        successors.clear();
+        // Update OGMap.
+        parGraphs.clear();
+      }
+      // Else, we needn't go back, just transfer graph to successors.
+    }
+
+    List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),
+        noGraphs = new ArrayList<>();
     // Use this array of boolean to indicate whether a graph has been removed
     // from the parent state.
     boolean[] hasBeenRemoved = new boolean[parGraphs.size()];
     // Map from index of graph to CFANode, e.g., i -> N0.
     // FIXME: This is the special handle for indeterminate conditional branches.
     Map<Integer, CFANode> nonDetTable = new HashMap<>();
-    //
-    Set<ObsGraph> blockedGraphs2 = new HashSet<>();
+    Set<ObsGraph> blockedGraphs = new HashSet<>();
 
     // Adjust precision and split children into two parts if possible.
-    for (Iterator<? extends AbstractState> it = nSuccessors.iterator(); it.hasNext();) {
+    for (Iterator<? extends AbstractState> it = successors.iterator(); it.hasNext();) {
       AbstractState s = it.next();
       PrecisionAdjustmentResult precAdjustmentResult;
       try {
         Optional<PrecisionAdjustmentResult>  precisionAdjustmentOptional =
                 precisionAdjustment.prec(s, precision, reachedSet,
                         Functions.identity(), s);
-        if (precisionAdjustmentOptional.isEmpty()) continue;
+        assert precisionAdjustmentOptional.isPresent();
+        // if (precisionAdjustmentOptional.isEmpty()) continue;
         precAdjustmentResult = precisionAdjustmentOptional.orElseThrow();
       } finally {
         // Stop time for precision adjustment.
@@ -249,7 +257,7 @@ public class OGAlgorithm implements Algorithm {
                 copiedGraph = transferResult.getSecond();
         if (chGraph == ObsGraph.DUMMY) {
           hasBeenRemoved[i] = true;
-          blockedGraphs2.add(parGraph);
+          blockedGraphs.add(parGraph);
           continue;
         }
         if (copiedGraph != null) {
@@ -284,10 +292,7 @@ public class OGAlgorithm implements Algorithm {
       }
     }
 
-    List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
     // FIXME: will there be some graphs get blocked?
-    // List<ObsGraph> blockedGraphs = getBlockedGraphs(parGraphs, hasBeenRemoved);
-    List<ObsGraph> blockedGraphs = new ArrayList<>(blockedGraphs2);
     if (!blockedGraphs.isEmpty()) {
       logger.log(Level.WARNING,
               "Blocked graphs found at state s" + parState.getStateId());
@@ -321,6 +326,64 @@ public class OGAlgorithm implements Algorithm {
     }
 
     return false;
+  }
+
+  private void handleRollback(List<ObsGraph> parGraphs,
+                              List<Pair<AbstractState, ObsGraph>> revisitResult) {
+    assert revisitResult != null;
+    ARGState preState = null;
+    for (ObsGraph g : parGraphs) {
+      // When we need to go back, the main thread must be in some node.
+      // OGNode nodeOfMain = g.getCurrentNode(OGPORState.getEntryFunctionName());
+      OGNode nodeOfMain = g.getLastNode();
+      assert nodeOfMain != null :
+          "Rolling back requires the node of the main thread not null!";
+      assert Objects.equals(nodeOfMain.getInThread(),
+          OGPORState.getEntryFunctionName()) :
+          "When rolling back, the last node of the graph should be in main thread.";
+
+      assert preState == null
+          || Objects.equals(preState, nodeOfMain.getPreState())
+          : "When rolling back, all graphs' nodes in main thread " +
+          "should have the same pre-ARGState.";
+      preState = nodeOfMain.getPreState();
+      assert preState != null : "Expect a nonnull pre-ARGState.";
+      g.removeNode(nodeOfMain);
+      if (nodeOfMain.getTrAfter() != null) {
+        g.setLastNode(nodeOfMain.getTrAfter());
+        nodeOfMain.getTrAfter().removeTrBefore();
+        nodeOfMain.removeTrAfter();
+      }
+      revisitResult.add(Pair.of(preState, g));
+    }
+    // Block main thread at preState.
+    OGPORState preOgState =
+        AbstractStates.extractStateByType(preState, OGPORState.class);
+    preOgState.block(OGPORState.getEntryFunctionName());
+  }
+
+  private boolean shouldRollback(ARGState parState) {
+    OGPORState parOgState =
+        AbstractStates.extractStateByType(parState, OGPORState.class);
+    assert parOgState != null;
+    // If main thread is not in any block when exiting, then we needn't go back.
+    String entryFunc = OGPORState.getEntryFunctionName();
+    if (parOgState.atBlockEndFor(entryFunc)) {
+      if (parOgState.hasNonBlockedThread()) {
+        // We should block the main thread because we need to explore other threads first.
+        parOgState.block(entryFunc);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private boolean exitEarly(ARGState parState) {
+    OGPORState parOgState =
+        AbstractStates.extractStateByType(parState, OGPORState.class);
+    assert parOgState != null;
+    return parOgState.willExit();
   }
 
   private List<ObsGraph> getGraphsForRevisit(

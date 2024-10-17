@@ -8,7 +8,6 @@ import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
-import org.sosy_lab.cpachecker.cpa.usage.refinement.SharedRefiner;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
@@ -63,9 +62,6 @@ public class ObsGraph implements Copier<ObsGraph> {
   //
   public final static ObsGraph DUMMY = new ObsGraph();
 
-  // FIXME: some read events lose their rfs after revisit.
-  private OGNode dummyNode = null;
-
   // A temporary structure for indicating there are some circles in the graph.
   Map<OGNode, List<OGNode>> circles = new HashMap<>();
 
@@ -81,18 +77,9 @@ public class ObsGraph implements Copier<ObsGraph> {
     //
   }
 
-  public OGNode getDummyNode() {
-    if (dummyNode == null) {
-      dummyNode = new OGNode();
-    }
-    return dummyNode;
-  }
-
   public void setVisitingNode(OGNode node) { this.visitingNode = node; }
 
   public OGNode getVisitingNode() { return this.visitingNode; }
-
-  public void setDummyNode(OGNode pDummyNode) { this.dummyNode = pDummyNode; }
 
   public int getIdentityHash() { return this.identityHash; }
 
@@ -125,8 +112,11 @@ public class ObsGraph implements Copier<ObsGraph> {
 
   public void removeNode(OGNode node) {
     assert nodes.contains(node) :
-            "Trying to remove a node that not in the graph!";
+        "Trying to remove a node that not in the graph!";
     nodes.remove(node);
+    if (node.isInGraph()) traceLen--;
+    node.getEvents().forEach(SharedEvent::removeAllRelations);
+    node.removeAllRelations();
   }
 
   /**
@@ -221,7 +211,6 @@ public class ObsGraph implements Copier<ObsGraph> {
     nGraph.lastNode = this.lastNode == null ? null : this.lastNode.deepCopy(memo);
     nGraph.needToRevisit = this.needToRevisit;
     nGraph.traceLen = this.traceLen;
-    nGraph.dummyNode = this.dummyNode != null ? this.dummyNode.deepCopy(memo) : null;
     // Don't copy circles.
 
     return nGraph;
@@ -575,7 +564,7 @@ public class ObsGraph implements Copier<ObsGraph> {
    * @param rp the upper bound of the deleted events (not including {@param rp}).
    * FIXME: remove cached assumption edges here?
    */
-  public List<SharedEvent> removeDelete(List<SharedEvent> delete, SharedEvent rp) {
+  public void removeDelete(List<SharedEvent> delete, SharedEvent rp) {
 
     OGNode rpn = rp.getInNode();
     // In rpn, some events may get delete, and we need to remove corresponding edges, too.
@@ -587,19 +576,9 @@ public class ObsGraph implements Copier<ObsGraph> {
             .collect(Collectors.toSet());
     Set<OGNode> nodesToRemove = new HashSet<>();
 
-    List<SharedEvent> loseRfRs = new ArrayList<>();
     // remove relations before removing nodes.
     Collections.reverse(delete);
     delete.forEach(e -> {
-      // FIXME: If e is a write and some reads not in the 'delete' read from it?
-      // Collect them here.
-      if (e.isWrite()) {
-        e.getReadBy().forEach(rb -> {
-          // rb will read from null after the removal of the relations of e.
-          if (!delete.contains(rb))
-            loseRfRs.add(rb);
-        });
-      }
       // For e.
       e.removeAllRelations();
 
@@ -623,6 +602,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     rpn.removeEdges(edgesToRemove);
     nodesToRemove.forEach(OGNode::removeAllRelations);
     nodes.removeAll(nodesToRemove);
+    // nodesToRemove.forEach(this::removeNode);
     // Remove all isolated nodes, i.e, the node that has no pre/suc after
     // removing the 'nodesToRemove' and no event.
     for (Iterator<OGNode> it = nodes.iterator(); it.hasNext();) {
@@ -636,8 +616,6 @@ public class ObsGraph implements Copier<ObsGraph> {
     // Remove the corresponding cached assumption edges because of the removal of
     // deleted events.
     removeAssumeEdges(delete, rp);
-
-    return loseRfRs;
   }
 
   public void deduceFromRead() {

@@ -31,9 +31,7 @@ public class OGTransfer {
     TEMP, /* Conflict is temporary */
     BLOCKED, /* Conflict because of missing re-visitable events */
   }
-  Set<OGNode> orderConflictSet = new HashSet<>();
-  // Storing the nodes <next node.
-  Set<OGNode> nextLessSet = new HashSet<>();
+
   // Activated thread for the current transfer edge.
   String curThd = null;
   // OGNode for the current thread.
@@ -150,14 +148,20 @@ public class OGTransfer {
 //    assert enableDebug && DebugAndTest.findEmtpyRf(g).isEmpty();
 //    assert enableDebug && DebugAndTest.hasInvalidLheFor(g).isEmpty();
 
-    OGPORState chOgState =
+    OGPORState parOgState =
+        AbstractStates.extractStateByType(parState, OGPORState.class),
+        chOgState =
             AbstractStates.extractStateByType(chState, OGPORState.class);
-    assert chOgState != null;
+    assert parOgState != null && chOgState != null;
     CriticalAreaAction caa = chOgState.getInCaa();
     Pair<ObsGraph, ObsGraph> result = null;
-    // Clear old order conflicts.
-    orderConflictSet.clear();
-    nextLessSet.clear();
+
+    // Update chOgState's blockedThreads if needed. Next, if current thread is blocked,
+    // we should transfer graph in other threads (if existed).
+    updateBlockedThread(parOgState, chOgState);
+    if (shouldBlockFor(chOgState)) {
+      return Pair.of(null, null);
+    }
 
     // CriticalAreaAction.
     switch (caa) {
@@ -179,6 +183,31 @@ public class OGTransfer {
 
     assert result != null;
     return result;
+  }
+
+  private void updateBlockedThread(OGPORState parOgState,
+                                   OGPORState chOgState) {
+    if (!parOgState.getBlockedThreads().isEmpty()
+        && chOgState.getBlockedThreads().isEmpty()) {
+      chOgState.setBlockedThreads(parOgState.getBlockedThreads());
+    }
+  }
+
+  private boolean shouldBlockFor(OGPORState s) {
+    if (s.isBlocked()) {
+      if (s.hasNonBlockedThread()) {
+        // We should block at s.
+        return true;
+      } else {
+        // There is no more thread except s.inThread,
+        // in this case we should unblock s.blockedThread.
+        assert s.blockFor(s.getInThread()) :
+            "Trying to unblock a thread not should be.";
+        s.unblock(s.getInThread());
+      }
+    }
+
+    return false;
   }
 
   private int getEdgeType(List<SharedEvent> sharedEvents, CFAEdge edge) {
@@ -1021,83 +1050,6 @@ public class OGTransfer {
 
     return null;
   }
-
-  private Set<OGNode> getOtherThdNodes(ObsGraph graph,
-                                       String curThd,
-                                       ARGState parState,
-                                       ARGState chState) {
-    Set<OGNode> otherThdNodes = new HashSet<>();
-    graph.getNodeTable().forEach((k, v) -> {
-      if (!curThd.equals(k) && v != null && !v.isInGraph())
-        otherThdNodes.add(v);
-    });
-    // Filtering threads <next curThd.
-    Set<String> nextLessThds = new HashSet<>();
-    for (ARGState ch : parState.getChildren()) {
-      if (nltcmp.compare(ch, chState) < 0) { // ch <next chState.
-        OGPORState chOg = AbstractStates.extractStateByType(ch, OGPORState.class);
-        assert chOg != null && chOg.getInThread() != null
-                : "Missing thd for some OGPORState!";
-//                otherThdNodes.removeIf(otn ->
-//                        Objects.equals(otn.getInThread(), chOg.getInThread()));
-        nextLessThds.add(chOg.getInThread());
-      }
-    }
-//        otherThdNodes.removeIf(otn -> nextLessThds.contains(otn.getInThread()));
-    otherThdNodes.forEach(otn -> {
-      if (nextLessThds.contains(otn.getInThread()))
-        nextLessSet.add(otn);
-    });
-
-    return otherThdNodes;
-  }
-
-  /**
-   * @param curNode  the current node.
-   * @param isolated the nodes come from other thread and have no hb/porf relations with {@param curNode}.
-   * @param hb       the nodes that {@param curNode} happen before.
-   * @return ture, if some node in {@param isolated} should be visited before {@param curNode}.
-   */
-  private boolean hasOrderConflict(
-          ObsGraph graph, OGNode curNode, List<OGNode> isolated, List<OGNode> hb) {
-    List<OGNode> toRemove = new ArrayList<>();
-    for (OGNode n1 : hb) {
-      for (OGNode n2 : isolated) {
-        if (!graph.hb(n1, n2, new HashSet<>())
-                && !graph.hb(n2, n1, new HashSet<>())) {
-          if (graph.addNodeBefore(n1, n2))
-            toRemove.add(n2);
-        }
-      }
-    }
-    isolated.removeAll(toRemove);
-
-    Set<OGNode> isoNextLess = new HashSet<>();
-    Set<OGNode> isoNextBigger = new HashSet<>();
-    isolated.forEach(ison -> {
-      if (nextLessSet.contains(ison)) isoNextLess.add(ison);
-      else isoNextBigger.add(ison);
-    });
-    isoNextBigger.forEach(bn -> {
-      // (1) bn < curNode => bn <order curNode.
-      if (graph.addNodeBefore(bn, curNode)) {
-        orderConflictSet.add(bn);
-      }
-      // (2) bn > curNode, but there is some nq, s.t.:
-      // bn should happen before nq && nq \in isolated && nq < curNode
-      // => bn <order curNode.
-      else if (isolated.stream().anyMatch(
-              nq -> graph.addNodeBefore(nq, curNode)
-                      && (graph.hb(bn, nq, new HashSet<>())
-                      || graph.porf(bn, nq)
-                      || graph.hasMoConflict(bn.getInThread(), nq)))) {
-        orderConflictSet.add(bn);
-      }
-    });
-
-    return !orderConflictSet.isEmpty();
-  }
-
 
   private void adjustWaitlist(Map<Integer, List<ObsGraph>> OGMap,
                               Vector<AbstractState> waitlist,

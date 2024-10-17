@@ -72,6 +72,40 @@ public class OGPORState implements AbstractState, Graphable {
 
     public boolean willExit() { return this.willExit; }
 
+    private final Set<String> blockedThreads = new HashSet<>();
+
+    public boolean blockFor(final String tid) {
+        return blockedThreads.contains(tid);
+    }
+
+    public boolean isBlocked() {
+        assert inThread != null;
+        return blockedThreads.contains(inThread);
+    }
+
+    public boolean hasNonBlockedThread() {
+        return threads.keySet().stream().anyMatch(t -> !blockedThreads.contains(t));
+    }
+
+    public void setBlockedThreads(final Collection<String> pBlockedThreads) {
+        blockedThreads.addAll(pBlockedThreads);
+        assert blockedThreads.size() == pBlockedThreads.size();
+    }
+
+    public Set<String> getBlockedThreads() { return this.blockedThreads; }
+
+    public void block(final String tid) {
+        assert !blockedThreads.contains(tid) :
+            "Trying to block the same thread twice!";
+        blockedThreads.add(tid);
+    }
+
+    public void unblock(final String tid) {
+        assert blockedThreads.contains(tid) :
+            "Trying to unblock a thread not should be.";
+        blockedThreads.remove(tid);
+    }
+
     public void setWillExit(CFAEdge cfaEdge) {
         this.willExit |= isEndOfMainFunction(cfaEdge) || isTerminatingEdge(cfaEdge);
     }
@@ -701,5 +735,16 @@ public class OGPORState implements AbstractState, Graphable {
             }
         }
         return false;
+    }
+
+    public static String getEntryFunctionName() {
+        assert GlobalInfo.getInstance().getCFAInfo().isPresent();
+        CFA cfa = GlobalInfo.getInstance().getCFAInfo().get().getCFA();
+        return cfa.getMainFunction().getFunctionName();
+    }
+
+    public boolean atBlockEndFor(String tid) {
+        assert tid != null;
+        return caas.containsKey(tid) && caas.get(tid) == END;
     }
 }

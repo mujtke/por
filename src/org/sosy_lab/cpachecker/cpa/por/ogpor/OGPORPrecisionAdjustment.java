@@ -42,7 +42,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         OGPORState parOgState = AbstractStates.extractStateByType(parARGState, OGPORState.class);
         assert parOgState != null;
         if (parOgState.willExit()) {
-            return Optional.empty();
+            // return Optional.empty();
         }
 
         return Optional.of(PrecisionAdjustmentResult.create(state,
