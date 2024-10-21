@@ -159,7 +159,7 @@ public class OGTransfer {
     // Update chOgState's blockedThreads if needed. Next, if current thread is blocked,
     // we should transfer graph in other threads (if existed).
     updateBlockedThread(parOgState, chOgState);
-    if (shouldBlockFor(chOgState)) {
+    if (shouldBeBlocked(chOgState)) {
       return Pair.of(null, null);
     }
 
@@ -193,7 +193,7 @@ public class OGTransfer {
     }
   }
 
-  private boolean shouldBlockFor(OGPORState s) {
+  private boolean shouldBeBlocked(OGPORState s) {
     if (s.isBlocked()) {
       if (s.hasNonBlockedThread()) {
         // We should block at s.

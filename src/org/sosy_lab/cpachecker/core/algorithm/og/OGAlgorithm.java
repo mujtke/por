@@ -161,8 +161,8 @@ public class OGAlgorithm implements Algorithm {
     List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
 
     if (exitEarly(parState)) {
-      if (shouldRollback(parState)) {
-        handleRollback(parGraphs, revisitResult);
+      if (mayRollback(parState)) {
+        List<ObsGraph> rollbackGraphs = handleRollback(parGraphs, revisitResult);
         // When we should go back, we won't visit successors any longer.
         successors.clear();
         // Update OGMap.
@@ -328,9 +328,10 @@ public class OGAlgorithm implements Algorithm {
     return false;
   }
 
-  private void handleRollback(List<ObsGraph> parGraphs,
+  private List<ObsGraph> handleRollback(List<ObsGraph> parGraphs,
                               List<Pair<AbstractState, ObsGraph>> revisitResult) {
     assert revisitResult != null;
+    List<ObsGraph> rollbackGraphs = new ArrayList<>();
     ARGState preState = null;
     for (ObsGraph g : parGraphs) {
       // When we need to go back, the main thread must be in some node.
@@ -341,6 +342,15 @@ public class OGAlgorithm implements Algorithm {
       assert Objects.equals(nodeOfMain.getInThread(),
           OGPORState.getEntryFunctionName()) :
           "When rolling back, the last node of the graph should be in main thread.";
+
+      // When trying to roll back, there shouldn't be any nodes(come from other threads)
+      // not in the graph.
+      if (g.getNodeTable().values().stream().filter(Objects::nonNull)
+          .anyMatch(n -> g.hb(nodeOfMain, n))) {
+        // We cannot send g back in this case.
+        rollbackGraphs.add(g);
+        continue;
+      }
 
       assert preState == null
           || Objects.equals(preState, nodeOfMain.getPreState())
@@ -356,13 +366,19 @@ public class OGAlgorithm implements Algorithm {
       }
       revisitResult.add(Pair.of(preState, g));
     }
-    // Block main thread at preState.
-    OGPORState preOgState =
-        AbstractStates.extractStateByType(preState, OGPORState.class);
-    preOgState.block(OGPORState.getEntryFunctionName());
+
+    if (preState != null) {
+      // Block main thread at preState.
+      OGPORState preOgState =
+          AbstractStates.extractStateByType(preState, OGPORState.class);
+      assert preOgState != null;
+      preOgState.block(OGPORState.getEntryFunctionName());
+    }
+
+    return rollbackGraphs;
   }
 
-  private boolean shouldRollback(ARGState parState) {
+  private boolean mayRollback(ARGState parState) {
     OGPORState parOgState =
         AbstractStates.extractStateByType(parState, OGPORState.class);
     assert parOgState != null;
