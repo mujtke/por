@@ -158,6 +158,7 @@ public class OGTransfer {
 
     // Update chOgState's blockedThreads if needed. Next, if current thread is blocked,
     // we should transfer graph in other threads (if existed).
+    // FIXME: causing some graphs blocked.
     updateBlockedThread(parOgState, chOgState);
     if (shouldBeBlocked(chOgState)) {
       return Pair.of(null, null);

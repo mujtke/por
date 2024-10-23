@@ -358,12 +358,12 @@ public class OGAlgorithm implements Algorithm {
           "should have the same pre-ARGState.";
       preState = nodeOfMain.getPreState();
       assert preState != null : "Expect a nonnull pre-ARGState.";
-      g.removeNode(nodeOfMain);
       if (nodeOfMain.getTrAfter() != null) {
         g.setLastNode(nodeOfMain.getTrAfter());
-        nodeOfMain.getTrAfter().removeTrBefore();
-        nodeOfMain.removeTrAfter();
+//        nodeOfMain.getTrAfter().removeTrBefore();
+//        nodeOfMain.removeTrAfter();
       }
+      g.removeNode(nodeOfMain, true);
       revisitResult.add(Pair.of(preState, g));
     }
 

@@ -65,10 +65,6 @@ public class OGNode implements Copier<OGNode> {
   private OGNode trBefore;
   private OGNode trAfter;
 
-  // Restriction used in transfer.
-  private final List<OGNode> happenBefore = new ArrayList<>();
-  private final List<OGNode> happenAfter = new ArrayList<>();
-
   // Indicate whether this node is in a graph. The true means this node is in the trace
   // of the graph.
   private boolean inGraph = false;
@@ -772,10 +768,6 @@ public class OGNode implements Copier<OGNode> {
   public void setLHRIndex(int pLHRIndex) { LHRIndex = pLHRIndex; }
   public void setLHWIndex(int pLHWIndex) { LHWIndex = pLHWIndex; }
 
-  public List<OGNode> getHappenBefore() { return happenBefore; }
-
-  public List<OGNode> getHappenAfter() { return happenAfter; }
-
   /**
    * For rf, mo, fr and other relations that could be defined on shared events, we update
    * the relations between nodes accordingly when relations between events changed.
@@ -937,26 +929,6 @@ public class OGNode implements Copier<OGNode> {
     trAfter = null;
   }
 
-  public void setHappenBefore(OGNode hbNode) {
-    assert hbNode != null && !happenBefore.contains(hbNode);
-    happenBefore.add(hbNode);
-  }
-
-  public void setHappenAfter(OGNode haNode) {
-    assert haNode != null && !happenAfter.contains(haNode);
-    happenAfter.add(haNode);
-  }
-
-  public void removeHappenBefore(OGNode hbNode) {
-    assert hbNode != null && happenBefore.contains(hbNode);
-    happenBefore.remove(hbNode);
-  }
-
-  public void removeHappenAfter(OGNode haNode) {
-    assert haNode != null && happenAfter.contains(haNode);
-    happenBefore.remove(haNode);
-  }
-
   /**
    * Note: here is a strong assumption: before removing all relations for this,
    * we should have remove all relations for all events that belongs to this node.
@@ -964,8 +936,7 @@ public class OGNode implements Copier<OGNode> {
    * done that when we remove all relations for the events in the node.
    */
   public void removeAllRelations() {
-    // Remove po (and rf, fr, mo).
-    OGNode tmp;
+    // Remove po, rf, fr, mo, and to.
     // po.
     if (predecessor != null) {
       predecessor.removeSuccessor(this);
@@ -986,7 +957,18 @@ public class OGNode implements Copier<OGNode> {
     // mo.
     assert moBefore.isEmpty() && moAfter.isEmpty();
 
-    // Remove to in another place.
+    // to.
+    OGNode ta = trAfter, tb = trBefore;
+    if (ta != null) {
+      if (tb != null)
+        ta.setTrBefore(tb);
+      removeTrAfter();
+    }
+    if (tb != null) {
+      if (ta != null)
+        tb.setTrAfter(ta);
+      removeTrBefore();
+    }
   }
 
   /**

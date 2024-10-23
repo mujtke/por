@@ -6,6 +6,7 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
+import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -37,8 +38,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
   // Record the current hold node for each thread: tid -> node.
   private final Map<String, OGNode> nodeTable = new HashMap<>();
-  // Visiting node.
-  private OGNode visitingNode;
+  // thread locks, lockName -> tid.
+  private final Map<String, String> locks = new HashMap<>();
 
   /**
    * This variable is used to record the assumption edges that read from indeterminate
@@ -77,10 +78,6 @@ public class ObsGraph implements Copier<ObsGraph> {
     //
   }
 
-  public void setVisitingNode(OGNode node) { this.visitingNode = node; }
-
-  public OGNode getVisitingNode() { return this.visitingNode; }
-
   public int getIdentityHash() { return this.identityHash; }
 
   public ARGState getCreationState() {
@@ -110,13 +107,16 @@ public class ObsGraph implements Copier<ObsGraph> {
     node.setHasBeenAddedToGraph(true);
   }
 
-  public void removeNode(OGNode node) {
+  public void removeNode(OGNode node, boolean flag) {
+    // If flag == true, we need to remove relations.
     assert nodes.contains(node) :
         "Trying to remove a node that not in the graph!";
     nodes.remove(node);
     if (node.isInGraph()) traceLen--;
-    node.getEvents().forEach(SharedEvent::removeAllRelations);
-    node.removeAllRelations();
+    if (flag) {
+      node.getEvents().forEach(SharedEvent::removeAllRelations);
+      node.removeAllRelations();
+    }
   }
 
   /**
@@ -194,9 +194,8 @@ public class ObsGraph implements Copier<ObsGraph> {
     // Node table.
     this.nodeTable.forEach((k, v) ->
             nGraph.nodeTable.put(k, v == null ? null : v.deepCopy(memo)));
-    // VisitingNode.
-    if (this.visitingNode != null)
-      nGraph.visitingNode = this.visitingNode.deepCopy(memo);
+    // locks.
+    nGraph.locks.putAll(this.locks);
     // CachedAssumeEdges.
     this.cachedAssumeEdges.forEach((k, v) -> {
       List<Triple<CFAEdge, Integer, Integer>> nList = new ArrayList<>();
@@ -601,8 +600,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     rpn.removeEdges(edgesToRemove);
     nodesToRemove.forEach(OGNode::removeAllRelations);
-    nodes.removeAll(nodesToRemove);
-    // nodesToRemove.forEach(this::removeNode);
+    // nodes.removeAll(nodesToRemove);
+    nodesToRemove.forEach(n -> removeNode(n, false));
     // Remove all isolated nodes, i.e, the node that has no pre/suc after
     // removing the 'nodesToRemove' and no event.
     for (Iterator<OGNode> it = nodes.iterator(); it.hasNext();) {
@@ -814,23 +813,6 @@ public class ObsGraph implements Copier<ObsGraph> {
             "Finding corEdge failed: " + edge);
 
     return coEdge;
-  }
-
-  // Set initial current nodes for threads.
-  public void setInitialCurrentNodeTable(ARGState initialState) {
-    assert !nodes.isEmpty();
-    OGNode firstNode = nodes.get(0);
-    String curThread = firstNode.getInThread();
-    nodeTable.put(curThread, firstNode);
-
-    // set other threads' current nodes as null.
-    // FIXME: this may change if we don't choose the earliest state as the
-    //  pivotState all the time.
-    for (String thd : nodeTable.keySet()) {
-      if (!Objects.equals(thd, curThread)) {
-        nodeTable.put(thd, null);
-      }
-    }
   }
 
   public OGNode getCurrentNode(String curThread) {
@@ -1397,6 +1379,52 @@ public class ObsGraph implements Copier<ObsGraph> {
       n = n.getTrAfter();
       i++;
     }
+  }
+
+  public AbstractState getPivotState() {
+    // TODO: try not going back to the first state.
+    OGNode targetNode;
+    // Use the preState of the first node, for the simplicity.
+    targetNode = nodes.get(0);
+    setLastNode(null);
+    // Before returning, clear the trace order and modify the order for nodes that
+    // trace after the target node. At the same time, set them invisible in the graph.
+    Set<String> metTids = new HashSet<>();
+    nodeTable.clear();
+
+    // FIXME: remove this part later.
+    metTids.add(targetNode.getInThread());
+    nodeTable.put(targetNode.getInThread(), targetNode);
+
+    for (OGNode next = targetNode; next != null;) {
+      OGNode tmp = next.getTrBefore();
+      // Initialize current node table info for G.
+      if (tmp != null) {
+        assert tmp.getInThread() != null;
+        if (!metTids.contains(tmp.getInThread())) {
+          nodeTable.put(tmp.getInThread(), tmp);
+          metTids.add(tmp.getInThread());
+        }
+      }
+
+      // Trace order.
+      if (next.getTrBefore() != null)
+        next.removeTrBefore();
+      if (next.getTrAfter() != null)
+        next.removeTrAfter();
+
+      // NOTE: don't remove mo relations here.
+
+      // Set the node invisible.
+      next.setInGraph(false);
+      setTraceLen(traceLen - 1);
+      next = tmp;
+    }
+    // Reset the cachedAssumeEdges.
+    resetCachedAssumeEdge();
+
+    assert targetNode.getPreState() != null;
+    return targetNode.getPreState();
   }
 
   // Debug.

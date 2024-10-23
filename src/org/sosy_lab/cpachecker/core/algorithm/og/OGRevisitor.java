@@ -213,7 +213,7 @@ public class OGRevisitor {
       }
     }
 
-    AbstractState pivotState = getPivotState(G);
+    AbstractState pivotState = G.getPivotState();
     // Set 'needToRevisit' to false, whether a further revisit is needed is
     // specified in the future.
     G.setNeedToRevisit(false);
@@ -308,44 +308,6 @@ public class OGRevisitor {
 
     return Pair.of(G, coG);
   }
-
-  private AbstractState getPivotState(ObsGraph G) {
-    // TODO: try not going back to the first state.
-    OGNode targetNode;
-    // Use the preState of the first node, for the simplicity.
-    targetNode = G.getNodes().get(0);
-    G.setLastNode(null);
-    // Before returning, clear the trace order and modify the order for nodes that
-    // trace after the target node. At the same time, set them invisible in the graph.
-    for (OGNode next = targetNode; next != null;) {
-      OGNode tmp = next.getTrBefore();
-      // Trace order.
-      if (next.getTrBefore() != null)
-        next.removeTrBefore();
-      if (next.getTrAfter() != null)
-        next.removeTrAfter();
-//            next.setTrAfter(null);
-//            next.setTrBefore(null);
-
-      // NOTE: don't remove mo relations here.
-      next.getHappenBefore().forEach(next::removeHappenBefore);
-      next.getHappenAfter().forEach(next::removeHappenAfter);
-
-      // Set the node invisible.
-      next.setInGraph(false);
-      G.setTraceLen(G.getTraceLen() - 1);
-      next = tmp;
-    }
-
-    assert targetNode != null && targetNode.getPreState() != null;
-
-    G.setInitialCurrentNodeTable(targetNode.getPreState());
-    // Reset the cachedAssumeEdges.
-    G.resetCachedAssumeEdge();
-
-    return targetNode.getPreState();
-  }
-
 
   /**
    * Checking whether all events in {@param deletePlusR} are added maximally.
