@@ -39,7 +39,7 @@ public class ObsGraph implements Copier<ObsGraph> {
   // Record the current hold node for each thread: tid -> node.
   private final Map<String, OGNode> nodeTable = new HashMap<>();
   // thread locks, lockName -> tid.
-  private final Map<String, String> locks = new HashMap<>();
+  private final Map<String, String> accessLocks = new HashMap<>();
 
   /**
    * This variable is used to record the assumption edges that read from indeterminate
@@ -195,7 +195,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     this.nodeTable.forEach((k, v) ->
             nGraph.nodeTable.put(k, v == null ? null : v.deepCopy(memo)));
     // locks.
-    nGraph.locks.putAll(this.locks);
+    nGraph.accessLocks.putAll(this.accessLocks);
     // CachedAssumeEdges.
     this.cachedAssumeEdges.forEach((k, v) -> {
       List<Triple<CFAEdge, Integer, Integer>> nList = new ArrayList<>();
@@ -583,6 +583,9 @@ public class ObsGraph implements Copier<ObsGraph> {
 
       // For e.inNode.
       OGNode en = e.getInNode();
+      // considering the node without any event.
+      en.getSuccessors().stream().filter(n -> n.getEvents().isEmpty())
+          .forEach(nodesToRemove::add);
       if (!Objects.equals(rpn, en)) {
         // Remove node en.
         nodesToRemove.add(en);
@@ -738,13 +741,16 @@ public class ObsGraph implements Copier<ObsGraph> {
       }
 
       // Part2: go ahead along the mo.
-      SharedEvent r = w.getInNode().getReadToSameVar(w);
-      if (r == null) continue;
-      SharedEvent msuc = w.getMoBefore();
-      while (msuc != null) {
-        if (!r.getFromRead().contains(msuc))
-          r.setFromRead(msuc);
-        msuc = msuc.getMoBefore();
+//      SharedEvent r = w.getInNode().getReadToSameVar(w);
+      for (SharedEvent r : w.getReadBy()) {
+//      if (r == null) continue;
+        SharedEvent msuc = w.getMoBefore();
+        while (msuc != null) {
+          if (!r.getFromRead().contains(msuc)
+              && !Objects.equals(r.getInNode(), msuc.getInNode()))
+            r.setFromRead(msuc);
+          msuc = msuc.getMoBefore();
+        }
       }
     }
   }
@@ -1190,6 +1196,8 @@ public class ObsGraph implements Copier<ObsGraph> {
   }
 
   public void visitSort(List<OGNode> ns) {
+    // Firstly, sort nodes by adding order <.
+    ns.sort((n1, n2) -> addNodeBefore(n1, n2) ? -1 : 1);
     // Clear old circles.
     circles.clear();
     sort(ns);
@@ -1256,8 +1264,6 @@ public class ObsGraph implements Copier<ObsGraph> {
     // ns may not contain curNode if ns is empty, which means curNode is a newly created node.
     assert ns.contains(curNode) || ns.isEmpty();
 
-    // Sorting nodes by adding order <.
-    ns.sort((n1, n2) -> addNodeBefore(n1, n2) ? -1 : 1);
     // Sorting nodes by visiting order <_visit.
     visitSort(ns);
 
@@ -1422,9 +1428,35 @@ public class ObsGraph implements Copier<ObsGraph> {
     }
     // Reset the cachedAssumeEdges.
     resetCachedAssumeEdge();
+    // TODO: Add lock for some thread we should visit first.
+    setAccessLock();
 
     assert targetNode.getPreState() != null;
     return targetNode.getPreState();
+  }
+
+  public void setAccessLock() {
+    accessLocks.clear();
+    List<OGNode> ns = nodeTable.values().stream()
+        .filter(Objects::nonNull).collect(Collectors.toList());
+    if (!ns.isEmpty()) {
+      visitSort(ns);
+      addAccessLockFor(ns.get(0).getInThread());
+    }
+  }
+
+  public Map<String, String> getAccessLock() { return this.accessLocks; }
+
+  public void addAccessLockFor(String curThd) {
+    accessLocks.put("accessLock", curThd);
+  }
+
+  public boolean hasAccessLock() {
+    return accessLocks.values().stream().anyMatch(Objects::nonNull);
+  }
+
+  public boolean hasAccessLockFor(String tid) {
+    return accessLocks.containsValue(tid);
   }
 
   // Debug.
