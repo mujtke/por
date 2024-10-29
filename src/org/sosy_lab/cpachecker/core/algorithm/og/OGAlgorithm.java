@@ -308,8 +308,11 @@ public class OGAlgorithm implements Algorithm {
     List<ObsGraph> graphsForRevisit = getGraphsForRevisit(withGraphs);
     while (!graphsForRevisit.isEmpty() || !revisitResult.isEmpty()) {
       // 1.Revisit.
-      if (!graphsForRevisit.isEmpty()) {
-        ObsGraph graph = graphsForRevisit.remove(0); // graph for revisit.
+      //      if (!graphsForRevisit.isEmpty()) {
+      for (Iterator<ObsGraph> it = graphsForRevisit.iterator(); it.hasNext();) {
+//        ObsGraph graph = graphsForRevisit.remove(0); // graph for revisit.
+        ObsGraph graph = it.next();
+        it.remove();
         assert graph.needToRevisit() : "Try to revisit a graph should not be!";
         revisitResult.addAll(revisitor.apply(reachedSet, graph));
         // Debug.
@@ -319,7 +322,13 @@ public class OGAlgorithm implements Algorithm {
       }
 
       // 2.Transfer.
-      graphsForRevisit.addAll(performMultiStepTransferFor(revisitResult));
+      Pair<List<ObsGraph>, List<Pair<AbstractState, ObsGraph>>>
+          multiTransferResult = performMultiStepTransferFor(revisitResult);
+      assert multiTransferResult.getFirst() != null
+          && multiTransferResult.getSecond() != null;
+      graphsForRevisit.addAll(multiTransferResult.getFirst());
+      revisitResult.addAll(multiTransferResult.getSecond());
+//      graphsForRevisit.addAll(performMultiStepTransferFor(revisitResult));
     }
 
     return false;
@@ -417,9 +426,10 @@ public class OGAlgorithm implements Algorithm {
    * Perform multi-step transfer for all graphs in {@param revisitResult}.
    * @return graphs need to revisit.
    */
-  private List<ObsGraph> performMultiStepTransferFor(
-          List<Pair<AbstractState, ObsGraph>> revisitResult) {
-    List<ObsGraph> graphsNeedRevisit = new ArrayList<>();
+  private Pair<List<ObsGraph>, List<Pair<AbstractState, ObsGraph>>>
+  performMultiStepTransferFor(List<Pair<AbstractState, ObsGraph>> revisitResult) {
+    List<ObsGraph> graphsToRevisitOnly = new ArrayList<>();
+    List<Pair<AbstractState, ObsGraph>> graphsToTransfer = new ArrayList<>();
     while (!revisitResult.isEmpty()) {
       Pair<AbstractState, ObsGraph> pair = revisitResult.remove(0);
       ARGState leadState = (ARGState) pair.getFirstNotNull();
@@ -438,20 +448,22 @@ public class OGAlgorithm implements Algorithm {
           logger.log(Level.INFO, "Blocked but re-visitable graph found at s" +
                   ((ARGState) transferResult.getFirst()).getStateId() +
                   " during the multi-step transfer.");
-          graphsNeedRevisit.add(graph);
+          graphsToRevisitOnly.add(graph);
           assert !transferResult.getThird() : "Shouldn't transfer a blocked graph.";
         } else {
           if (transferResult.getSecond().needToRevisit()) {
-            logger.log(Level.INFO, "The graph that reached s" +
-                    ((ARGState) transferResult.getFirst()).getStateId() +
-                    " after multi-step transfer is still re-visitable.");
-            graphsNeedRevisit.add(transferResult.getSecond().deepCopy(new HashMap<>()));
-            // FIXME: set lastNode of transferResult.getSecond() re-visited.
-            transferResult.getSecond().setLastNodeRevisited();
-          }
-          if (transferResult.getThird()) { // We should continue to transfer the graph.
-            revisitResult.add(Pair.of(transferResult.getFirst(),
-                    transferResult.getSecond()));
+            if (transferResult.getThird()) { // We should continue to transfer the graph.
+//              revisitResult.add(Pair.of(transferResult.getFirst(),
+//                  transferResult.getSecond()));
+              graphsToTransfer.add(Pair.of(transferResult.getFirst(),
+                  transferResult.getSecond()));
+              graphsToRevisitOnly.add(transferResult.getSecond());
+            } else {
+//              graphsNeedRevisitOnly.add(transferResult.getSecond().deepCopy(new HashMap<>()));
+              graphsToRevisitOnly.add(transferResult.getSecond());
+              // FIXME: set lastNode of transferResult.getSecond() re-visited.
+//              transferResult.getSecond().setLastNodeRevisited();
+            }
           }
         }
       } else {
@@ -462,9 +474,9 @@ public class OGAlgorithm implements Algorithm {
     }
 
     // Debug.
-    if (graphsNeedRevisit.stream().anyMatch(g -> !g.needToRevisit()))
-      System.out.println("");
-    return graphsNeedRevisit;
+    if (graphsToRevisitOnly.stream().anyMatch(g -> !g.needToRevisit()))
+      throw new UnsupportedOperationException("Find a graph not re-visitable!");
+    return Pair.of(graphsToRevisitOnly, graphsToTransfer);
   }
 
   private List<ObsGraph> getBlockedGraphs(

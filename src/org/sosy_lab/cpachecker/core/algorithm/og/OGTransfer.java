@@ -1039,21 +1039,20 @@ public class OGTransfer {
         return Triple.of(chState, ObsGraph.DUMMY, false);
       }
       if (chGraph != null) {
+        if (chState.getChildren().isEmpty()) {
+          handleLeafNode(waitlist, leadState, chState, chGraph);
+          if (chGraph.needToRevisit())
+            return Triple.of(chState, chGraph, false);
+          return null;
+        }
         // FIXME: If chGraph is re-visitable, should we revisit it first?
         if (chGraph.needToRevisit()) {
+          // Return chGraph for revisiting and continue to transfer it.
           return Triple.of(chState, chGraph, true);
         }
-        if (chState.getChildren().isEmpty()) {
-          // FIXME: neither the chState is in the waitlist nor does it have any child.
-          // In this case, should we add the chState to the waitlist again?
-          // At the same time, when we can add states to the waitlist, do we
-          // still need to adjust it?
-          waitlist.add(chState);
-          List<ObsGraph> chGraphs =
-                  OGMap.computeIfAbsent(chState.getStateId(),
-                          k -> new ArrayList<>());
-          chGraphs.add(chGraph);
-          // return Pair.of(chState, chGraph);
+        if (exitEarly(chState)) {
+          // In this case, we transfer the graph to a state with main
+          // thread exited.
           return Triple.of(chState, chGraph, false);
         }
         // Else, find target state recursively.
@@ -1064,6 +1063,23 @@ public class OGTransfer {
     }
 
     return null;
+  }
+
+  // FIXME: neither the chState is in the waitlist nor does it have any child.
+  // In this case, should we add the chState to the waitlist again?
+  // At the same time, when we can add states to the waitlist, do we
+  // still need to adjust it?
+  private void handleLeafNode(Vector<AbstractState> waitlist,
+                              ARGState leadState,
+                              ARGState chState,
+                              ObsGraph chGraph) {
+    if (!exitEarly(leadState)) {
+      waitlist.add(chState);
+    }
+    List<ObsGraph> chGraphs =
+        OGMap.computeIfAbsent(chState.getStateId(),
+            k -> new ArrayList<>());
+    chGraphs.add(chGraph);
   }
 
   private void adjustWaitlist(Map<Integer, List<ObsGraph>> OGMap,
