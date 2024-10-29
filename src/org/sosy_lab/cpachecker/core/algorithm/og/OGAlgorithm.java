@@ -160,15 +160,12 @@ public class OGAlgorithm implements Algorithm {
         "Require one graph at least but not found in s" + parState.getStateId() + "!";
     List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
 
-    if (exitEarly(parState)) {
-      if (mayRollback(parState)) {
-        List<ObsGraph> rollbackGraphs = handleRollback(parGraphs, revisitResult);
-        // When we should go back, we won't visit successors any longer.
-        successors.clear();
-        // Update OGMap.
-        parGraphs.clear();
-      }
-      // Else, we needn't go back, just transfer graph to successors.
+    if (transfer.exitEarly(parState)) {
+      List<ObsGraph> rollbackGraphs = handleRollback(parGraphs, revisitResult);
+      // When we should go back, we won't visit successors any longer.
+      successors.clear();
+      // Update OGMap.
+      parGraphs.clear();
     }
 
     List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),

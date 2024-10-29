@@ -1094,6 +1094,13 @@ public class OGTransfer {
     }
   }
 
+  public boolean exitEarly(ARGState argState) {
+    OGPORState ogState =
+        AbstractStates.extractStateByType(argState, OGPORState.class);
+    assert ogState != null;
+    return ogState.willExit();
+  }
+
   // Debug.
   public void addGraphToFull(ObsGraph graph, Integer stateId) {
     String gStr = getDotStr(graph);
