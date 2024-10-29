@@ -747,4 +747,8 @@ public class OGPORState implements AbstractState, Graphable {
         assert tid != null;
         return caas.containsKey(tid) && caas.get(tid) == END;
     }
+
+    public boolean hasSpawnedThread(Map<String, String> accessLock) {
+        return threads.keySet().stream().anyMatch(accessLock::containsValue);
+    }
 }

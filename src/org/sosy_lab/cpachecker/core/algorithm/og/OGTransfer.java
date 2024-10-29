@@ -160,7 +160,7 @@ public class OGTransfer {
     // we should transfer graph in other threads (if existed).
     // FIXME: causing some graphs blocked.
     updateBlockedThread(parOgState, chOgState);
-    if (shouldBeBlocked(chOgState)) {
+    if (shouldBeBlocked(graphWrapper, parOgState, chOgState)) {
       return Pair.of(null, null);
     }
 
@@ -194,17 +194,31 @@ public class OGTransfer {
     }
   }
 
-  private boolean shouldBeBlocked(OGPORState s) {
-    if (s.isBlocked()) {
-      if (s.hasNonBlockedThread()) {
+  private boolean shouldBeBlocked(
+      List<ObsGraph> graphWrapper, OGPORState par, OGPORState ch) {
+    ObsGraph g = graphWrapper.get(0);
+    if (g.hasAccessLock()
+        // Access lock for a thread not spawned yet is useless.
+        && par.hasSpawnedThread(g.getAccessLock())
+        && !g.hasAccessLockFor(ch.getInThread())) {
+      // We should visit thread that holds a access lock.
+      return true;
+    }
+    // Else, g has no access lock or g has access lock for s.inThread.
+    if (g.hasAccessLockFor(ch.getInThread())) {
+      return false;
+    }
+    // Else, g has no access lock.
+    if (ch.isBlocked()) {
+      if (ch.hasNonBlockedThread()) {
         // We should block at s.
         return true;
       } else {
         // There is no more thread except s.inThread,
         // in this case we should unblock s.blockedThread.
-        assert s.blockFor(s.getInThread()) :
+        assert ch.blockFor(ch.getInThread()) :
             "Trying to unblock a thread not should be.";
-        s.unblock(s.getInThread());
+        ch.unblock(ch.getInThread());
       }
     }
 
