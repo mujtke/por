@@ -282,7 +282,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
       // Else, nodei has w access to the same var with r.
       if (exclusivePorf(nodei, rNode, r)) {
-        if (porfPres.stream().anyMatch(pre -> porf(nodei, pre))) {
+//        if (porfPres.stream().anyMatch(pre -> porf(nodei, pre))) {
+        if (porfPres.stream().anyMatch(pre -> hb(nodei, pre))) {
           // nodei porf some nodes in the porfPres. In this case, r cannot read
           // from nodei.
           porfPres.add(nodei);
