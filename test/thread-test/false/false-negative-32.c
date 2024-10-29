@@ -67,7 +67,6 @@ void * P0(void *arg)
   __VERIFIER_atomic_begin();
   __unbuffered_cnt = __unbuffered_cnt + 1;
   __VERIFIER_atomic_end();
-  return 0;
 }
 
 
@@ -79,7 +78,6 @@ void * P1(void *arg)
   x = x;
   __unbuffered_cnt = __unbuffered_cnt + 1;
   __VERIFIER_atomic_end();
-  return 0;
 }
 
 void * P2(void *arg)
@@ -90,7 +88,6 @@ void * P2(void *arg)
   x = x;
   __unbuffered_cnt = __unbuffered_cnt + 1;
   __VERIFIER_atomic_end();
-  return 0;
 }
 
 
@@ -111,6 +108,5 @@ int main()
 	  ERROR: reach_error();
   __VERIFIER_atomic_end();
 
-  return 0;
 }
 
