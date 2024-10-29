@@ -374,8 +374,10 @@ public class OGTransfer {
 
     graph.setNeedToRevisit(node != null && node.shouldRevisit());
     // we have reached the end of the node, so update the current node for curThd.
-    if (node != null)
+    if (node != null) {
       graph.updateCurrentNodeTable(curThd, node);
+      graph.setAccessLock();
+    }
     graphWrapper.clear();
     if (enableDebug)
       debugActions(graph, parState, chState, edge);
@@ -503,6 +505,7 @@ public class OGTransfer {
       node.setLoopDepth(chOgState.getLoopDepth());
       graph.setNeedToRevisit(node.shouldRevisit()); // having reached the end of the node, update the current node for curThd.
       graph.updateCurrentNodeTable(curThd, node);
+      graph.setAccessLock();
       graphWrapper.clear();
       if (enableDebug)
         debugActions(graph, parState, chState, edge);
@@ -776,6 +779,7 @@ public class OGTransfer {
     // update the pre/suc state.
     node.updatePreAndSucState(parState, chState);
     graph.updateCurrentNode(curThd, node);
+    graph.setAccessLock();
     graph.setNeedToRevisit(node.shouldRevisit());
     result = Pair.of(graph, null);
     graphWrapper.clear();
