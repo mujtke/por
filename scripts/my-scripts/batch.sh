@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+GREEN="\033[32m"
+YELLOW="\033[33m"
+CLEAR="\033[0m"
+BOLD="\033[1m"
+
 ARCH=$(arch)
 if [ "$ARCH" == "arm64" ]; then
 	sig="KILL"
@@ -8,6 +13,22 @@ elif [ "$ARCH" == "x86_64" ]; then
 else
 	echo "Unknown architecture." && exit 0
 fi
+
+CONFIG="config/myAnalysis-concurrency-bdd-ogpor-no-out.properties"
+read -p "Select a strategy: 
+(1) OGPOR(enter).
+(2) PCDPOR.
+"
+case $REPLY in
+	"")
+		;;
+	"1")
+		;;
+	"2")
+		CONFIG="config/myAnalysis-concurrency-bdd-pcdpor-no-out.properties"
+		;;
+esac
+echo -e "Selected: $GREEN$BOLD$CONFIG.$CLEAR"
 
 taskNum=0
 function CtrlC_Handler {
@@ -40,27 +61,23 @@ workDir="$fullPath"
 [[ ! -d "$workDir" ]] && echo "Directory $workDir does not exist!" && exit 0
 
 targetDir="$1"
-GREEN="\033[32m"
-YELLOW="\033[33m"
-CLEAR="\033[0m"
-BOLD="\033[1m"
 
 # echo -e "\033[32mFile\t\t\t\t\033[33mResult\033[0m"
-printf "${GREEN}${BOLD}%-30s${CLEAR}%-10s${YELLOW}%-10s${CLEAR}%-10s\n" "File" "LOC" "Result" "Time"
+printf "${GREEN}${BOLD}%-30s${CLEAR}%-10s${YELLOW}%-10s${CLEAR}%-12s%-10s\n" \
+	"File" "LOC" "Result" "State_Num" "Time"
 
 function runTask() {
 	TEST_FILE="$1"
 	printf "%-30s" "$(basename ${TEST_FILE})"
 	printf "%-10s" "$(grep -v -E '^//|^$|^[\s\t ]*$' "$TEST_FILE" | wc -l | tr -d ' ')"
 	cd "$workDir"
-	RESULT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
-		-spec default -preprocess \
-		"$TEST_FILE" 2> /dev/null | grep 'Verification result:' | awk '{ print $3 }')
-	if [[ "$RESULT" =~ FALSE.* || "$RESULT" == TRUE.* ]]; then
-		printf "%-10s\n" "$RESULT"
-	else
-		printf "%-10s\n" "UNKNOWN"
-	fi
+	OUT=$(./scripts/cpa.sh -config "$CONFIG" -spec default -preprocess \
+		"$TEST_FILE" 2> /dev/null)
+	RESULT=$(grep 'Verification result:' <<< "$OUT" | awk '{ print $3 }')
+	STATE_NUM=$(grep 'explored states:' <<< "$OUT" | awk '{ print $3 }')
+	[[ "$RESULT" =~ FALSE.* || "$RESULT" =~ TRUE.* ]] && printf "%-10s" "$RESULT" || printf "%-10s" "UNKNOWN"
+	[[ "$STATE_NUM" =~ [0-9]+ ]] && printf "%-12s" "$STATE_NUM" || printf "%-12s" "----"
+	printf "\n"
 }
 
 function pass() {
@@ -73,8 +90,8 @@ function pass() {
 	return 0
 }
 
-taskNum=$(find -s "$targetDir" -iname '*.c' | wc -l | tr -d ' ')
-for file in $(find -s "$targetDir" -iname '*.c'); do
+taskNum=$(find "$targetDir" -iname '*.c' | sort | wc -l | tr -d ' ')
+for file in $(find "$targetDir" -iname '*.c' | sort); do
 	# Ignore some files.
 	pass "$file"
 	if [ $? -eq 1 ]; then
