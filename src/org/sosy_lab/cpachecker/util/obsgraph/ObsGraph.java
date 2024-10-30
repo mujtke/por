@@ -86,12 +86,14 @@ public class ObsGraph implements Copier<ObsGraph> {
   public void setTargetNode(
       OGRevisitor.REVISIT_TYPE type, SharedEvent w, SharedEvent r) {
     if (type == OGRevisitor.REVISIT_TYPE.READ) {
-      assert w.getInNode() != null;
-      this.targetNode = w.getInNode();
+//      assert w.getInNode() != null;
+//      this.targetNode = w.getInNode();
+      this.targetNode = nodes.get(0);
     } else { // type == WRITE
       assert r.getInNode() != null;
       if (r.getInNode().isInGraph()) {
-        this.targetNode = r.getInNode().getTrAfter();
+//        this.targetNode = r.getInNode().getTrAfter();
+        this.targetNode = nodes.get(0);
       } else {
         // FIXME: In this case, we can choose wNode only?
         assert w.getInNode() != null;
@@ -1415,13 +1417,13 @@ public class ObsGraph implements Copier<ObsGraph> {
   public AbstractState getPivotState() {
     // In normal case, targetNode should be not null.
     assert targetNode != null;
-    setLastNode(targetNode);
+    setLastNode(targetNode.getTrAfter());
     // Before returning, clear the trace order and modify the order for nodes that
     // trace after the target node. At the same time, set them invisible in the graph.
     Set<String> metTids = new HashSet<>();
     nodeTable.clear();
 
-    for (OGNode next = targetNode.getTrBefore(); next != null;) {
+    for (OGNode next = targetNode; next != null;) {
       OGNode tmp = next.getTrBefore();
       // Initialize current node table info for G.
       assert next.getInThread() != null;
@@ -1441,12 +1443,20 @@ public class ObsGraph implements Copier<ObsGraph> {
       setTraceLen(traceLen - 1);
       next = tmp;
     }
+    // Some nodes may be not in graph, and we may use them for update
+    // node table.
+    nodes.stream().filter(n -> !n.isInGraph()).forEach(n -> {
+      if (!metTids.contains(n.getInThread())) {
+        nodeTable.put(n.getInThread(), n);
+        metTids.add(n.getInThread());
+      }
+    });
     // Reset the cachedAssumeEdges.
     resetCachedAssumeEdge();
     // TODO: Add lock for some thread we should visit first.
     setAccessLock();
 
-    AbstractState targetState = targetNode.getSucState();
+    AbstractState targetState = targetNode.getPreState();
     targetNode = null;
     return targetState;
   }

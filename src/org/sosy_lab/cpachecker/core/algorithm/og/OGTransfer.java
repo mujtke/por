@@ -990,6 +990,13 @@ public class OGTransfer {
                                                                     ARGState leadState,
                                                                     List<ObsGraph> graphWrapper) {
     assert graphWrapper.size() == 1 : "Only one graph in graphWrapper is allowed.";
+    // leadState may have been in the waitlist.
+    if (waitlist.contains(leadState)) {
+      List<ObsGraph> chGraphs = OGMap.computeIfAbsent(leadState.getStateId(),
+              k -> new ArrayList<>());
+      chGraphs.add(graphWrapper.get(0));
+      return Triple.of(leadState, graphWrapper.get(0), false);
+    }
     // Divide children of leadState into two parts: in the waitlist or not.
     List<ARGState> inWait = new ArrayList<>(), notInWait = new ArrayList<>();
     leadState.getChildren().forEach(s -> {
