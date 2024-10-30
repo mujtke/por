@@ -66,6 +66,9 @@ public class ObsGraph implements Copier<ObsGraph> {
   // A temporary structure for indicating there are some circles in the graph.
   Map<OGNode, List<OGNode>> circles = new HashMap<>();
 
+  // No copy for this.
+  private OGNode targetNode;
+
   // Debug: indicating where the graph is created.
   ARGState creationState = null;
   private static boolean enableDebug = false;
@@ -77,6 +80,27 @@ public class ObsGraph implements Copier<ObsGraph> {
   public ObsGraph() {
     //
   }
+
+  public void setTargetNode(OGNode pNode) { this.targetNode = pNode; }
+
+  public void setTargetNode(
+      OGRevisitor.REVISIT_TYPE type, SharedEvent w, SharedEvent r) {
+    if (type == OGRevisitor.REVISIT_TYPE.READ) {
+      assert w.getInNode() != null;
+      this.targetNode = w.getInNode();
+    } else { // type == WRITE
+      assert r.getInNode() != null;
+      if (r.getInNode().isInGraph()) {
+        this.targetNode = r.getInNode().getTrAfter();
+      } else {
+        // FIXME: In this case, we can choose wNode only?
+        assert w.getInNode() != null;
+        this.targetNode = w.getInNode();
+      }
+    }
+  }
+
+  public OGNode getTargetNode() { return this.targetNode; }
 
   public int getIdentityHash() { return this.identityHash; }
 
@@ -1389,29 +1413,21 @@ public class ObsGraph implements Copier<ObsGraph> {
   }
 
   public AbstractState getPivotState() {
-    // TODO: try not going back to the first state.
-    OGNode targetNode;
-    // Use the preState of the first node, for the simplicity.
-    targetNode = nodes.get(0);
-    setLastNode(null);
+    // In normal case, targetNode should be not null.
+    assert targetNode != null;
+    setLastNode(targetNode);
     // Before returning, clear the trace order and modify the order for nodes that
     // trace after the target node. At the same time, set them invisible in the graph.
     Set<String> metTids = new HashSet<>();
     nodeTable.clear();
 
-    // FIXME: remove this part later.
-    metTids.add(targetNode.getInThread());
-    nodeTable.put(targetNode.getInThread(), targetNode);
-
-    for (OGNode next = targetNode; next != null;) {
+    for (OGNode next = targetNode.getTrBefore(); next != null;) {
       OGNode tmp = next.getTrBefore();
       // Initialize current node table info for G.
-      if (tmp != null) {
-        assert tmp.getInThread() != null;
-        if (!metTids.contains(tmp.getInThread())) {
-          nodeTable.put(tmp.getInThread(), tmp);
-          metTids.add(tmp.getInThread());
-        }
+      assert next.getInThread() != null;
+      if (!metTids.contains(next.getInThread())) {
+        nodeTable.put(next.getInThread(), next);
+        metTids.add(next.getInThread());
       }
 
       // Trace order.
@@ -1419,8 +1435,6 @@ public class ObsGraph implements Copier<ObsGraph> {
         next.removeTrBefore();
       if (next.getTrAfter() != null)
         next.removeTrAfter();
-
-      // NOTE: don't remove mo relations here.
 
       // Set the node invisible.
       next.setInGraph(false);
@@ -1432,8 +1446,9 @@ public class ObsGraph implements Copier<ObsGraph> {
     // TODO: Add lock for some thread we should visit first.
     setAccessLock();
 
-    assert targetNode.getPreState() != null;
-    return targetNode.getPreState();
+    AbstractState targetState = targetNode.getSucState();
+    targetNode = null;
+    return targetState;
   }
 
   public void setAccessLock() {

@@ -277,9 +277,11 @@ public class OGRevisitor {
 
       corp = coG.changeAssumeEdge(rp);
       corp.setReadFrom(wp);
+      coG.setTargetNode(type, wp, rp);
 
       // Handle G.
       r.setReadFrom(w);
+      G.setTargetNode(type, w, r);
     }
 
     else if (hasConflict) {
@@ -287,8 +289,10 @@ public class OGRevisitor {
       // replace r with the event co-r.
       SharedEvent cor = G.changeAssumeEdge(r);
       cor.setReadFrom(w);
+      G.setTargetNode(type, w, cor);
     } else { // No conflict.
       r.setReadFrom(w);
+      G.setTargetNode(type, w, r);
     }
 
     G.deduceFromRead();
