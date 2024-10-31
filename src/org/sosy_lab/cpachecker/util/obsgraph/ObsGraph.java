@@ -86,17 +86,15 @@ public class ObsGraph implements Copier<ObsGraph> {
   public void setTargetNode(
       OGRevisitor.REVISIT_TYPE type, SharedEvent w, SharedEvent r) {
     if (type == OGRevisitor.REVISIT_TYPE.READ) {
-//      assert w.getInNode() != null;
-//      this.targetNode = w.getInNode();
-      this.targetNode = nodes.get(0);
+      this.targetNode = w.getInNode();
+//      this.targetNode = nodes.get(0);
     } else { // type == WRITE
       assert r.getInNode() != null;
       if (r.getInNode().isInGraph()) {
-//        this.targetNode = r.getInNode().getTrAfter();
-        this.targetNode = nodes.get(0);
+        this.targetNode = r.getInNode();
+//        this.targetNode = nodes.get(0);
       } else {
         // FIXME: In this case, we can choose wNode only?
-        assert w.getInNode() != null;
         this.targetNode = w.getInNode();
       }
     }
