@@ -910,7 +910,6 @@ public class OGNode implements Copier<OGNode> {
   }
 
   public void setTrBefore(OGNode tbNode) {
-    assert tbNode != null;
     trBefore = tbNode;
   }
 
@@ -920,7 +919,6 @@ public class OGNode implements Copier<OGNode> {
   }
 
   public void setTrAfter(OGNode taNode) {
-    assert taNode != null;
     trAfter = taNode;
   }
 
@@ -960,13 +958,11 @@ public class OGNode implements Copier<OGNode> {
     // to.
     OGNode ta = trAfter, tb = trBefore;
     if (ta != null) {
-      if (tb != null)
-        ta.setTrBefore(tb);
+      ta.setTrBefore(tb);
       removeTrAfter();
     }
     if (tb != null) {
-      if (ta != null)
-        tb.setTrAfter(ta);
+      tb.setTrAfter(ta);
       removeTrBefore();
     }
   }
