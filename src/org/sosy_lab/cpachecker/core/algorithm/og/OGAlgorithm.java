@@ -515,11 +515,10 @@ public class OGAlgorithm implements Algorithm {
     OGNode revisitNode = graph.getRevisitNode();
     graph.setNeedToRevisit(true);
 
-    // FIXME
-    assert parState.getParents().size() == 1;
-    ARGState revisitParState = parState.getParents().iterator().next();
+    assert revisitNode != null;
+    ARGState revisitState = revisitNode.getSucState();
 
-    revisitor.apply(revisitParState, parState, precision, List.of(graph), revisitResult);
+    revisitor.apply(parState, revisitState, precision, List.of(graph), revisitResult);
   }
 
   /**
