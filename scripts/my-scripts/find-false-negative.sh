@@ -2,7 +2,8 @@
 
 TEST_FILE="$(realpath $1)"
 
-cd "$HOME/Code/Java/por"
+# cd "$HOME/Code/Java/por"
+cd "$PWD"
 
 OGPOR_OUT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
 	-spec default -preprocess "$TEST_FILE" 2> /dev/null &)
