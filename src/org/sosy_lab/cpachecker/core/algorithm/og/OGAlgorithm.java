@@ -150,9 +150,6 @@ public class OGAlgorithm implements Algorithm {
       // Stop timer for transfer.
     }
 
-    if (successors.isEmpty())
-      return false;
-
     ARGState parState = (ARGState) state, chState;
     successors = reorder(parState, successors);
     List<ObsGraph> parGraphs = OGMap.get(parState.getStateId()), chGraphs = null;
@@ -167,6 +164,9 @@ public class OGAlgorithm implements Algorithm {
       // Update OGMap.
       parGraphs.clear();
     }
+
+    if (successors.isEmpty())
+      return false;
 
     List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),
         noGraphs = new ArrayList<>();

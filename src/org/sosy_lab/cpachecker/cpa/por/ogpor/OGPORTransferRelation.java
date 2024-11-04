@@ -17,6 +17,8 @@ import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.defaults.SingleEdgeTransferRelation;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.cpa.location.LocationState;
+import org.sosy_lab.cpachecker.cpa.locations.LocationsState;
 import org.sosy_lab.cpachecker.cpa.threading.ThreadingState;
 import org.sosy_lab.cpachecker.exceptions.CPATransferException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -97,7 +99,7 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
             throws CPATransferException, InterruptedException {
 
         OGPORState parOGState = (OGPORState) state;
-        parOGState.setWillExit(cfaEdge);
+//        parOGState.setWillExit(cfaEdge);
 
         if (OGMap.get(parOGState.getSid()) == null) {
             return Set.of();
@@ -177,6 +179,9 @@ public class OGPORTransferRelation extends SingleEdgeTransferRelation {
         assert cfaEdge != null;
         // Update loop depth table.
         ogState.updateLoopDepth(cfaEdge);
+        // Check exit.
+        LocationState mainLoc = threadingState.getThreadLocation(mainThreadId);
+        mainLoc.getOutgoingEdges().forEach(ogState::setWillExit);
 
         // Debug.
 //        System.out.println(
