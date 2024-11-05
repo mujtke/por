@@ -1125,7 +1125,15 @@ public class OGTransfer {
     OGPORState ogState =
         AbstractStates.extractStateByType(argState, OGPORState.class);
     assert ogState != null;
-    return ogState.willExit();
+    if (ogState.blockFor(OGPORState.getEntryFunctionName())) {
+      // When main thread is blocked, the program won't exit early.
+      return false;
+    }
+    // If there is no unblocked child thread, then program exit normally?
+    Set<String> unblockedChTs = ogState.getThreads().keySet();
+    unblockedChTs.remove(OGPORState.getEntryFunctionName());
+    unblockedChTs.removeAll(ogState.getBlockedThreads());
+    return ogState.willExit() && !unblockedChTs.isEmpty();
   }
 
   // Debug.

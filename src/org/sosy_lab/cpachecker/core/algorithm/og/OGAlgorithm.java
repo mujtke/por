@@ -153,20 +153,17 @@ public class OGAlgorithm implements Algorithm {
     ARGState parState = (ARGState) state, chState;
     successors = reorder(parState, successors);
     List<ObsGraph> parGraphs = OGMap.get(parState.getStateId()), chGraphs = null;
-    assert parGraphs != null && !parGraphs.isEmpty() :
-        "Require one graph at least but not found in s" + parState.getStateId() + "!";
     List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
 
-    if (transfer.exitEarly(parState)) {
-      List<ObsGraph> rollbackGraphs = handleRollback(parGraphs, revisitResult);
-      // When we should go back, we won't visit successors any longer.
-      successors.clear();
-      // Update OGMap.
-      parGraphs.clear();
+    if ((parGraphs == null || parGraphs.isEmpty())) {
+      return false;
     }
 
-    if (successors.isEmpty())
-      return false;
+    assert parGraphs != null && !parGraphs.isEmpty() :
+        "Require one graph at least but not found in s" + parState.getStateId() + "!";
+    if (transfer.exitEarly(parState)) {
+      handleRollback(parGraphs, revisitResult);
+    }
 
     List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),
         noGraphs = new ArrayList<>();
@@ -334,54 +331,50 @@ public class OGAlgorithm implements Algorithm {
     return false;
   }
 
-  private List<ObsGraph> handleRollback(List<ObsGraph> parGraphs,
+  private void handleRollback(List<ObsGraph> parGraphs,
                               List<Pair<AbstractState, ObsGraph>> revisitResult) {
-    assert revisitResult != null;
-    List<ObsGraph> rollbackGraphs = new ArrayList<>();
-    ARGState preState = null;
+    ARGState backTo = null;
     for (ObsGraph g : parGraphs) {
-      // When we need to go back, the main thread must be in some node.
-      // OGNode nodeOfMain = g.getCurrentNode(OGPORState.getEntryFunctionName());
-      OGNode nodeOfMain = g.getLastNode();
-      assert nodeOfMain != null :
-          "Rolling back requires the node of the main thread not null!";
-      assert Objects.equals(nodeOfMain.getInThread(),
-          OGPORState.getEntryFunctionName()) :
-          "When rolling back, the last node of the graph should be in main thread.";
-
-      // When trying to roll back, there shouldn't be any nodes(come from other threads)
-      // not in the graph.
-      if (g.getNodeTable().values().stream().filter(Objects::nonNull)
-          .anyMatch(n -> g.hb(nodeOfMain, n))) {
-        // We cannot send g back in this case.
-        rollbackGraphs.add(g);
-        continue;
+      // When we need to go back, the main thread may be
+      // (1) in some node (nodeOfMain != null),
+      // (2) or not in any node (nodeOfMain = null).
+      OGNode nodeOfMain = g.getCurrentNode(OGPORState.getEntryFunctionName());
+      if (nodeOfMain != null) { // case(1)
+        // When trying to roll back, there shouldn't be any nodes(come from other threads)
+        // not in the graph.
+        if (g.getNodeTable().values().stream().filter(Objects::nonNull)
+            .anyMatch(n -> g.hb(nodeOfMain, n))) {
+          // For such g, it won't be transferred or sent back.
+          continue;
+        }
+        if (backTo == null) {
+          backTo = nodeOfMain.getPreState();
+        }
+        if (nodeOfMain.getTrAfter() != null) {
+          g.setLastNode(nodeOfMain.getTrAfter());
+        }
+        g.removeNode(nodeOfMain, true);
+        revisitResult.add(Pair.of(backTo, g));
       }
-
-      assert preState == null
-          || Objects.equals(preState, nodeOfMain.getPreState())
-          : "When rolling back, all graphs' nodes in main thread " +
-          "should have the same pre-ARGState.";
-      preState = nodeOfMain.getPreState();
-      assert preState != null : "Expect a nonnull pre-ARGState.";
-      if (nodeOfMain.getTrAfter() != null) {
-        g.setLastNode(nodeOfMain.getTrAfter());
-//        nodeOfMain.getTrAfter().removeTrBefore();
-//        nodeOfMain.removeTrAfter();
+      else { // case(2)
+        if (g.getLastNode() != null) {
+          if (backTo == null) {
+            backTo = g.getLastNode().getSucState();
+          }
+          revisitResult.add(Pair.of(backTo, g));
+        } else {
+          logger.log(Level.WARNING, "The program exits early, nothing to do with it.");
+        }
       }
-      g.removeNode(nodeOfMain, true);
-      revisitResult.add(Pair.of(preState, g));
     }
+    parGraphs.clear();
 
-    if (preState != null) {
-      // Block main thread at preState.
-      OGPORState preOgState =
-          AbstractStates.extractStateByType(preState, OGPORState.class);
-      assert preOgState != null;
-      preOgState.block(OGPORState.getEntryFunctionName());
-    }
-
-    return rollbackGraphs;
+    assert backTo != null : "Expect a nonnull ARGState when send some graph back.";
+    // Block main thread at state backTo.
+    OGPORState backToOgState =
+        AbstractStates.extractStateByType(backTo, OGPORState.class);
+    assert backToOgState != null;
+    backToOgState.block(OGPORState.getEntryFunctionName());
   }
 
   private boolean mayRollback(ARGState parState) {

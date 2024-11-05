@@ -95,8 +95,8 @@ public class OGPORState implements AbstractState, Graphable {
     public Set<String> getBlockedThreads() { return this.blockedThreads; }
 
     public void block(final String tid) {
-        assert !blockedThreads.contains(tid) :
-            "Trying to block the same thread twice!";
+//        assert !blockedThreads.contains(tid) :
+//            "Trying to block the same thread twice!";
         blockedThreads.add(tid);
     }
 
