@@ -162,7 +162,7 @@ public class OGAlgorithm implements Algorithm {
     assert parGraphs != null && !parGraphs.isEmpty() :
         "Require one graph at least but not found in s" + parState.getStateId() + "!";
     if (transfer.exitEarly(parState)) {
-      handleRollback(parGraphs, revisitResult);
+      handleRollback(parState, parGraphs, revisitResult);
     }
 
     List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),
@@ -331,14 +331,17 @@ public class OGAlgorithm implements Algorithm {
     return false;
   }
 
-  private void handleRollback(List<ObsGraph> parGraphs,
+  private void handleRollback(ARGState parState,
+                              List<ObsGraph> parGraphs,
                               List<Pair<AbstractState, ObsGraph>> revisitResult) {
     ARGState backTo = null;
     for (ObsGraph g : parGraphs) {
       // When we need to go back, the main thread may be
       // (1) in some node (nodeOfMain != null),
       // (2) or not in any node (nodeOfMain = null).
-      OGNode nodeOfMain = g.getCurrentNode(OGPORState.getEntryFunctionName());
+      OGNode nodeOfMain = (g.getLastNode() != null
+          && (g.getLastNode().getSucState() == parState))
+          ? g.getLastNode() : null;
       if (nodeOfMain != null) { // case(1)
         // When trying to roll back, there shouldn't be any nodes(come from other threads)
         // not in the graph.
@@ -369,12 +372,13 @@ public class OGAlgorithm implements Algorithm {
     }
     parGraphs.clear();
 
-    assert backTo != null : "Expect a nonnull ARGState when send some graph back.";
-    // Block main thread at state backTo.
-    OGPORState backToOgState =
-        AbstractStates.extractStateByType(backTo, OGPORState.class);
-    assert backToOgState != null;
-    backToOgState.block(OGPORState.getEntryFunctionName());
+    if (backTo != null) {
+      // Block main thread at state backTo.
+      OGPORState backToOgState =
+          AbstractStates.extractStateByType(backTo, OGPORState.class);
+      assert backToOgState != null;
+      backToOgState.block(OGPORState.getEntryFunctionName());
+    }
   }
 
   private boolean mayRollback(ARGState parState) {

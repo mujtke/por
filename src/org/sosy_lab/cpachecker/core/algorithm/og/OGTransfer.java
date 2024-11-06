@@ -1130,7 +1130,7 @@ public class OGTransfer {
       return false;
     }
     // If there is no unblocked child thread, then program exit normally?
-    Set<String> unblockedChTs = ogState.getThreads().keySet();
+    Set<String> unblockedChTs = new HashSet<>(ogState.getThreads().keySet());
     unblockedChTs.remove(OGPORState.getEntryFunctionName());
     unblockedChTs.removeAll(ogState.getBlockedThreads());
     return ogState.willExit() && !unblockedChTs.isEmpty();
