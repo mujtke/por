@@ -735,8 +735,8 @@ public class OGTransfer {
         // NOTE: here is an implicit strong assumption: block start edge contains
         //  no writes.
         // Check the conflict.
-        if (hasConflictForBlockStart(graph, curThd, node, parState, chState))
-          return Pair.of(null, null);
+//        if (hasConflictForBlockStart(graph, curThd, node, parState, chState))
+//          return Pair.of(null, null);
       }
       else { // node == null.
         // We start a new node and enter it if no conflicts exist.
@@ -756,8 +756,8 @@ public class OGTransfer {
     } else if (edgeType == 2) { // Shared non-assumption edge.
       if (node != null) {
         assert !node.isSimpleNode() && node.contains(edge);
-        if (hasConflictForBlockStart(graph, curThd, node, parState, chState))
-          return Pair.of(null, null);
+//        if (hasConflictForBlockStart(graph, curThd, node, parState, chState))
+//          return Pair.of(null, null);
       } else { // Node == null.
         if (hasUnmetNode(graph)) {
           return Pair.of(null, null);
@@ -989,7 +989,8 @@ public class OGTransfer {
   public Triple<AbstractState, ObsGraph, Boolean> multiStepTransfer(Vector<AbstractState> waitlist,
                                                                     ARGState leadState,
                                                                     List<ObsGraph> graphWrapper) {
-    assert graphWrapper.size() == 1 : "Only one graph in graphWrapper is allowed.";
+    if (graphWrapper.isEmpty()) // The graph in wrapper has been transferred.
+      return null;
     // leadState may have been in the waitlist.
     if (waitlist.contains(leadState)) {
       List<ObsGraph> chGraphs = OGMap.computeIfAbsent(leadState.getStateId(),
@@ -1008,8 +1009,6 @@ public class OGTransfer {
     notInWait.sort(nltcmp);
     // Handle states in the waitlist first.
     for (ARGState chState : inWait) {
-      if (graphWrapper.isEmpty()) // The graph in wrapper has been transferred.
-        return null;
       CFAEdge etp = leadState.getEdgeToChild(chState);
       assert etp != null;
       Pair<ObsGraph, ObsGraph> transferResult = singleStepTransfer(graphWrapper,

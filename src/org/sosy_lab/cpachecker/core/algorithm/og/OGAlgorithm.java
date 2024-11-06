@@ -161,9 +161,9 @@ public class OGAlgorithm implements Algorithm {
 
     assert parGraphs != null && !parGraphs.isEmpty() :
         "Require one graph at least but not found in s" + parState.getStateId() + "!";
-    if (transfer.exitEarly(parState)) {
-      handleRollback(parState, parGraphs, revisitResult);
-    }
+//    if (transfer.exitEarly(parState)) {
+//      handleRollback(parState, parGraphs, revisitResult);
+//    }
 
     List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),
         noGraphs = new ArrayList<>();
@@ -206,6 +206,7 @@ public class OGAlgorithm implements Algorithm {
 
       chState = (ARGState) suc;
       chGraphs = null;
+      boolean exitEarly = transfer.exitEarly(chState);
 
       // Perform all possible single-step transferring.
       // I.e., transfer as many as graphs from parState to chState.
@@ -249,6 +250,13 @@ public class OGAlgorithm implements Algorithm {
 
         ObsGraph chGraph = transferResult.getFirst(),
                 copiedGraph = transferResult.getSecond();
+        if (exitEarly && chGraph != null) {
+          // If main thread exit early at chState.
+          if (handleRollbackForSingleGraph(chState, chGraph, revisitResult)) {
+            chGraph = null;
+            assert copiedGraph == null;
+          }
+        }
         if (chGraph == ObsGraph.DUMMY) {
           hasBeenRemoved[i] = true;
           blockedGraphs.add(parGraph);
@@ -379,6 +387,50 @@ public class OGAlgorithm implements Algorithm {
       assert backToOgState != null;
       backToOgState.block(OGPORState.getEntryFunctionName());
     }
+  }
+
+  /**
+   * @return Whether g has been sent back.
+   */
+  private boolean handleRollbackForSingleGraph(
+      ARGState chState,
+      ObsGraph g,
+      List<Pair<AbstractState, ObsGraph>> revisitResult) {
+    ARGState backTo = null;
+    OGNode nodeOfMain = (g.getLastNode() != null
+        && (g.getLastNode().getSucState() == chState))
+        ? g.getLastNode() : null;
+    if (nodeOfMain != null) {
+      if (g.getNodeTable().values().stream().filter(Objects::nonNull)
+          .anyMatch(n -> g.hb(nodeOfMain, n))) {
+        // For such g, it won't be transferred or sent back.
+        return false;
+      }
+      backTo = nodeOfMain.getPreState();
+      if (nodeOfMain.getTrAfter() != null) {
+        g.setLastNode(nodeOfMain.getTrAfter());
+      }
+      g.removeNode(nodeOfMain, true);
+      revisitResult.add(Pair.of(backTo, g));
+    }
+    else { // case(2)
+      if (g.getLastNode() != null) {
+        backTo = g.getLastNode().getSucState();
+        revisitResult.add(Pair.of(backTo, g));
+      } else {
+        logger.log(Level.WARNING, "The program exits early, nothing to do with it.");
+        return false;
+      }
+    }
+
+    if (backTo != null) {
+      // Block main thread at state backTo.
+      OGPORState backToOgState =
+          AbstractStates.extractStateByType(backTo, OGPORState.class);
+      assert backToOgState != null;
+      backToOgState.block(OGPORState.getEntryFunctionName());
+    }
+    return true;
   }
 
   private boolean mayRollback(ARGState parState) {
