@@ -134,10 +134,10 @@ public class OGAlgorithm implements Algorithm {
    * with next state.
    */
   private boolean handleState(
-          final AbstractState state,
-          final Precision precision,
-          final ReachedSet reachedSet)
-          throws InterruptedException, CPAException {
+      final AbstractState state,
+      final Precision precision,
+      final ReachedSet reachedSet)
+      throws InterruptedException, CPAException {
     logger.log(Level.ALL, "Current state is ", state, " with precision", precision);
 
     // debug.
@@ -153,38 +153,18 @@ public class OGAlgorithm implements Algorithm {
     ARGState parState = (ARGState) state, chState;
     successors = reorder(parState, successors);
     List<ObsGraph> parGraphs = OGMap.get(parState.getStateId()), chGraphs = null;
-    List<Pair<AbstractState, ObsGraph>> revisitResult = new ArrayList<>();
-
     if ((parGraphs == null || parGraphs.isEmpty())) {
       return false;
     }
 
-    assert parGraphs != null && !parGraphs.isEmpty() :
-        "Require one graph at least but not found in s" + parState.getStateId() + "!";
-//    if (transfer.exitEarly(parState)) {
-//      handleRollback(parState, parGraphs, revisitResult);
-//    }
-
-    List<Pair<AbstractState, Precision>> withGraphs = new ArrayList<>(),
-        noGraphs = new ArrayList<>();
-    // Use this array of boolean to indicate whether a graph has been removed
-    // from the parent state.
-    boolean[] hasBeenRemoved = new boolean[parGraphs.size()];
-    // Map from index of graph to CFANode, e.g., i -> N0.
-    // FIXME: This is the special handle for indeterminate conditional branches.
-    Map<Integer, CFANode> nonDetTable = new HashMap<>();
-    Set<ObsGraph> blockedGraphs = new HashSet<>();
-
-    // Adjust precision and split children into two parts if possible.
     for (Iterator<? extends AbstractState> it = successors.iterator(); it.hasNext();) {
       AbstractState s = it.next();
       PrecisionAdjustmentResult precAdjustmentResult;
       try {
         Optional<PrecisionAdjustmentResult>  precisionAdjustmentOptional =
-                precisionAdjustment.prec(s, precision, reachedSet,
-                        Functions.identity(), s);
+            precisionAdjustment.prec(s, precision, reachedSet,
+                Functions.identity(), s);
         assert precisionAdjustmentOptional.isPresent();
-        // if (precisionAdjustmentOptional.isEmpty()) continue;
         precAdjustmentResult = precisionAdjustmentOptional.orElseThrow();
       } finally {
         // Stop time for precision adjustment.
@@ -198,376 +178,41 @@ public class OGAlgorithm implements Algorithm {
       if (action == Action.BREAK) {
         // Without stop operation, does 'break' mean termination?
         if (AbstractStates.isTargetState(suc)) {
-          reachedSet.add(suc, prec);
-          waitlist.add(suc);
+          addState(reachedSet, waitlist, suc, prec);
           return true;
         }
       }
-
-      chState = (ARGState) suc;
-      chGraphs = null;
-      boolean exitEarly = transfer.exitEarly(chState);
-
-      // Perform all possible single-step transferring.
-      // I.e., transfer as many as graphs from parState to chState.
-      CFAEdge edge = parState.getEdgeToChild(chState);
-      assert edge != null;
-
-      for (int i = 0; i < parGraphs.size(); i++) {
-        if (hasBeenRemoved[i]) // This graph has been transferred, just skip it.
-          continue;
-        ObsGraph parGraph = parGraphs.get(i);
-        boolean shouldKeepGraph = false,
-                /* Special handle for indeterminate conditional branches, if
-                 * shouldKeepGraph == true, it means we need to keep the graph because
-                 * it will be used for the other conditional branch. I.e., we will
-                 * use the graph twice. */
-                secondTransfer = false; /* The flag indicate that whether we are
-                                                        transferring the graph second time. */
-        /* nonDetTable records the index of the graph in array 'hasBeenRemoved', e.g.,
-         * the <1, N15> means the graph (parGraphs.get(1)) will need to be transferred along
-         * the edge whose predecessor CFANode is N15. And before that, we have transferred
-         * the graph along one edge has the same predecessor CFANode N15. This is necessary
-         * when indeterminacy exists.
-         */
-        if (nonDetTable.containsKey(i)) {
-          CFANode wantedCFANode = nonDetTable.get(i);
-          if (!Objects.equals(edge.getPredecessor(), wantedCFANode)) {
-            // When nonDetTable is not empty, we should transfer the graph
-            // along the edge in it.
-            continue;
-          }
-          secondTransfer = true;
-        }
-
-        // Single-step transfer.
-        Pair<ObsGraph, ObsGraph> transferResult = transfer.singleStepTransfer(
-                new ArrayList<>(List.of(parGraph)),
-                edge,
-                parState,
-                chState,
-                true);
-
-        ObsGraph chGraph = transferResult.getFirst(),
-                copiedGraph = transferResult.getSecond();
-        if (exitEarly && chGraph != null) {
-          // If main thread exit early at chState.
-          if (handleRollbackForSingleGraph(chState, chGraph, revisitResult)) {
-            chGraph = null;
-            assert copiedGraph == null;
-          }
-        }
-        if (chGraph == ObsGraph.DUMMY) {
-          hasBeenRemoved[i] = true;
-          blockedGraphs.add(parGraph);
-          continue;
-        }
-        if (copiedGraph != null) {
-          nonDetTable.put(i, edge.getPredecessor());
-          // Replace the ith graph with copiedGraph, the former has been transferred,
-          // so we use its deep copy to replace it.
-          parGraphs.set(i, copiedGraph);
-          shouldKeepGraph = true;
-          // TODO: copiedGraph's creationState?
-          // copiedGraph.setCreationState(parState);
-        }
-
-        if (chGraph != null) {
-          // ParGraph has been transferred to the chState.
-          OGMap.putIfAbsent(chState.getStateId(), new ArrayList<>());
-          chGraphs = OGMap.get(chState.getStateId());
-          chGraphs.add(chGraph);
-          if (!shouldKeepGraph) {
-            hasBeenRemoved[i] = true;
-          }
-          if (secondTransfer) {
-            // Copied graph has been transferred, now we remove it.
-            nonDetTable.remove(i);
-          }
-        }
-      }
-
-      if (chGraphs != null && !chGraphs.isEmpty()) {
-        withGraphs.add(Pair.of(suc, prec));
-      } else {
-        noGraphs.add(Pair.of(suc, prec));
-      }
+      addState(reachedSet, waitlist, suc, prec);
     }
 
-    // FIXME: will there be some graphs get blocked?
-    if (!blockedGraphs.isEmpty()) {
-      logger.log(Level.WARNING,
-              "Blocked graphs found at state s" + parState.getStateId());
-      blockedGraphs.forEach(
-              g -> performRevisitForBlockedGraph(g, parState, precision, revisitResult));
-    }
+    // transfer and revisit.
+    List<Pair<ARGState, ObsGraph>> transferTasks = new ArrayList<>(),
+        revisitTasks = new ArrayList<>();
+    parGraphs.forEach(g -> transferTasks.add(Pair.of(parState, g)));
+    while (!transferTasks.isEmpty()) {
+      // 1.Transfer.
+      Pair<ARGState, ObsGraph> tTask = transferTasks.remove(0);
+      transfer.multiStepTransfer(tTask, revisitTasks, transferTasks, waitlist);
 
-    // Remove transferred graphs from parGraphs.
-    parGraphs.clear();
-
-    // Add children to reachedSet and waitlist ('noGraphs' first).
-    addStates(reachedSet, waitlist, noGraphs);
-    addStates(reachedSet, waitlist, withGraphs);
-
-    // Revisit and transfer(multi-step).
-    List<ObsGraph> graphsForRevisit = getGraphsForRevisit(withGraphs);
-    while (!graphsForRevisit.isEmpty() || !revisitResult.isEmpty()) {
-      // 1.Revisit.
-      //      if (!graphsForRevisit.isEmpty()) {
-      for (Iterator<ObsGraph> it = graphsForRevisit.iterator(); it.hasNext();) {
-//        ObsGraph graph = graphsForRevisit.remove(0); // graph for revisit.
-        ObsGraph graph = it.next();
-        it.remove();
-        assert graph.needToRevisit() : "Try to revisit a graph should not be!";
-        revisitResult.addAll(revisitor.apply(reachedSet, graph));
-        // Debug.
-        if (graph.getRevisitNode() != null) {
-          assert false : "Some graphs keep re-visitable after the revisit!";
-        }
-      }
-
-      // 2.Transfer.
-      Pair<List<ObsGraph>, List<Pair<AbstractState, ObsGraph>>>
-          multiTransferResult = performMultiStepTransferFor(revisitResult);
-      assert multiTransferResult.getFirst() != null
-          && multiTransferResult.getSecond() != null;
-      graphsForRevisit.addAll(multiTransferResult.getFirst());
-      revisitResult.addAll(multiTransferResult.getSecond());
-//      graphsForRevisit.addAll(performMultiStepTransferFor(revisitResult));
-    }
-
-    return false;
-  }
-
-  private void handleRollback(ARGState parState,
-                              List<ObsGraph> parGraphs,
-                              List<Pair<AbstractState, ObsGraph>> revisitResult) {
-    ARGState backTo = null;
-    for (ObsGraph g : parGraphs) {
-      // When we need to go back, the main thread may be
-      // (1) in some node (nodeOfMain != null),
-      // (2) or not in any node (nodeOfMain = null).
-      OGNode nodeOfMain = (g.getLastNode() != null
-          && (g.getLastNode().getSucState() == parState))
-          ? g.getLastNode() : null;
-      if (nodeOfMain != null) { // case(1)
-        // When trying to roll back, there shouldn't be any nodes(come from other threads)
-        // not in the graph.
-        if (g.getNodeTable().values().stream().filter(Objects::nonNull)
-            .anyMatch(n -> g.hb(nodeOfMain, n))) {
-          // For such g, it won't be transferred or sent back.
-          continue;
-        }
-        if (backTo == null) {
-          backTo = nodeOfMain.getPreState();
-        }
-        if (nodeOfMain.getTrAfter() != null) {
-          g.setLastNode(nodeOfMain.getTrAfter());
-        }
-        g.removeNode(nodeOfMain, true);
-        revisitResult.add(Pair.of(backTo, g));
-      }
-      else { // case(2)
-        if (g.getLastNode() != null) {
-          if (backTo == null) {
-            backTo = g.getLastNode().getSucState();
-          }
-          revisitResult.add(Pair.of(backTo, g));
-        } else {
-          logger.log(Level.WARNING, "The program exits early, nothing to do with it.");
-        }
-      }
-    }
-    parGraphs.clear();
-
-    if (backTo != null) {
-      // Block main thread at state backTo.
-      OGPORState backToOgState =
-          AbstractStates.extractStateByType(backTo, OGPORState.class);
-      assert backToOgState != null;
-      backToOgState.block(OGPORState.getEntryFunctionName());
-    }
-  }
-
-  /**
-   * @return Whether g has been sent back.
-   */
-  private boolean handleRollbackForSingleGraph(
-      ARGState chState,
-      ObsGraph g,
-      List<Pair<AbstractState, ObsGraph>> revisitResult) {
-    ARGState backTo = null;
-    OGNode nodeOfMain = (g.getLastNode() != null
-        && (g.getLastNode().getSucState() == chState))
-        ? g.getLastNode() : null;
-    if (nodeOfMain != null) {
-      if (g.getNodeTable().values().stream().filter(Objects::nonNull)
-          .anyMatch(n -> g.hb(nodeOfMain, n))) {
-        // For such g, it won't be transferred or sent back.
-        return false;
-      }
-      backTo = nodeOfMain.getPreState();
-      if (nodeOfMain.getTrAfter() != null) {
-        g.setLastNode(nodeOfMain.getTrAfter());
-      }
-      g.removeNode(nodeOfMain, true);
-      revisitResult.add(Pair.of(backTo, g));
-    }
-    else { // case(2)
-      if (g.getLastNode() != null) {
-        backTo = g.getLastNode().getSucState();
-        revisitResult.add(Pair.of(backTo, g));
-      } else {
-        logger.log(Level.WARNING, "The program exits early, nothing to do with it.");
-        return false;
-      }
-    }
-
-    if (backTo != null) {
-      // Block main thread at state backTo.
-      OGPORState backToOgState =
-          AbstractStates.extractStateByType(backTo, OGPORState.class);
-      assert backToOgState != null;
-      backToOgState.block(OGPORState.getEntryFunctionName());
-    }
-    return true;
-  }
-
-  private boolean mayRollback(ARGState parState) {
-    OGPORState parOgState =
-        AbstractStates.extractStateByType(parState, OGPORState.class);
-    assert parOgState != null;
-    // If main thread is not in any block when exiting, then we needn't go back.
-    String entryFunc = OGPORState.getEntryFunctionName();
-    if (parOgState.atBlockEndFor(entryFunc)) {
-      if (parOgState.hasNonBlockedThread()) {
-        // We should block the main thread because we need to explore other threads first.
-        parOgState.block(entryFunc);
-        return true;
+      // 2.Revisit.
+      while (!revisitTasks.isEmpty()) {
+        Pair<ARGState, ObsGraph> rTask = revisitTasks.remove(0);
+        transferTasks.addAll(revisitor.apply(reachedSet, rTask));
       }
     }
 
     return false;
   }
 
-  private boolean exitEarly(ARGState parState) {
-    OGPORState parOgState =
-        AbstractStates.extractStateByType(parState, OGPORState.class);
-    assert parOgState != null;
-    return parOgState.willExit();
-  }
-
-  private List<ObsGraph> getGraphsForRevisit(
-          List<Pair<AbstractState, Precision>> withGraphs) {
-    List<ObsGraph> result = new ArrayList<>();
-    for (Pair<AbstractState, Precision> p : withGraphs) {
-      ARGState state = (ARGState) p.getFirstNotNull();
-      List<ObsGraph> graphs = OGMap.get(state.getStateId());
-      assert graphs != null && !graphs.isEmpty();
-      result.addAll(graphs.stream().filter(ObsGraph::needToRevisit)
-              .collect(Collectors.toList()));
-    }
-
-    return result;
-  }
-
-  /**
-   * Perform multi-step transfer for all graphs in {@param revisitResult}.
-   * @return graphs need to revisit.
-   */
-  private Pair<List<ObsGraph>, List<Pair<AbstractState, ObsGraph>>>
-  performMultiStepTransferFor(List<Pair<AbstractState, ObsGraph>> revisitResult) {
-    List<ObsGraph> graphsToRevisitOnly = new ArrayList<>();
-    List<Pair<AbstractState, ObsGraph>> graphsToTransfer = new ArrayList<>();
-    while (!revisitResult.isEmpty()) {
-      Pair<AbstractState, ObsGraph> pair = revisitResult.remove(0);
-      ARGState leadState = (ARGState) pair.getFirstNotNull();
-      ObsGraph graph = pair.getSecondNotNull();
-//            Pair<AbstractState, ObsGraph> transferResult =
-//                    transfer.multiStepTransfer(waitlist, leadState, new ArrayList<>(List.of(graph)));
-      Triple<AbstractState, ObsGraph, Boolean> transferResult =
-              transfer.multiStepTransfer(waitlist, leadState, new ArrayList<>(List.of(graph)));
-      if (transferResult != null) {
-        // FIXME: some graphs in the result may be re-visitable, how to handle them?
-        assert transferResult.getFirst() != null
-                && transferResult.getSecond() != null
-                && transferResult.getThird() != null;
-        if (transferResult.getSecond() == ObsGraph.DUMMY) {
-          assert graph.needToRevisit() : "Blocked but not re-visitable graph found!";
-          logger.log(Level.INFO, "Blocked but re-visitable graph found at s" +
-                  ((ARGState) transferResult.getFirst()).getStateId() +
-                  " during the multi-step transfer.");
-          graphsToRevisitOnly.add(graph);
-          assert !transferResult.getThird() : "Shouldn't transfer a blocked graph.";
-        } else {
-          if (transferResult.getSecond().needToRevisit()) {
-            if (transferResult.getThird()) { // We should continue to transfer the graph.
-//              revisitResult.add(Pair.of(transferResult.getFirst(),
-//                  transferResult.getSecond()));
-              graphsToTransfer.add(Pair.of(transferResult.getFirst(),
-                  transferResult.getSecond()));
-              graphsToRevisitOnly.add(transferResult.getSecond());
-            } else {
-//              graphsNeedRevisitOnly.add(transferResult.getSecond().deepCopy(new HashMap<>()));
-              graphsToRevisitOnly.add(transferResult.getSecond());
-              // FIXME: set lastNode of transferResult.getSecond() re-visited.
-//              transferResult.getSecond().setLastNodeRevisited();
-            }
-          }
-        }
-      } else {
-        // TODO: In this case, have some graphs not been transferred to a proper state?
-        logger.log(Level.WARNING,
-                "Some graph hasn't been transferred to a proper state.");
-      }
-    }
-
-    // Debug.
-    if (graphsToRevisitOnly.stream().anyMatch(g -> !g.needToRevisit()))
-      throw new UnsupportedOperationException("Find a graph not re-visitable!");
-    return Pair.of(graphsToRevisitOnly, graphsToTransfer);
-  }
-
-  private List<ObsGraph> getBlockedGraphs(
-          List<ObsGraph> parGraphs, boolean[] hasBeenRemoved) {
-    List<ObsGraph> blockedGraphs = new ArrayList<>();
-    for (int i = 0; i < hasBeenRemoved.length; i++) {
-      if (!hasBeenRemoved[i])
-        blockedGraphs.add(parGraphs.get(i));
-    }
-
-    return blockedGraphs;
-  }
-
-  private void addStates(final ReachedSet pReachedSet,
+  private void addState(final ReachedSet pReachedSet,
                          final Vector<AbstractState> pWaitlist,
-                         List<Pair<AbstractState, Precision>> pStates) {
-    pStates.forEach(sp -> {
+                         AbstractState state,
+                         Precision precision) {
       // NOTE: a destroyed ARGState shouldn't be added to reachedSet.
-      if (!((ARGState) sp.getFirstNotNull()).isDestroyed()) {
-        pWaitlist.add(sp.getFirstNotNull());
-        pReachedSet.add(sp.getFirstNotNull(), sp.getSecondNotNull());
+      if (!((ARGState) state).isDestroyed()) {
+        pWaitlist.add(state);
+        pReachedSet.add(state, precision);
       }
-    });
-  }
-
-  /**
-   * FIXME
-   * Perform revisit for the blocked graphs.
-   */
-  private void performRevisitForBlockedGraph(
-          ObsGraph graph,
-          ARGState parState,
-          Precision precision,
-          List<Pair<AbstractState, ObsGraph>> revisitResult) {
-    // Get the re-visitable nodes of the graph.
-    OGNode revisitNode = graph.getRevisitNode();
-    graph.setNeedToRevisit(true);
-
-    assert revisitNode != null;
-    ARGState revisitState = revisitNode.getSucState();
-
-    revisitor.apply(parState, revisitState, precision, List.of(graph), revisitResult);
   }
 
   /**

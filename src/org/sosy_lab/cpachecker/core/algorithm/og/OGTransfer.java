@@ -1,6 +1,7 @@
 package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Preconditions;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
@@ -17,6 +18,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
@@ -122,66 +124,41 @@ public class OGTransfer {
    * 2) The graph meets the node first time.
    * For both cases, we need to handle the edge and events according to the types of the
    * edge and critical area.
-   * @param graphWrapper Indicates whether the given graph has been transferred.
-   * @param edge Current CFA edge.
    * @param parState Initial ARGState where the transferring begin.
    * @param chState Final ARGState where the transferring stop.
-   * @param isSimpleTransfer Indicate whether the current call of this method is direct
-   *                         or indirect, for the latter, the method is called by
-   *                         {@link #multiStepTransfer(Vector, ARGState, List)}.
    * @return <graph, copiedGraph> CopiedGraph is used for the case where the indeterminacy
    * exists.
    * @implNote When adding events to the node, we use deep copies of the events in
    * {{@link #edgeVarMap}. Similarly, copiedGraph also comes from the deep copying of
    * the graph in {@param graphWrapper}.
    */
-  public Pair<ObsGraph, ObsGraph> singleStepTransfer(
-          List<ObsGraph> graphWrapper,
-          CFAEdge edge,
-          ARGState parState,
-          ARGState chState,
-          boolean isSimpleTransfer) {
-
+  Pair<ObsGraph, ObsGraph> singleStepTransfer(
+      ARGState parState, ARGState chState, ObsGraph g) {
     // For debugging.
     int parId = parState.getStateId(), chId = chState.getStateId();
-    ObsGraph g = graphWrapper.get(0);
-//    assert enableDebug && DebugAndTest.findEmtpyRf(g).isEmpty();
-//    assert enableDebug && DebugAndTest.hasInvalidLheFor(g).isEmpty();
 
-    OGPORState parOgState =
-        AbstractStates.extractStateByType(parState, OGPORState.class),
-        chOgState =
-            AbstractStates.extractStateByType(chState, OGPORState.class);
-    assert parOgState != null && chOgState != null;
+    OGPORState parOgState = getOGPORState(parState),
+        chOgState = getOGPORState(chState);
     CriticalAreaAction caa = chOgState.getInCaa();
     Pair<ObsGraph, ObsGraph> result = null;
 
     // Update chOgState's blockedThreads if needed. Next, if current thread is blocked,
     // we should transfer graph in other threads (if existed).
-    // FIXME: causing some graphs blocked.
     updateBlockedThread(parOgState, chOgState);
-    if (shouldBeBlocked(graphWrapper, parOgState, chOgState)) {
+    if (shouldBeBlocked(g, parOgState, chOgState)) {
       return Pair.of(null, null);
     }
 
-    // CriticalAreaAction.
+    // Handle different criticalAreaAction.
     switch (caa) {
-      case START:
-        result = handleBlockStart(graphWrapper, edge, parState, chState);
+      case START: result = handleBlockStart(g, parState, chState);
         break;
-      case CONTINUE:
-        result = handleBlockContinue(graphWrapper, edge, parState, chState,
-                isSimpleTransfer);
+      case CONTINUE: result = handleBlockContinue(g, parState, chState);
         break;
-      case END:
-        result = handleBlockTerminated(graphWrapper, edge, parState, chState,
-                isSimpleTransfer);
+      case END: result = handleBlockTerminated(g, parState, chState);
         break;
-      case NOT_IN:
-        result = handleBlockNotIn(graphWrapper, edge, parState, chState,
-                isSimpleTransfer);
+      case NOT_IN: result = handleBlockNotIn(g, parState, chState);
     }
-
     assert result != null;
     return result;
   }
@@ -195,8 +172,7 @@ public class OGTransfer {
   }
 
   private boolean shouldBeBlocked(
-      List<ObsGraph> graphWrapper, OGPORState par, OGPORState ch) {
-    ObsGraph g = graphWrapper.get(0);
+      ObsGraph g, OGPORState par, OGPORState ch) {
     if (g.hasAccessLock()
         // Access lock for a thread not spawned yet is useless.
         && par.hasSpawnedThread(g.getAccessLock())
@@ -240,34 +216,29 @@ public class OGTransfer {
 
   }
 
-  OGPORState getCoOGSibling (ARGState parState, CFAEdge coARGEdge) {
-    List<ARGState> chSiblings = parState.getChildren().stream()
-            .filter(ch -> Objects.equals(parState.getEdgeToChild(ch), coARGEdge))
-            .collect(Collectors.toList());
-    assert chSiblings.size() == 1;
-    OGPORState coChOgState = AbstractStates.extractStateByType(
-            chSiblings.get(0), OGPORState.class);
-    assert coChOgState != null;
+  public @NonNull OGPORState getOGPORState(AbstractState state) {
+    OGPORState result = AbstractStates.extractStateByType(state, OGPORState.class);
+    assert result != null;
+    return result;
+  }
 
-    return coChOgState;
+  public @NonNull CFAEdge getEdgeFromTo(ARGState parState, ARGState chState) {
+    assert parState != null && chState != null;
+    CFAEdge edge = parState.getEdgeToChild(chState);
+    assert edge != null;
+    return edge;
   }
 
   private Pair<ObsGraph, ObsGraph> handleBlockNotIn(
-          List<ObsGraph> graphWrapper,
-          CFAEdge edge,
-          ARGState parState,
-          ARGState chState,
-          boolean isSimpleTransfer) {
+      ObsGraph graph,
+      ARGState parState,
+      ARGState chState) {
     // Caa = NOT_IN.
-    assert graphWrapper.size() == 1;
-    ObsGraph graph = graphWrapper.iterator().next(),
-            copiedGraph = null;
-    OGPORState chOgState =
-            AbstractStates.extractStateByType(chState, OGPORState.class);
-    assert chOgState != null;
-    curThd = chOgState.getInThread();
+    ObsGraph copiedGraph = null;
+    @NonNull OGPORState chOgState = getOGPORState(chState);
+    curThd = getInThread(chOgState);
     node = graph.getCurrentNode(curThd);
-
+    @NonNull CFAEdge edge = getEdgeFromTo(parState, chState);
     List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
     int edgeType = getEdgeType(sharedEvents, edge);
     ConflictType conflict = ConflictType.NONE;
@@ -279,7 +250,7 @@ public class OGTransfer {
     } else if (edgeType == 1) { // Local assumption edge.
       node = null;
       CFAEdge coARGEdge = getCoEdgeFromARG(parState, edge);
-      if (coARGEdge != null && isSimpleTransfer) {
+      if (coARGEdge != null && graph.meetNewAssumeEdge(curThd)) {
         // In this case indeterminacy exists, and it's the first time that the
         // graph meet the edge. We need to traverse both two edges.
         // This is done only when a graph meets the edge at the first
@@ -346,7 +317,7 @@ public class OGTransfer {
         return Pair.of(null, null);
       } else { // Node == null and no unmet nodes exist.
         CFAEdge coARGEdge = getCoEdgeFromARG(parState, edge);
-        if (coARGEdge != null && isSimpleTransfer) {
+        if (coARGEdge != null && graph.meetNewAssumeEdge(curThd)) {
           // Indeterminacy exists, and it's the first time that graph meets
           // the edge.
           copiedGraph = handleNonDet(graph, parState, edge);
@@ -378,9 +349,7 @@ public class OGTransfer {
       graph.updateCurrentNodeTable(curThd, node);
       graph.setAccessLock();
     }
-    graphWrapper.clear();
-    if (enableDebug)
-      debugActions(graph, parState, chState, edge);
+    debugActions(graph, parState, chState, edge);
     if (conflict == ConflictType.TEMP)
       return Pair.of(ObsGraph.DUMMY, null);
     else if (conflict == ConflictType.BLOCKED)
@@ -409,21 +378,16 @@ public class OGTransfer {
   }
 
   private Pair<ObsGraph, ObsGraph> handleBlockTerminated(
-          List<ObsGraph> graphWrapper,
-          CFAEdge edge,
-          ARGState parState,
-          ARGState chState,
-          boolean isSimpleTransfer) {
+      ObsGraph graph,
+      ARGState parState,
+      ARGState chState) {
     // Caa = END. This means edge should be a funCall and node terminates.
-    assert graphWrapper.size() == 1;
-    ObsGraph graph = graphWrapper.iterator().next(),
-            copiedGraph = null;
-    OGPORState chOgState =
-            AbstractStates.extractStateByType(chState, OGPORState.class);
-    assert chOgState != null;
-    curThd = chOgState.getInThread();
+    ObsGraph copiedGraph = null;
+    @NonNull OGPORState chOgState = getOGPORState(chState);
+    curThd = getInThread(chOgState);
     node = graph.getCurrentNode(curThd);
     assert node != null; // node must be not null.
+    CFAEdge edge = getEdgeFromTo(parState, chState);
     List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
     int edgeType = getEdgeType(sharedEvents, edge);
     boolean edgeInNode = node.contains(edge);
@@ -458,13 +422,13 @@ public class OGTransfer {
         else if (node.hasBeenAddedToGraph() && !edgeInNode) {
           Pair<ObsGraph, ObsGraph> handleResult =
                   handleAssumeEdgeNotInNode(graph, node, edge, parState,
-                          chOgState, curThd, isSimpleTransfer, false);
+                          chOgState, curThd, false);
           graph = handleResult.getFirst();
           copiedGraph = handleResult.getSecond();
         } else { // Totally new node.
           Pair<ObsGraph, ObsGraph> handleResult =
                   handleAssumeEdgeWithNewNode(graph, node, edge, parState,
-                          chOgState, curThd, isSimpleTransfer, true);
+                          chOgState, curThd, true);
           graph = handleResult.getFirst();
           copiedGraph = handleResult.getSecond();
         }
@@ -475,13 +439,13 @@ public class OGTransfer {
         } else if (node.hasBeenAddedToGraph() && !edgeInNode) {
           Pair<ObsGraph, ObsGraph> handleResult =
                   handleAssumeEdgeNotInNode(graph, node, edge, parState,
-                          chOgState, curThd, isSimpleTransfer, true);
+                          chOgState, curThd, true);
           graph = handleResult.getFirst();
           copiedGraph = handleResult.getSecond();
         } else { // Totally new node.
           Pair<ObsGraph, ObsGraph> handleResult =
                   handleAssumeEdgeWithNewNode(graph, node, edge, parState,
-                          chOgState, curThd, isSimpleTransfer, true);
+                          chOgState, curThd, true);
           graph = handleResult.getFirst();
           copiedGraph = handleResult.getSecond();
         }
@@ -506,9 +470,7 @@ public class OGTransfer {
       graph.setNeedToRevisit(node.shouldRevisit()); // having reached the end of the node, update the current node for curThd.
       graph.updateCurrentNodeTable(curThd, node);
       graph.setAccessLock();
-      graphWrapper.clear();
-      if (enableDebug)
-        debugActions(graph, parState, chState, edge);
+      debugActions(graph, parState, chState, edge);
     }
     if (conflict == ConflictType.TEMP)
       return Pair.of(ObsGraph.DUMMY, null);
@@ -537,26 +499,20 @@ public class OGTransfer {
   }
 
   private Pair<ObsGraph, ObsGraph> handleBlockContinue(
-          List<ObsGraph> graphWrapper,
-          CFAEdge edge,
-          ARGState parState,
-          ARGState chState,
-          boolean isSimpleTransfer) {
+      ObsGraph graph,
+      ARGState parState,
+      ARGState chState) {
     // Caa = CONTINUE means we are inside a *complex* node.
-    assert graphWrapper.size() == 1;
-    ObsGraph graph = graphWrapper.iterator().next(),
-            copiedGraph = null; // For handling an indeterminate assignment.
-    OGPORState chOgState =
-            AbstractStates.extractStateByType(chState, OGPORState.class);
-    assert chOgState != null;
-    curThd = chOgState.getInThread();
+    ObsGraph copiedGraph = null; // For handling an indeterminate assignment.
+    @NonNull OGPORState chOgState = getOGPORState(chState);
+    curThd = getInThread(chOgState);
     node = graph.getCurrentNode(curThd);
     assert node != null;
+    @NonNull CFAEdge edge = getEdgeFromTo(parState, chState);
     List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
     int edgeType = getEdgeType(sharedEvents, edge);
     boolean edgeInNode = node.contains(edge);
-    Pair<ObsGraph, ObsGraph> handleAssumeResult = null,
-            result = null;
+    Pair<ObsGraph, ObsGraph> result = null, handleAssumeResult = null;
 
     if (edgeType == 0) { // Local non-assumption edge.
       if (node.hasBeenAddedToGraph() && edgeInNode) {
@@ -583,12 +539,12 @@ public class OGTransfer {
       } else if (node.hasBeenAddedToGraph() && !edgeInNode) {
         handleAssumeResult =
                 handleAssumeEdgeNotInNode(graph, node, edge, parState,
-                        chOgState, curThd, isSimpleTransfer, false);
+                        chOgState, curThd, false);
       } // node.hasBeenAddedToGraph() && !edgeInNode
       else { // Totally new node.
         handleAssumeResult =
                 handleAssumeEdgeWithNewNode(graph, node, edge, parState,
-                        chOgState, curThd, isSimpleTransfer, false);
+                        chOgState, curThd, false);
       }
       // edgeType == 1
     }
@@ -613,11 +569,11 @@ public class OGTransfer {
       else if (node.hasBeenAddedToGraph() && !edgeInNode) {
         handleAssumeResult =
                 handleAssumeEdgeNotInNode(graph, node, edge, parState, chOgState,
-                        curThd, isSimpleTransfer, true);
+                        curThd, true);
       } else { // Totally new node.
         handleAssumeResult =
                 handleAssumeEdgeWithNewNode(graph, node, edge, parState,
-                        chOgState, curThd, isSimpleTransfer, true);
+                        chOgState, curThd, true);
       }
     }
 
@@ -628,9 +584,7 @@ public class OGTransfer {
     if (graph != null) {
       node.updatePreAndSucState(null, chState);
       graph.setNeedToRevisit(false);
-      graphWrapper.clear();
-      if (enableDebug)
-        debugActions(graph, parState, chState, edge);
+      debugActions(graph, parState, chState, edge);
     }
     // For copied graph, we don't update info because it doesn't transfer along the edge.
     result = Pair.of(graph, copiedGraph);
@@ -708,22 +662,18 @@ public class OGTransfer {
   }
 
   private Pair<ObsGraph, ObsGraph> handleBlockStart(
-          List<ObsGraph> graphWrapper,
-          CFAEdge edge,
+          ObsGraph graph,
           ARGState parState,
           ARGState chState) {
     // Caa = START. This means edge should be a funCall and we will enter a node.
-    assert graphWrapper.size() == 1;
-    ObsGraph graph = graphWrapper.iterator().next(), copiedGraph = null;
-    OGPORState chOgState =
-            AbstractStates.extractStateByType(chState, OGPORState.class);
-    assert chOgState != null;
-    curThd = chOgState.getInThread();
+    assert graph != null;
+    curThd = getInThread(chState);
     node = graph.getCurrentNode(curThd);
+    CFAEdge edge = parState.getEdgeToChild(chState);
+    assert edge != null;
     List<SharedEvent> sharedEvents = edgeVarMap.get(edge.hashCode());
     int edgeType = getEdgeType(sharedEvents, edge);
-    ConflictType conflict1 = ConflictType.NONE;
-    boolean conflictMo = false;
+    ObsGraph copiedGraph = null;
     Pair<ObsGraph, ObsGraph> result = null;
 
     if (edgeType == 0) { // Local non-assumption edge.
@@ -782,11 +732,21 @@ public class OGTransfer {
     graph.setAccessLock();
     graph.setNeedToRevisit(node.shouldRevisit());
     result = Pair.of(graph, null);
-    graphWrapper.clear();
-    if (enableDebug)
-      debugActions(graph, parState, chState, edge);
 
+    debugActions(graph, parState, chState, edge);
     return result;
+  }
+
+  private @NonNull String getInThread(AbstractState state) {
+    assert state != null;
+    if (state instanceof OGPORState) {
+      return ((OGPORState) state).getInThread();
+    } else {
+      OGPORState ogState =
+          AbstractStates.extractStateByType(state, OGPORState.class);
+      assert ogState != null;
+      return ogState.getInThread();
+    }
   }
 
   private boolean hasConflictForBlockStart(
@@ -866,7 +826,6 @@ public class OGTransfer {
    * @param parState antecedent ARGState of the edge.
    * @param chOgState successive OGPORState of the edge.
    * @param curThd the thread that edge in.
-   * @param isSimpleTransfer whether the first time that the graph meet the edge.
    * @param isShared whether the edge contains shared vars.
    * @return Pair of the graph and its deep copy (if needed).
    */
@@ -877,7 +836,6 @@ public class OGTransfer {
           ARGState parState,
           OGPORState chOgState,
           String curThd,
-          boolean isSimpleTransfer,
           boolean isShared) {
     ObsGraph copiedGraph = null;
     CFAEdge coCFAEdge = getCoEdgeFromCFA(edge),
@@ -939,10 +897,9 @@ public class OGTransfer {
           ARGState parState,
           OGPORState chOgState,
           String curThd,
-          boolean isSimpleTransfer,
           boolean isShared) {
     // It must be the first time we meet the edge.
-    assert isSimpleTransfer;
+    assert graph.meetNewAssumeEdge(curThd);
     ObsGraph copiedGraph = null;
     // Copy the graph when indeterminacy exists.
     CFAEdge coARGEdge = getCoEdgeFromARG(parState, edge);
@@ -963,6 +920,7 @@ public class OGTransfer {
   private void debugActions(ObsGraph graph,
                             ARGState parState, ARGState chState, CFAEdge edge) {
 
+    if (!enableDebug) return;
     if (graph == null) return;
     addGraphToFull(graph, chState.getStateId());
     System.out.println("Transferring from s" + parState.getStateId()
@@ -976,103 +934,80 @@ public class OGTransfer {
   }
 
   /**
-   * @param graphWrapper A container used to justify whether we should stop the
-   *                     enumeration for the states in the inWait or notInWait. If
-   *                     the container has no graph anymore, which means the graph has
-   *                     been transferred, then there is no need to handle the left
-   *                     states.
-   * @return pair of the target state and graph.
-   * return triple of the state, graph and flag whether we should continue transfer
-   * the graph, i.e., the state is not the target.
+   * @param task
+   * @param revisitTasks
+   * @param transferTasks
+   * @param waitlist
+   * TODO: reorder waitlist according whether a state in it holds some graph.
    */
-//    public Pair<AbstractState, ObsGraph> multiStepTransfer(Vector<AbstractState> waitlist,
-  public Triple<AbstractState, ObsGraph, Boolean> multiStepTransfer(Vector<AbstractState> waitlist,
-                                                                    ARGState leadState,
-                                                                    List<ObsGraph> graphWrapper) {
-    if (graphWrapper.isEmpty()) // The graph in wrapper has been transferred.
-      return null;
-    // leadState may have been in the waitlist.
-    if (waitlist.contains(leadState)) {
-      List<ObsGraph> chGraphs = OGMap.computeIfAbsent(leadState.getStateId(),
-              k -> new ArrayList<>());
-      chGraphs.add(graphWrapper.get(0));
-      return Triple.of(leadState, graphWrapper.get(0), false);
-    }
-    // Divide children of leadState into two parts: in the waitlist or not.
-    List<ARGState> inWait = new ArrayList<>(), notInWait = new ArrayList<>();
-    leadState.getChildren().forEach(s -> {
-      if (waitlist.contains(s)) inWait.add(s);
-      else notInWait.add(s);
-    });
-    // Reorder by using <next.
-    inWait.sort(nltcmp);
-    notInWait.sort(nltcmp);
-    // Handle states in the waitlist first.
-    for (ARGState chState : inWait) {
-      CFAEdge etp = leadState.getEdgeToChild(chState);
-      assert etp != null;
-      Pair<ObsGraph, ObsGraph> transferResult = singleStepTransfer(graphWrapper,
-              etp, leadState, chState, false);
-      ObsGraph chGraph = transferResult.getFirst();
-      // FIXME: if chGraph == ObsGraph.DUMMY?
-      if (chGraph == ObsGraph.DUMMY) {
-        // continue;
-        return Triple.of(chState, ObsGraph.DUMMY, false);
-      }
-      if (chGraph != null) {
-        // NOTE: if chGraph is re-visitable? This case will be handled after returning.
-        // Find the target state.
-        List<ObsGraph> chGraphs =
-                OGMap.computeIfAbsent(chState.getStateId(),
-                        k -> new ArrayList<>());
-        chGraphs.add(chGraph);
-        // Adjust the waitlist to ensure chState will be explored before its
-        // siblings that has no graphs.
-        adjustWaitlist(OGMap, waitlist, chState);
-        // return Pair.of(chState, chGraph);
-        return Triple.of(chState, chGraph, false);
-      }
-    }
+  void multiStepTransfer(
+      final Pair<ARGState, ObsGraph> task,
+      final List<Pair<ARGState, ObsGraph>> revisitTasks,
+      final List<Pair<ARGState, ObsGraph>> transferTasks,
+      final Vector<AbstractState> waitlist) {
 
-    // Handel states not in the waitlist.
-    for (ARGState chState : notInWait) {
-      if (graphWrapper.isEmpty())
-        return null;
-      CFAEdge etp = leadState.getEdgeToChild(chState);
-      assert etp != null;
-      Pair<ObsGraph, ObsGraph> transferResult = singleStepTransfer(graphWrapper,
-              etp, leadState, chState, false);
-      ObsGraph chGraph = transferResult.getFirst();
-      // FIXME: if chGraph == ObsGraph.DUMMY?
-      if (chGraph == ObsGraph.DUMMY) {
-        // continue;
-        return Triple.of(chState, ObsGraph.DUMMY, false);
-      }
-      if (chGraph != null) {
-        if (chState.getChildren().isEmpty()) {
-          handleLeafNode(waitlist, leadState, chState, chGraph);
-          if (chGraph.needToRevisit())
-            return Triple.of(chState, chGraph, false);
-          return null;
-        }
-        // FIXME: If chGraph is re-visitable, should we revisit it first?
-        if (chGraph.needToRevisit()) {
-          // Return chGraph for revisiting and continue to transfer it.
-          return Triple.of(chState, chGraph, true);
-        }
-        if (exitEarly(chState)) {
-          // In this case, we transfer the graph to a state with main
-          // thread exited.
-          return Triple.of(chState, chGraph, false);
-        }
-        // Else, find target state recursively.
-        List<ObsGraph> newGraphWrapper = new ArrayList<>();
-        newGraphWrapper.add(chGraph);
-        return multiStepTransfer(waitlist, chState, newGraphWrapper);
-      }
-    }
+    ARGState leadState = task.getFirst();
+    ObsGraph parGraph = task.getSecond();
+    assert leadState != null && parGraph != null;
+    Collection<ARGState> successors = leadState.getChildren();
+    assert !successors.isEmpty();
+    for (ARGState suc : successors) {
+      Pair<ObsGraph, ObsGraph> sr = singleStepTransfer(leadState, suc, parGraph);
+      ObsGraph tg = sr.getFirst();
 
-    return null;
+      if (exitEarly(suc)) {
+        if (tg != null) {
+          // TODO: roll back.
+          assert sr.getSecond() == null;
+          if (!handleRollbackForSingleGraph(suc, tg, transferTasks)) {
+            if (tg.needToRevisit()) {
+              revisitTasks.add(Pair.of(suc, tg));
+            }
+          }
+          return;
+        }
+        continue;
+      }
+
+      if (tg == ObsGraph.DUMMY) {
+        assert sr.getSecond() == null;
+        if (tg.needToRevisit()) {
+          revisitTasks.add(Pair.of(suc, tg));
+        }
+        // Else, tg gets blocked at suc.
+        return;
+      }
+
+      else if (tg != null) {
+        ObsGraph cotg = sr.getSecond();
+        if (cotg != null) {
+          transferTasks.add(Pair.of(leadState, cotg));
+        }
+        if (tg.needToRevisit()) {
+          revisitTasks.add(Pair.of(suc, tg));
+        }
+        if (waitlist.contains(suc)) {
+          transferGraphTo(suc, tg);
+        } else {
+          if (suc.getChildren().isEmpty()) {
+            waitlist.add(suc);
+            transferGraphTo(suc, tg);
+            return;
+          }
+          // Transfer of tg will happen after its revisit if
+          // it is re-visitable.
+          transferTasks.add(Pair.of(suc, tg));
+        }
+      }
+      // tg == null, continue to transfer the parGraph.
+    }
+  }
+
+  public void transferGraphTo(ARGState state, ObsGraph g) {
+    List<ObsGraph> graphs =
+        OGMap.computeIfAbsent(state.getStateId(),
+            k -> new ArrayList<>());
+    graphs.add(g);
   }
 
   // FIXME: neither the chState is in the waitlist nor does it have any child.
@@ -1133,6 +1068,50 @@ public class OGTransfer {
     unblockedChTs.remove(OGPORState.getEntryFunctionName());
     unblockedChTs.removeAll(ogState.getBlockedThreads());
     return ogState.willExit() && !unblockedChTs.isEmpty();
+  }
+
+  /**
+   * @return Whether g has been sent back.
+   */
+  private boolean handleRollbackForSingleGraph(
+      final ARGState chState,
+      final ObsGraph g,
+      final List<Pair<ARGState, ObsGraph>> transferTasks) {
+    ARGState backTo = null;
+    OGNode nodeOfMain = (g.getLastNode() != null
+        && (g.getLastNode().getSucState() == chState))
+        ? g.getLastNode() : null;
+    if (nodeOfMain != null) {
+      if (g.getNodeTable().values().stream().filter(Objects::nonNull)
+          .anyMatch(n -> g.hb(nodeOfMain, n))) {
+        // For such g, it won't be transferred or sent back.
+        return false;
+      }
+      backTo = nodeOfMain.getPreState();
+      if (nodeOfMain.getTrAfter() != null) {
+        g.setLastNode(nodeOfMain.getTrAfter());
+      }
+      g.removeNode(nodeOfMain, true);
+      transferTasks.add(Pair.of(backTo, g));
+    }
+    else { // case(2)
+      if (g.getLastNode() != null) {
+        backTo = g.getLastNode().getSucState();
+        transferTasks.add(Pair.of(backTo, g));
+      } else {
+        // logger.log(Level.WARNING, "The program exits early, nothing to do with it.");
+        return false;
+      }
+    }
+
+    if (backTo != null) {
+      // Block main thread at state backTo.
+      OGPORState backToOgState =
+          AbstractStates.extractStateByType(backTo, OGPORState.class);
+      assert backToOgState != null;
+      backToOgState.block(OGPORState.getEntryFunctionName());
+    }
+    return true;
   }
 
   // Debug.

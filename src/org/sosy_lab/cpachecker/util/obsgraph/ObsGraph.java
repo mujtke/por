@@ -6,7 +6,6 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -26,7 +25,7 @@ public class ObsGraph implements Copier<ObsGraph> {
 
   /**
    * This variable tracks the node that visible and to-max.
-   * NOTE: to-max doesn't means that the node is always added last. I.e., the lastNode
+   * NOTE: to-max doesn't mean that the node is always added last. I.e., the lastNode
    * isn't always the last one of the {@link #nodes}
    */
   private OGNode lastNode = null;
@@ -1305,114 +1304,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     return OGTransfer.ConflictType.NONE;
   }
 
-  /**
-   * Detecting possible mo-deduced conflicts.
-   * FIXME: This is done after the curNode becomes complete, i.e., we have
-   *  visited the curNode for updating its relations.
-   * @param targetThd TODO.
-   * @return true if any mo-conflict detected.
-   */
-  public boolean hasMoConflict(String targetThd, OGNode curNode) {
-    // Check mo-deduced conflicts.
-    List<SharedEvent> toCheckEvents = curNode.getToCheckEvents();
-    // Get mo predecessors of the events to check.
-    List<Pair<SharedEvent, SharedEvent>> moPredecessors = new ArrayList<>();
-    getMoPredecessors(toCheckEvents, moPredecessors);
-
-    // Find possible conflict.
-    for (Pair<SharedEvent, SharedEvent> pair : moPredecessors) {
-      SharedEvent ce = pair.getFirstNotNull(),    // Checked event.
-              mpe = pair.getSecondNotNull(),      // Direct mo predecessor of ce.
-              msuc = mpe.getMoBefore();           // Direct mo successor of mpe.
-      // 1. There exists r (mperb) reads from mpe, but r.inNode is not the graph.
-      // In this case, conflict exists, because it requires that r.inNode happen
-      // before the curNode, but the former hasn't been in the graph yet.
-      while (mpe != null) {
-        // Check conflict.
-        // FIXME: it's enough to use 'readBy' only?
-        for (SharedEvent mperb : mpe.getReadBy()) {
-          OGNode mperbn = mperb.getInNode();
-          assert mperbn != null;
-          if (targetThd != null
-                  && !Objects.equals(mperbn.getInThread(), targetThd)) {
-            // Not the target thread, just skip.
-            continue;
-          }
-          if (mperbn != curNode
-                  && !mperbn.isInGraph()) { //
-            // Conflict found.
-            return true;
-          }
-        }
-        mpe = mpe.getMoAfter();
-      }
-
-      // 2. There exists wsuc is a mo-descendant of the mpe, s.t., for some rs
-      // that reads from ce: 1) msuc porf r
-      //                     2) msuc.inNode is not in the graph.
-      //                     3) r.inNode is not in the graph.
-      // In this case, conflict exists, because it requires that msuc.inNode happen
-      // before the curNode, but the former hasn't been in the graph yet.
-      for (SharedEvent rb : ce.getReadBy()) {
-        while (msuc != null) {
-          // In this case, wsuc, ce and r locate different nodes respectively.
-          OGNode msucn = msuc.getInNode(), rbn = rb.getInNode();
-          if (targetThd != null
-                  && !Objects.equals(msucn.getInThread(), targetThd)) {
-            // Not the target thread, just skip.
-            msuc = msuc.getMoBefore();
-            continue;
-          }
-          if (msucn != curNode
-                  &&!msucn.isInGraph()
-                  && !rbn.isInGraph()
-                  && porf(msucn, rbn)) {
-            // Conflict found.
-            // msuc should happen before the curNode.
-            return true;
-          }
-          msuc = msuc.getMoBefore();
-        }
-      }
-    }
-
-    return false;
-  }
-
-  // Get all direct mo-predecessors of events in toCheckEvents.
-  private void getMoPredecessors(List<SharedEvent> toCheckEvents,
-                                 List<Pair<SharedEvent, SharedEvent>> moPredecessors) {
-    if (toCheckEvents == null || toCheckEvents.isEmpty())
-      return;
-
-    OGNode n = lastNode,
-            checkNode = toCheckEvents.get(0).getInNode();
-    assert checkNode != null;
-    List<SharedEvent> toRemove = new ArrayList<>();
-    int i = 0;
-    while (n != null && !toCheckEvents.isEmpty()) {
-      if (n == checkNode) {
-        n = n.getTrAfter();
-        continue;
-      }
-      for (SharedEvent w : n.getWs()) {
-        for (SharedEvent w0 : toCheckEvents) {
-          if(w.accessSameVarWith(w0)) {
-            moPredecessors.add(Pair.of(w0, w)); // Find the moPredecessor of
-            // w0.
-            toRemove.add(w0);
-          }
-        }
-      }
-
-      toCheckEvents.removeAll(toRemove);
-      toRemove.clear();
-      n = n.getTrAfter();
-      i++;
-    }
-  }
-
-  public AbstractState getPivotState() {
+  public ARGState getPivotState() {
     // In normal case, targetNode should be not null.
     assert targetNode != null;
     setLastNode(targetNode.getTrAfter());
@@ -1454,7 +1346,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     // TODO: Add lock for some thread we should visit first.
     setAccessLock();
 
-    AbstractState targetState = targetNode.getPreState();
+    ARGState targetState = targetNode.getPreState();
     targetNode = null;
     return targetState;
   }
@@ -1481,6 +1373,19 @@ public class ObsGraph implements Copier<ObsGraph> {
 
   public boolean hasAccessLockFor(String tid) {
     return accessLocks.containsValue(tid);
+  }
+
+  public boolean meetNewAssumeEdge(String tid) {
+    // If it's the first time we meet an new assume edge in thread tid, then
+    // for this thread, the next assume edge we need to meet according to the cachedAssumeEdges
+    // must be null.
+    if (!cachedAssumeEdges.containsKey(tid)) return true;
+    assert assumeEdgeTable.containsKey(tid);
+    List<Triple<CFAEdge, Integer, Integer>> cacheEdges = cachedAssumeEdges.get(tid);
+    int idx = assumeEdgeTable.get(tid);
+    if (idx < 0 || idx >= cacheEdges.size()) return true;
+    // Else, there is some edge we need to meet first.
+    return false;
   }
 
   // Debug.

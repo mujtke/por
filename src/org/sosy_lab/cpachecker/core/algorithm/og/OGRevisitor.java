@@ -57,7 +57,7 @@ public class OGRevisitor {
                     ARGState chState,
                     Precision precision,
                     List<ObsGraph> graphs,
-                    List<Pair<AbstractState, ObsGraph>> result) {
+                    List<Pair<ARGState, ObsGraph>> result) {
     if (graphs.isEmpty())
       return;
 
@@ -68,7 +68,21 @@ public class OGRevisitor {
     }
   }
 
-  public List<Pair<AbstractState, ObsGraph>> apply(
+  public List<Pair<ARGState, ObsGraph>> apply(
+      final ReachedSet reachedSet,
+      Pair<ARGState, ObsGraph> rTask) {
+    ARGState chState = rTask.getFirstNotNull();
+    ARGState parState = chState.getParents().iterator().next();
+    assert parState != null;
+    assert reachedSet.contains(parState)
+        && reachedSet.contains(chState);
+    ObsGraph graph = rTask.getSecondNotNull();
+    return new ArrayList<>(
+        revisit(parState, chState, reachedSet.getPrecision(chState), graph)
+    );
+  }
+
+  public List<Pair<ARGState, ObsGraph>> apply(
           final ReachedSet reachedSet,
           ObsGraph graph) {
     OGNode lastNode = graph.getLastNode();
@@ -87,11 +101,11 @@ public class OGRevisitor {
   }
 
   // parState: indicating where the revisit takes place.
-  private List<Pair<AbstractState, ObsGraph>> revisit(ARGState parState,
+  private List<Pair<ARGState, ObsGraph>> revisit(ARGState parState,
                                                       ARGState chState,
                                                       Precision precision,
                                                       ObsGraph g) {
-    List<Pair<AbstractState, ObsGraph>> result = new ArrayList<>();
+    List<Pair<ARGState, ObsGraph>> result = new ArrayList<>();
     // List of the graphs that need to revisit.
     List<ObsGraph> RG = new ArrayList<>();
     RG.add(g);
@@ -190,7 +204,7 @@ public class OGRevisitor {
    * @param G The result of revisiting.
    * @param chState Used for debugging.
    */
-  private void handleRevisitResult(final List<Pair<AbstractState, ObsGraph>> result,
+  private void handleRevisitResult(final List<Pair<ARGState, ObsGraph>> result,
                                    final List<ObsGraph> RG,
                                    final ObsGraph G0,
                                    final ObsGraph G,
@@ -213,7 +227,7 @@ public class OGRevisitor {
       }
     }
 
-    AbstractState pivotState = G.getPivotState();
+    ARGState pivotState = G.getPivotState();
     // Set 'needToRevisit' to false, whether a further revisit is needed is
     // specified in the future.
     G.setNeedToRevisit(false);
