@@ -185,7 +185,7 @@ public class OGTransfer {
       return false;
     }
     // Else, g has no access lock.
-    if (ch.isBlocked()) {
+    if (!g.hasAccessLock() && ch.isBlocked()) {
       if (ch.hasNonBlockedThread()) {
         // We should block at s.
         return true;
@@ -350,9 +350,10 @@ public class OGTransfer {
       graph.setAccessLock();
     }
     debugActions(graph, parState, chState, edge);
-    if (conflict == ConflictType.TEMP)
-      return Pair.of(ObsGraph.DUMMY, null);
-    else if (conflict == ConflictType.BLOCKED)
+    if (conflict == ConflictType.TEMP) {
+      graph.setHasConflicts(true);
+      return Pair.of(graph, null);
+    } else if (conflict == ConflictType.BLOCKED)
       return Pair.of(null, null);
     result = Pair.of(graph, copiedGraph);
 
@@ -472,9 +473,10 @@ public class OGTransfer {
       graph.setAccessLock();
       debugActions(graph, parState, chState, edge);
     }
-    if (conflict == ConflictType.TEMP)
-      return Pair.of(ObsGraph.DUMMY, null);
-    else if (conflict == ConflictType.BLOCKED)
+    if (conflict == ConflictType.TEMP) {
+      graph.setHasConflicts(true);
+      return Pair.of(graph, null);
+    } else if (conflict == ConflictType.BLOCKED)
       return Pair.of(null, null);
 
     result = Pair.of(graph, copiedGraph);
@@ -950,7 +952,7 @@ public class OGTransfer {
     ObsGraph parGraph = task.getSecond();
     assert leadState != null && parGraph != null;
     Collection<ARGState> successors = leadState.getChildren();
-    assert !successors.isEmpty();
+    // assert !successors.isEmpty();
     for (ARGState suc : successors) {
       Pair<ObsGraph, ObsGraph> sr = singleStepTransfer(leadState, suc, parGraph);
       ObsGraph tg = sr.getFirst();
@@ -969,16 +971,17 @@ public class OGTransfer {
         continue;
       }
 
-      if (tg == ObsGraph.DUMMY) {
-        assert sr.getSecond() == null;
-        if (tg.needToRevisit()) {
-          revisitTasks.add(Pair.of(suc, tg));
-        }
-        // Else, tg gets blocked at suc.
-        return;
-      }
-
       else if (tg != null) {
+        if (tg.hasConflicts()) {
+          assert sr.getSecond() == null;
+          if (tg.needToRevisit()) {
+            tg.setHasConflicts(false);
+            revisitTasks.add(Pair.of(suc, tg));
+          }
+          // Else, tg gets blocked at suc.
+          return;
+        }
+
         ObsGraph cotg = sr.getSecond();
         if (cotg != null) {
           transferTasks.add(Pair.of(leadState, cotg));
@@ -988,15 +991,16 @@ public class OGTransfer {
         }
         if (waitlist.contains(suc)) {
           transferGraphTo(suc, tg);
+          return;
         } else {
           if (suc.getChildren().isEmpty()) {
             waitlist.add(suc);
             transferGraphTo(suc, tg);
-            return;
           }
           // Transfer of tg will happen after its revisit if
           // it is re-visitable.
           transferTasks.add(Pair.of(suc, tg));
+          return;
         }
       }
       // tg == null, continue to transfer the parGraph.

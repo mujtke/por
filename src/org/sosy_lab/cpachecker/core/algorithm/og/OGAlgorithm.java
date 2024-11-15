@@ -189,6 +189,7 @@ public class OGAlgorithm implements Algorithm {
     List<Pair<ARGState, ObsGraph>> transferTasks = new ArrayList<>(),
         revisitTasks = new ArrayList<>();
     parGraphs.forEach(g -> transferTasks.add(Pair.of(parState, g)));
+    parGraphs.clear();
     while (!transferTasks.isEmpty()) {
       // 1.Transfer.
       Pair<ARGState, ObsGraph> tTask = transferTasks.remove(0);

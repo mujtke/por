@@ -59,8 +59,8 @@ public class ObsGraph implements Copier<ObsGraph> {
 
   // Based on object's memory address, so this should be different for every graph object.
   private final int identityHash = System.identityHashCode(this);
-  //
-  public final static ObsGraph DUMMY = new ObsGraph();
+  // Indicating whether the graph contains conflicts.
+  private boolean hasConflicts = false;
 
   // A temporary structure for indicating there are some circles in the graph.
   Map<OGNode, List<OGNode>> circles = new HashMap<>();
@@ -76,9 +76,9 @@ public class ObsGraph implements Copier<ObsGraph> {
     enableDebug = pEnableDebug;
   }
 
-  public ObsGraph() {
-    //
-  }
+  public void setHasConflicts(boolean hasConflicts) { this.hasConflicts = hasConflicts; }
+
+  public boolean hasConflicts() { return this.hasConflicts; }
 
   public void setTargetNode(OGNode pNode) { this.targetNode = pNode; }
 
