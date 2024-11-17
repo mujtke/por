@@ -321,7 +321,13 @@ public class OGTransfer {
           // Indeterminacy exists, and it's the first time that graph meets
           // the edge.
           copiedGraph = handleNonDet(graph, parState, edge);
-          // graph.addVisitedAssumeEdge(curThd, edge, chOgState);
+          OGNode copiedNode = new OGNode(
+              new ArrayList<>(Collections.singleton(coARGEdge)),
+              true,
+              parState,
+              null);
+          copiedGraph.addNode(copiedNode);
+          copiedNode.setInGraph(false);
         }
 
         node = new OGNode(new ArrayList<>(Collections.singleton(edge)),
@@ -852,9 +858,9 @@ public class OGTransfer {
       } else {
         // Replacement won't happen for shared assumption edge because the graph
         // remembers which edge it has met. Therefore, transfer gets blocked here.
-        return Pair.of(null, null);
-//                throw new UnsupportedOperationException(
-//                        "Transfer gets blocked at s" + parState.getStateId());
+        // return Pair.of(null, null);
+        throw new UnsupportedOperationException(
+            "Mismatched shared assume edge found at s" + parState.getStateId());
       }
     } // case (1)
 
@@ -876,13 +882,15 @@ public class OGTransfer {
       copiedGraph = handleNonDet(graph, parState, edge);
       node.addEdgeWithEvents(edge,
               isShared ? edgeVarMap.get(edge.hashCode()) : null);
+      OGNode copiedNode = copiedGraph.getNodes().get(graph.getNodes().indexOf(node));
+      copiedNode.addEdgeWithEvents(coARGEdge,
+          isShared ? edgeVarMap.get(coARGEdge.hashCode()) : null);
       if (!isShared) {
         graph.addVisitedAssumeEdge(curThd, edge, chOgState);
+        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, chOgState);
       } else {
         // FIXME: should we store the edge if it contains shared vars?
       }
-      // Don't add coEdge(!d) for the copied graph, because the latter
-      // still doesn't meet the former now.
     } // case (3)
 
     else { // case (4), coCFAEgeInNode && coARGEdge != null
@@ -907,14 +915,18 @@ public class OGTransfer {
     CFAEdge coARGEdge = getCoEdgeFromARG(parState, edge);
     if (coARGEdge != null) { // Indeterminacy exists.
       copiedGraph = handleNonDet(graph, parState, edge);
-      node.addEdgeWithEvents(edge, null);
+      // node.addEdgeWithEvents(edge, null);
+      node.addEdgeWithEvents(edge,
+          isShared ? edgeVarMap.get(edge.hashCode()) : null);
+      OGNode copiedNode = copiedGraph.getNodes().get(graph.getNodes().indexOf(node));
+      copiedNode.addEdgeWithEvents(coARGEdge,
+          isShared ? edgeVarMap.get(coARGEdge.hashCode()) : null);
       if (!isShared) {
         graph.addVisitedAssumeEdge(curThd, edge, chOgState);
+        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, chOgState);
       } else {
         // FIXME: cache the edge when it has share vars?
       }
-      // Note, we don't add coARGEdge to copiedGraph here, because the
-      // latter hasn't met the former yet.
     }
     return Pair.of(graph, copiedGraph);
   }
