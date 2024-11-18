@@ -467,6 +467,9 @@ public class OGTransfer {
       assert !enableDebug || !DebugAndTest.acyclicMo(graph) : "Mo circle found!";
       // Check possible conflict after having visited the node.
       conflict = hasConflictForBlockTerminated(graph, curThd, node, conflict);
+      if (conflict == ConflictType.TRUE) {
+        return Pair.of(null, null);
+      }
       if (node.getLheIndex() == -2)
         node.setLHEIndex(-1);
     }
@@ -500,7 +503,7 @@ public class OGTransfer {
               ConflictType.TEMP : ConflictType.BLOCKED;
     }
     if (conflict == ConflictType.TRUE) {
-      throw new UnsupportedOperationException("Visited a node shouldn't be.");
+      // throw new UnsupportedOperationException("Visited a node shouldn't be.");
     }
 
     return conflict;
@@ -858,9 +861,9 @@ public class OGTransfer {
       } else {
         // Replacement won't happen for shared assumption edge because the graph
         // remembers which edge it has met. Therefore, transfer gets blocked here.
-        // return Pair.of(null, null);
-        throw new UnsupportedOperationException(
-            "Mismatched shared assume edge found at s" + parState.getStateId());
+        return Pair.of(null, null);
+//        throw new UnsupportedOperationException(
+//            "Mismatched shared assume edge found at s" + parState.getStateId());
       }
     } // case (1)
 
