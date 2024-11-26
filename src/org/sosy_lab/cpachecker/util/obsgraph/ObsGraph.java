@@ -94,7 +94,14 @@ public class ObsGraph implements Copier<ObsGraph> {
 //        this.targetNode = nodes.get(0);
       } else {
         // FIXME: In this case, we can choose wNode only?
-        this.targetNode = w.getInNode();
+        // this.targetNode = w.getInNode();
+        if (targetNode == null) {
+          this.targetNode = w.getInNode();
+        } else {
+          this.targetNode = w.getInNode().getPreState().getStateId()
+              <= targetNode.getPreState().getStateId()
+              ? w.getInNode() : targetNode;
+        }
       }
     }
   }
@@ -626,8 +633,18 @@ public class ObsGraph implements Copier<ObsGraph> {
     });
 
     rpn.removeEdges(edgesToRemove);
+    // Record a temporary target node.
+    int targetStateId = Integer.MAX_VALUE;
+    for (OGNode n : nodesToRemove) {
+      if (!n.isInGraph()) continue;
+      ARGState pre = n.getPreState();
+      assert pre != null;
+      if (pre.getStateId() >= targetStateId) continue;
+      targetStateId = pre.getStateId();
+      assert n.getTrAfter() != null;
+      targetNode = n.getTrAfter();
+    }
     nodesToRemove.forEach(OGNode::removeAllRelations);
-    // nodes.removeAll(nodesToRemove);
     nodesToRemove.forEach(n -> removeNode(n, false));
     // Remove all isolated nodes, i.e, the node that has no pre/suc after
     // removing the 'nodesToRemove' and no event.
