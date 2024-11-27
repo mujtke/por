@@ -8,6 +8,7 @@ import org.sosy_lab.cpachecker.core.algorithm.og.OGRevisitor;
 import org.sosy_lab.cpachecker.core.algorithm.og.OGTransfer;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
+import org.sosy_lab.cpachecker.cpa.threading.ThreadingState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
@@ -1361,21 +1362,44 @@ public class ObsGraph implements Copier<ObsGraph> {
     // Reset the cachedAssumeEdges.
     resetCachedAssumeEdge();
     // TODO: Add lock for some thread we should visit first.
-    setAccessLock();
+    String thdWithAccessLock = setAccessLock();
 
-    ARGState targetState = targetNode.getPreState();
+    // ARGState targetState = targetNode.getPreState();
+    ARGState targetState =
+        getTargetState(targetNode.getPreState(), thdWithAccessLock);
     targetNode = null;
     return targetState;
   }
 
-  public void setAccessLock() {
+  private ARGState getTargetState(ARGState s, String thdWithAccessLock) {
+    if (thdWithAccessLock != null) {
+      while (true) {
+        assert s != null;
+        ThreadingState threadingState =
+            AbstractStates.extractStateByType(s, ThreadingState.class);
+        assert threadingState != null;
+        // Check localAccessLock, FIXME: don't use hard encoding.
+        if (!threadingState.hasLock("__CPAchecker_local_access_lock__") ||
+            threadingState.hasLock(thdWithAccessLock, "__CPAchecker_local_access_lock__")) {
+          break;
+        }
+        s = s.getParents().iterator().next();
+      }
+    }
+    return s;
+  }
+
+  public String setAccessLock() {
     accessLocks.clear();
     List<OGNode> ns = nodeTable.values().stream()
         .filter(Objects::nonNull).collect(Collectors.toList());
     if (!ns.isEmpty()) {
       visitSort(ns);
       addAccessLockFor(ns.get(0).getInThread());
+      return ns.get(0).getInThread();
     }
+
+    return null;
   }
 
   public Map<String, String> getAccessLock() { return this.accessLocks; }
