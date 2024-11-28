@@ -1,0 +1,180 @@
+// The pthread relative.
+typedef unsigned pthread_t;
+typedef unsigned pthread_mutex_t;
+#define NULL ((void *) 0)
+extern void pthread_create(pthread_t *, void *, void *(*)(void *), void *);
+extern void pthread_mutex_lock(pthread_t *);
+extern void pthread_mutex_unlock(pthread_t *);
+extern void pthread_mutex_init(pthread_mutex_t *, int);
+extern void pthread_join(pthread_t , int);
+extern void pthread_mutex_destroy(pthread_mutex_t *);
+
+// Assertions.
+extern void assert(int);
+extern void abort(void);
+extern void reach_error();
+
+// Atomic block.
+extern void __VERIFIER_atomic_begin();
+extern void __VERIFIER_atomic_end();
+extern void abort(void);
+extern _Bool __VERIFIER_nondet_bool(void);
+extern void abort(void);
+void reach_error() { assert(0); }
+void __VERIFIER_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();} }; return; }
+extern void __VERIFIER_atomic_begin();
+extern void __VERIFIER_atomic_end();
+
+#ifndef TRUE
+#define TRUE (_Bool)1
+#endif
+#ifndef FALSE
+#define FALSE (_Bool)0
+#endif
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+
+void * P0(void *arg);
+
+
+void * P1(void *arg);
+
+
+int __unbuffered_cnt;
+
+
+int __unbuffered_cnt = 0;
+
+
+int __unbuffered_p1_EAX;
+
+
+int __unbuffered_p1_EAX = 0;
+
+
+int __unbuffered_p1_EBX;
+
+
+int __unbuffered_p1_EBX = 0;
+
+
+_Bool main$tmp_guard0;
+
+
+_Bool main$tmp_guard1;
+
+
+int x;
+
+
+int x = 0;
+
+
+int y;
+
+
+int y = 0;
+
+
+_Bool y$flush_delayed;
+
+
+int y$mem_tmp;
+
+
+_Bool y$r_buff0_thd0;
+
+
+_Bool y$r_buff0_thd1;
+
+
+_Bool y$r_buff0_thd2;
+
+
+_Bool y$r_buff1_thd0;
+
+
+_Bool y$r_buff1_thd1;
+
+
+_Bool y$r_buff1_thd2;
+
+
+_Bool y$read_delayed;
+
+
+int *y$read_delayed_var;
+
+
+int y$w_buff0;
+
+
+_Bool y$w_buff0_used;
+
+
+int y$w_buff1;
+
+
+_Bool y$w_buff1_used;
+
+
+_Bool weak$$choice0;
+
+
+_Bool weak$$choice2;
+
+
+
+void * P0(void *arg)
+{
+  __VERIFIER_atomic_begin();
+  y = y$w_buff0_used && y$r_buff0_thd1 ? y$w_buff0 : (y$w_buff1_used && y$r_buff1_thd1 ? y$w_buff1 : y);
+  y$w_buff0_used = y$w_buff0_used && y$r_buff0_thd1 ? FALSE : y$w_buff0_used;
+  y$w_buff1_used = y$w_buff0_used && y$r_buff0_thd1 || y$w_buff1_used && y$r_buff1_thd1 ? FALSE : y$w_buff1_used;
+  y$r_buff0_thd1 = y$w_buff0_used && y$r_buff0_thd1 ? FALSE : y$r_buff0_thd1;
+  y$r_buff1_thd1 = y$w_buff0_used && y$r_buff0_thd1 || y$w_buff1_used && y$r_buff1_thd1 ? FALSE : y$r_buff1_thd1;
+  __VERIFIER_atomic_end();
+  __VERIFIER_atomic_begin();
+  __unbuffered_cnt = __unbuffered_cnt + 1;
+  __VERIFIER_atomic_end();
+}
+
+
+
+void * P1(void *arg)
+{
+  __VERIFIER_atomic_begin();
+  weak$$choice0 = __VERIFIER_nondet_bool();
+  weak$$choice2 = __VERIFIER_nondet_bool();
+  y$flush_delayed = weak$$choice2;
+  y$mem_tmp = y;
+  y = !y$w_buff0_used || !y$r_buff0_thd2 && !y$w_buff1_used || !y$r_buff0_thd2 && !y$r_buff1_thd2 ? y : (y$w_buff0_used && y$r_buff0_thd2 ? y$w_buff0 : y$w_buff1);
+  y$w_buff0 = weak$$choice2 ? y$w_buff0 : (!y$w_buff0_used || !y$r_buff0_thd2 && !y$w_buff1_used || !y$r_buff0_thd2 && !y$r_buff1_thd2 ? y$w_buff0 : (y$w_buff0_used && y$r_buff0_thd2 ? y$w_buff0 : y$w_buff0));
+  y$w_buff1 = weak$$choice2 ? y$w_buff1 : (!y$w_buff0_used || !y$r_buff0_thd2 && !y$w_buff1_used || !y$r_buff0_thd2 && !y$r_buff1_thd2 ? y$w_buff1 : (y$w_buff0_used && y$r_buff0_thd2 ? y$w_buff1 : y$w_buff1));
+  y$w_buff0_used = weak$$choice2 ? y$w_buff0_used : (!y$w_buff0_used || !y$r_buff0_thd2 && !y$w_buff1_used || !y$r_buff0_thd2 && !y$r_buff1_thd2 ? y$w_buff0_used : (y$w_buff0_used && y$r_buff0_thd2 ? FALSE : y$w_buff0_used));
+  y$w_buff1_used = weak$$choice2 ? y$w_buff1_used : (!y$w_buff0_used || !y$r_buff0_thd2 && !y$w_buff1_used || !y$r_buff0_thd2 && !y$r_buff1_thd2 ? y$w_buff1_used : (y$w_buff0_used && y$r_buff0_thd2 ? FALSE : FALSE));
+  y$r_buff0_thd2 = weak$$choice2 ? y$r_buff0_thd2 : (!y$w_buff0_used || !y$r_buff0_thd2 && !y$w_buff1_used || !y$r_buff0_thd2 && !y$r_buff1_thd2 ? y$r_buff0_thd2 : (y$w_buff0_used && y$r_buff0_thd2 ? FALSE : y$r_buff0_thd2));
+  y$r_buff1_thd2 = weak$$choice2 ? y$r_buff1_thd2 : (!y$w_buff0_used || !y$r_buff0_thd2 && !y$w_buff1_used || !y$r_buff0_thd2 && !y$r_buff1_thd2 ? y$r_buff1_thd2 : (y$w_buff0_used && y$r_buff0_thd2 ? FALSE : FALSE));
+  __unbuffered_p1_EBX = y;
+  y = y$flush_delayed ? y$mem_tmp : y;
+  y$flush_delayed = FALSE;
+  __VERIFIER_atomic_end();
+  __VERIFIER_atomic_begin();
+  __unbuffered_cnt = __unbuffered_cnt + 1;
+  __VERIFIER_atomic_end();
+}
+
+int main()
+{
+  pthread_t t1597;
+  pthread_create(&t1597, NULL, P0, NULL);
+  pthread_t t1598;
+  pthread_create(&t1598, NULL, P1, NULL);
+  __VERIFIER_atomic_begin();
+  if (__unbuffered_cnt != 2) {
+		abort();
+	}
+  __VERIFIER_atomic_end();
+}
+

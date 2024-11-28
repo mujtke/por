@@ -109,8 +109,6 @@ void * P0(void *arg)
   p0_EBX = x;
   __VERIFIER_atomic_end();
   __VERIFIER_atomic_begin();
-  __VERIFIER_atomic_end();
-  __VERIFIER_atomic_begin();
   cnt = cnt + 1;
   __VERIFIER_atomic_end();
 }
@@ -126,8 +124,6 @@ void * P1(void *arg)
   y = 1;
   __VERIFIER_atomic_end();
   __VERIFIER_atomic_begin();
-  __VERIFIER_atomic_end();
-  __VERIFIER_atomic_begin();
   cnt = cnt + 1;
   __VERIFIER_atomic_end();
 }
@@ -141,8 +137,6 @@ void * P2(void *arg)
   __VERIFIER_atomic_end();
   __VERIFIER_atomic_begin();
   y = 2;
-  __VERIFIER_atomic_end();
-  __VERIFIER_atomic_begin();
   __VERIFIER_atomic_end();
   __VERIFIER_atomic_begin();
   cnt = cnt + 1;
@@ -161,11 +155,13 @@ int main()
   __VERIFIER_atomic_begin();
   main_tmp_guard0 = cnt == 3;
   __VERIFIER_atomic_end();
-  assume_abort_if_not(main_tmp_guard0);
-  __VERIFIER_atomic_begin();
-  __VERIFIER_atomic_end();
+  if (!main_tmp_guard0) {
+		abort();
+	}
   __VERIFIER_atomic_begin();
   main_tmp_guard1 = !(y == 2 && p0_EAX == 2 && p0_EBX == 0 && p2_EAX == 1);
   __VERIFIER_atomic_end();
-  __VERIFIER_assert(main_tmp_guard1);
+  if (!main_tmp_guard1) {
+ERROR: reach_error();
+	}
 }
