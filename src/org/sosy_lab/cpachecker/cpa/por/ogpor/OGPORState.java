@@ -110,6 +110,11 @@ public class OGPORState implements AbstractState, Graphable {
         this.willExit |= isEndOfMainFunction(cfaEdge) || isTerminatingEdge(cfaEdge);
     }
 
+    public boolean exitNormally() {
+        assert enteringEdge != null;
+        return isEndOfMainFunction(enteringEdge) || isTerminatingEdge(enteringEdge);
+    }
+
     public int getSid() { return sid; }
 
     public void setSid(int sid) { this.sid = sid; }

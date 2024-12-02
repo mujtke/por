@@ -5,11 +5,11 @@ import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
+import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
@@ -18,8 +18,6 @@ import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
-import java.util.logging.Level;
-import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction;
@@ -43,12 +41,15 @@ public class OGTransfer {
   private final Map<Integer, List<SharedEvent>> edgeVarMap;
   private final NLTComparator nltcmp = new NLTComparator();
   private static boolean enableDebug = false;
+  private final OGStatistics stat;
 
   public OGTransfer(
-          Map<Integer, List<ObsGraph>> pOGMap,
-          HashMap<Integer, List<SharedEvent>> pEdgeVarMap) {
+      Map<Integer, List<ObsGraph>> pOGMap,
+      HashMap<Integer, List<SharedEvent>> pEdgeVarMap,
+      OGStatistics pStat) {
     this.OGMap = pOGMap;
     this.edgeVarMap = pEdgeVarMap;
+    this.stat = pStat;
   }
 
   public NLTComparator getNltcmp() { return nltcmp; }
@@ -967,7 +968,12 @@ public class OGTransfer {
     ObsGraph parGraph = task.getSecond();
     assert leadState != null && parGraph != null;
     Collection<ARGState> successors = leadState.getChildren();
-    // assert !successors.isEmpty();
+
+    if (successors.isEmpty() && exitNormally(leadState)) {
+      // System.out.println("Leaf state: s" + leadState.getStateId());
+      stat.ogCounter.inc();
+    }
+
     for (ARGState suc : successors) {
       Pair<ObsGraph, ObsGraph> sr = singleStepTransfer(leadState, suc, parGraph);
       ObsGraph tg = sr.getFirst();
@@ -1020,6 +1026,13 @@ public class OGTransfer {
       }
       // tg == null, continue to transfer the parGraph.
     }
+  }
+
+  public boolean exitNormally(ARGState state) {
+    OGPORState ogporState =
+        AbstractStates.extractStateByType(state, OGPORState.class);
+    assert ogporState != null;
+    return ogporState.willExit() || ogporState.exitNormally();
   }
 
   public void transferGraphTo(ARGState state, ObsGraph g) {

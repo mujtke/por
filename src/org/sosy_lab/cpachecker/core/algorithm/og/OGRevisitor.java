@@ -9,6 +9,7 @@ import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.DummyCFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
+import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
@@ -21,6 +22,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.*;
@@ -28,6 +30,7 @@ import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.*;
 @Options(prefix = "algorithm.og")
 public class OGRevisitor {
 
+  private final OGStatistics stat;
   private static boolean enableDebug = false;
 
   public enum REVISIT_TYPE {
@@ -37,9 +40,13 @@ public class OGRevisitor {
   // Handle conditional statements.
   private static ConditionalStatementHandler CSHandler;
 
-  public OGRevisitor(Configuration config, CFA cfa, LogManager logger)
-          throws InvalidConfigurationException {
-    CSHandler = new ConditionalStatementHandler(config, cfa, logger);
+  public OGRevisitor(Configuration config, CFA cfa, OGStatistics pStat, LogManager logger) {
+    try {
+      CSHandler = new ConditionalStatementHandler(config, cfa, logger);
+    } catch (InvalidConfigurationException e) {
+      logger.log(Level.SEVERE, "Invalid configuration exception.", e);
+    }
+    this.stat = pStat;
   }
 
 

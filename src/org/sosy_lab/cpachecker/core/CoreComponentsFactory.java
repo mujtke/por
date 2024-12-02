@@ -484,7 +484,7 @@ public class CoreComponentsFactory {
     }
     // Added by yzc:
     else if (useOGAlgorithm) {
-        algorithm = new OGAlgorithm(cpa, logger, shutdownNotifier);
+        algorithm = new OGAlgorithm(cfa, cpa, logger, config, shutdownNotifier);
     }
 
     else {

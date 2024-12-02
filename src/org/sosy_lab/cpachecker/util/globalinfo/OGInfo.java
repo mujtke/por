@@ -30,10 +30,6 @@ public class OGInfo {
   // StateId -> { graphId -> graphStr (produced in revisit) }
   private final Map<Integer, Map<Integer, List<String>>> revisitOGMap;
 
-  private final OGTransfer transfer;
-
-  private final OGRevisitor revisitor;
-
   // <next table.
   private final HashMap<Integer, Integer> nlt;
 
@@ -69,8 +65,6 @@ public class OGInfo {
       edgeVarMap = new HashMap<>();
       fullOGMap = new HashMap<>();
       revisitOGMap = new HashMap<>();
-      transfer = new OGTransfer(OGMap, edgeVarMap);
-      revisitor = new OGRevisitor(pConfig, pCfa, pLogger);
       nlt = new HashMap<>();
       enableDebug();
     } else {
@@ -79,8 +73,6 @@ public class OGInfo {
       edgeVarMap = null;
       fullOGMap = null;
       revisitOGMap = null;
-      transfer = null;
-      revisitor = null;
       nlt = null;
     }
   }
@@ -88,35 +80,20 @@ public class OGInfo {
   private void enableDebug() {
     if (initialGraph != null)
       initialGraph.enableDebug(enableDebug);
-    if (transfer != null)
-      transfer.enableDebug(enableDebug);
-    if (revisitor != null)
-      revisitor.enableDebug(enableDebug);
   }
 
   public Map<Integer, List<ObsGraph>> getOGMap() {
     return OGMap;
   }
-
-  public OGTransfer getTransfer() {
-    return transfer;
-  }
-
-  public OGRevisitor getRevisitor() {
-    return revisitor;
-  }
-
   public Map<Integer, List<Pair<Integer, String>>> getFullOGMap() {
     return fullOGMap;
   }
-
   public Map<Integer, Map<Integer, List<String>>> getRevisitOGMap() {
     return revisitOGMap;
   }
   public HashMap<Integer, Integer> getNlt() {
     return nlt;
   }
-
   public boolean isEnableDebug() {
     return enableDebug;
   }

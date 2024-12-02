@@ -2,24 +2,23 @@ package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Functions;
 import org.sosy_lab.common.ShutdownNotifier;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.log.LogManager;
+import org.sosy_lab.cpachecker.cfa.CFA;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
-import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.exceptions.CPAEnabledAnalysisPropertyViolationException;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
-import org.sosy_lab.cpachecker.util.Triple;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 import org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest;
-import org.sosy_lab.cpachecker.util.obsgraph.OGNode;
 import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.core.interfaces.PrecisionAdjustmentResult.Action;
 
@@ -28,12 +27,12 @@ import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.dumpToJson2;
 
 import java.util.*;
 import java.util.logging.Level;
-import java.util.stream.Collectors;
 
-public class OGAlgorithm implements Algorithm {
+public class OGAlgorithm implements Algorithm, StatisticsProvider {
 
   private final LogManager logger;
   private final ShutdownNotifier shutdownNotifier;
+  private final OGStatistics stat = new OGStatistics();
 
   private final AlgorithmStatus status;
 
@@ -58,8 +57,10 @@ public class OGAlgorithm implements Algorithm {
   // Debug.
   private boolean enableDebug = false;
 
-  public OGAlgorithm(ConfigurableProgramAnalysis cpa,
+  public OGAlgorithm(CFA cfa,
+                     ConfigurableProgramAnalysis cpa,
                      LogManager pLog,
+                     Configuration config,
                      ShutdownNotifier pShutdownNotifier) {
     this.logger = pLog;
     this.shutdownNotifier = pShutdownNotifier;
@@ -69,8 +70,10 @@ public class OGAlgorithm implements Algorithm {
     OGInfo ogInfo = GlobalInfo.getInstance().getOgInfo();
     this.OGMap = ogInfo.getOGMap();
     assert OGMap != null;
-    this.revisitor = ogInfo.getRevisitor();
-    this.transfer = ogInfo.getTransfer();
+    this.revisitor = new OGRevisitor(config, cfa, stat, logger);
+    this.revisitor.enableDebug(ogInfo.isEnableDebug());
+    this.transfer = new OGTransfer(ogInfo.getOGMap(), ogInfo.getEdgeVarMap(), stat);
+    this.transfer.enableDebug(ogInfo.isEnableDebug());
     this.nlt = ogInfo.getNlt();
     this.enableDebug = ogInfo.isEnableDebug();
   }
@@ -261,5 +264,10 @@ public class OGAlgorithm implements Algorithm {
   // Just for debugging. Printing a given graph g.
   private int p(ObsGraph g) {
     return DebugAndTest.print(g);
+  }
+
+  @Override
+  public void collectStatistics(Collection<Statistics> statsCollection) {
+    statsCollection.add(stat);
   }
 }
