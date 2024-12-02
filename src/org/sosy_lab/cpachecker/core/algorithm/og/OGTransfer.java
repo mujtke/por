@@ -1106,7 +1106,7 @@ public class OGTransfer {
         // For such g, it won't be transferred or sent back.
         return false;
       }
-      backTo = nodeOfMain.getPreState();
+      backTo = g.getRollbackState(nodeOfMain.getPreState(), nodeOfMain.getInThread());
       if (nodeOfMain.getTrAfter() != null) {
         g.setLastNode(nodeOfMain.getTrAfter());
       }

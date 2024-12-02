@@ -1389,6 +1389,20 @@ public class ObsGraph implements Copier<ObsGraph> {
     return s;
   }
 
+  public ARGState getRollbackState(ARGState s, String tid) {
+    while (true) {
+      assert s != null;
+      ThreadingState threadingState =
+          AbstractStates.extractStateByType(s, ThreadingState.class);
+      assert threadingState != null;
+      if (!threadingState.hasLock(tid, "__CPAchecker_local_access_lock__")) {
+        break;
+      }
+      s = s.getParents().iterator().next();
+    }
+    return s;
+  }
+
   public String setAccessLock() {
     accessLocks.clear();
     List<OGNode> ns = nodeTable.values().stream()
