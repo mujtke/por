@@ -5,10 +5,11 @@ import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFANode;
 import org.sosy_lab.cpachecker.cfa.model.CFATerminationNode;
 import org.sosy_lab.cpachecker.cfa.model.FunctionExitNode;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.BDDState;
+import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
+import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.predicates.regions.NamedRegionManager;
@@ -529,13 +530,26 @@ public class DebugAndTest {
     return 0;
   }
 
-  private static String getARGStateFillColor(Map<Integer, Map<Integer, List<String>>> revisitOGMap,
-                                             int curStateId) {
+  private static String getARGStateFillColor(Map<Integer, List<String>> fullOGMap,
+                                             Map<Integer, Map<Integer, List<String>>> revisitOGMap,
+                                             ARGState curState) {
+    int curStateId = curState.getStateId();
     if (revisitOGMap != null) {
       Map<Integer, List<String>> revisitOgs = revisitOGMap.get(curStateId);
       if (revisitOgs != null && !revisitOgs.isEmpty())
+        // Show the re-visitable.
         return "orange";
     }
+    if (curState.getChildren().isEmpty()
+        && fullOGMap.get(curStateId) != null && !fullOGMap.get(curStateId).isEmpty()) {
+      OGPORState ogporState = AbstractStates.extractStateByType(curState, OGPORState.class);
+      assert ogporState != null;
+      if (!ogporState.willExit() && !ogporState.exitNormally()) {
+        // Show the blocked.
+        return "blue";
+      }
+    }
+    // Show the normal.
     return "white";
   }
   private static ARG getARG(ReachedSet reachedSet,
@@ -559,7 +573,7 @@ public class DebugAndTest {
       if (cur.getParents().isEmpty()) {
         ARG.State state = new ARG.State(String.valueOf(curStateId),
                 "s" + curStateId,
-                getARGStateFillColor(revisitOGMap, curStateId));
+                getARGStateFillColor(fullOGMap, revisitOGMap, cur));
         arg.getReached().add(state);
         continue;
       }
@@ -568,7 +582,7 @@ public class DebugAndTest {
       int parStateId = par.getStateId();
       ARG.State state = new ARG.State(String.valueOf(curStateId),
               "s" + curStateId,
-              getARGStateFillColor(revisitOGMap, curStateId));
+              getARGStateFillColor(fullOGMap, revisitOGMap, cur));
       ARG.Edge edge = new ARG.Edge(String.valueOf(parStateId),
               String.valueOf(curStateId),
               Objects.requireNonNull(par.getEdgeToChild(cur)).toString());

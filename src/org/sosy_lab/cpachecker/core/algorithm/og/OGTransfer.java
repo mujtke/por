@@ -969,7 +969,7 @@ public class OGTransfer {
     assert leadState != null && parGraph != null;
     Collection<ARGState> successors = leadState.getChildren();
 
-    if (successors.isEmpty() && exitNormally(leadState)) {
+    if (successors.isEmpty() && exitNormally(leadState) && !waitlist.contains(leadState)) {
       // System.out.println("Leaf state: s" + leadState.getStateId());
       stat.ogCounter.inc();
     }
