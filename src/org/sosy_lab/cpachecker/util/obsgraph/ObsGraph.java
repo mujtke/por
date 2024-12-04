@@ -12,6 +12,8 @@ import org.sosy_lab.cpachecker.cpa.threading.ThreadingState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.Pair;
 import org.sosy_lab.cpachecker.util.Triple;
+import org.sosy_lab.cpachecker.util.dependence.conditional.CondDepConstraints;
+import org.sosy_lab.cpachecker.util.dependence.conditional.ConditionalDepGraph;
 import org.sosy_lab.cpachecker.util.globalinfo.GlobalInfo;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
 
@@ -1312,8 +1314,20 @@ public class ObsGraph implements Copier<ObsGraph> {
     if (ns.contains(curNode)) {
       if (ns.indexOf(curNode) == 0) {
         // Has a cycle?
-        if (hasCircleFor(curNode))
+        if (hasCircleFor(curNode)) {
+          for (OGNode cn : circles.get(curNode)) {
+            if (!cn.fromRead(curNode) || !curNode.fromRead(cn)) continue;
+            ConditionalDepGraph cdg =
+                GlobalInfo.getInstance().getEdgeInfo().getCondDepGraph();
+            CondDepConstraints cdc =
+                (CondDepConstraints) cdg.dep(cdg.getDGNode(curNode.getBlockEdges().get(0).hashCode()),
+                cdg.getDGNode(cn.getBlockEdges().get(0).hashCode()));
+            if (cdc == null) {
+              return OGTransfer.ConflictType.BLOCKED;
+            }
+          }
           return OGTransfer.ConflictType.TEMP;
+        }
       } else {
         return OGTransfer.ConflictType.TRUE;
       }
