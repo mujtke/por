@@ -1128,7 +1128,7 @@ public class OGTransfer {
     }
     else { // case(2)
       if (g.getLastNode() != null) {
-        backTo = g.getLastNode().getSucState();
+        backTo = g.getRollbackState(chState, OGPORState.getEntryFunctionName());
         transferTasks.add(Pair.of(backTo, g));
       } else {
         // logger.log(Level.WARNING, "The program exits early, nothing to do with it.");
