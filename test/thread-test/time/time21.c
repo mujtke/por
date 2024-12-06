@@ -60,8 +60,6 @@ int y = 0;
 
 void * P0(void *arg)
 {
-  p0_EAX = y;
-  p0_EBX = x;
   cnt = cnt + 1;
 }
 
@@ -69,20 +67,21 @@ void * P0(void *arg)
 
 void * P1(void *arg)
 {
-  x = 1;
-  y = 1;
   cnt = cnt + 1;
 }
-
 
 
 void * P2(void *arg)
 {
-  p2_EAX = y;
-  y = 2;
+  // p2_EAX = y;
+  // y = 2;
   cnt = cnt + 1;
 }
 
+void * P3(void *arg)
+{
+  cnt = cnt + 1;
+}
 
 int main()
 {
@@ -91,7 +90,9 @@ int main()
   pthread_t t1844;
   pthread_create(&t1844, NULL, P1, NULL);
   pthread_t t1845;
-  // pthread_create(&t1845, NULL, P2, NULL);
+  pthread_create(&t1845, NULL, P2, NULL);
+  pthread_t t1846;
+  // pthread_create(&t1846, NULL, P3, NULL);
   // __VERIFIER_atomic_begin();
   // main_tmp_guard0 = cnt == 3;
 	int a = cnt == 3;

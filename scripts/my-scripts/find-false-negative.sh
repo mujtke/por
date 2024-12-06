@@ -6,17 +6,18 @@ TEST_FILE="$(realpath $1)"
 cd "$PWD"
 
 OGPOR_OUT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-ogpor-no-out.properties \
-	-spec default -preprocess "$TEST_FILE" 2> /dev/null &)
+	-spec default -preprocess -stats "$TEST_FILE" 2> /dev/null &)
 OGPOR_PID=$!
 
 PCDPOR_OUT=$(./scripts/cpa.sh -config config/myAnalysis-concurrency-bdd-pcdpor-no-out.properties \
-	-spec default -preprocess "$TEST_FILE" 2> /dev/null &)
+	-spec default -preprocess -stats "$TEST_FILE" 2> /dev/null &)
 PCDPOR_PID=$!
 
 wait $OGPOR_PID $PCDPOR_PID
 
 OGPOR_RESULT=$(grep 'Verification result:' <<< $OGPOR_OUT | awk '{ print $3 }')
 OGPOR_STATES_NUM=$(grep 'explored states:' <<< $OGPOR_OUT | awk '{ print $3 }')
+OGPOR_OG_NUM=$(grep -i 'number of og' <<< $OGPOR_OUT | awk '{ print $4 }')
 PCDPOR_RESULT=$(grep 'Verification result:' <<< $PCDPOR_OUT | awk '{ print $3 }')
 PCDPOR_STATES_NUM=$(grep 'explored states:' <<< $PCDPOR_OUT | awk '{ print $3 }')
 
@@ -36,6 +37,6 @@ else
 	PCDPOR="ERROR."
 fi
 
-printf "       %-8s%-8s\n" "Result" "Explored States"
-printf "OGPOR  %-8s%-8s\n" "$OGPOR_RESULT" "$OGPOR_STATES_NUM"
-printf "PCDPOR %-8s%-8s\n" "$PCDPOR_RESULT" "$PCDPOR_STATES_NUM"
+printf "       %-8s%-18s%-18s\n" "Result" "Explored States" "Number of OG"
+printf "OGPOR  %-8s%-18s%-18s\n" "$OGPOR_RESULT" "$OGPOR_STATES_NUM" "$OGPOR_OG_NUM"
+printf "PCDPOR %-8s%-18s\n" "$PCDPOR_RESULT" "$PCDPOR_STATES_NUM"

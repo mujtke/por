@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Last modified: Thu Apr 11 03:51:43 PM CST 2024.
+# Last modified: Fri Dec  6 14:28:40 CST 2024
 # The script is used to run CPAchecker with specified
 # configuration files by selecting a certain number.
 #
@@ -56,6 +56,7 @@ function run_with_provided_configuration() {
   (3) pcdpor with output
   (4) pcdpor with no output
   (5) original bdd analysis
+  (6) ogpor & bmc with output
 Select a configuration that you would like to use(<Enter> with *): "
 	case "$REPLY" in
 		""|"1" ) echo "empty or 1 input."
@@ -72,6 +73,9 @@ Select a configuration that you would like to use(<Enter> with *): "
 			;;
 		"5" ) echo "5 input."
 			CONFIG_FILE="config/bddAnalysis-concurrency.properties"
+			;;
+		"6" ) echo "6 input."
+			CONFIG_FILE="config/myAnalysis-concurrency-bdd-ogpor-bmc.properties"
 			;;
 		* ) echo "Invalid input. Exit."
 			exit 1

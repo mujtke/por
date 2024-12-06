@@ -167,7 +167,8 @@ void * P0(void *arg)
   r_buff1_thd1 = w_buff0_used && r_buff0_thd1 || w_buff1_used && r_buff1_thd1 ? FALSE : r_buff1_thd1;
   __VERIFIER_atomic_end();
   __VERIFIER_atomic_begin();
-  __unbuffered_cnt = __unbuffered_cnt + 1;
+  // __unbuffered_cnt = __unbuffered_cnt + 1;
+  __unbuffered_cnt = 1;
   __VERIFIER_atomic_end();
   return 0;
 }
@@ -233,7 +234,8 @@ void * P1(void *arg)
   r_buff1_thd2 = w_buff0_used && r_buff0_thd2 || w_buff1_used && r_buff1_thd2 ? FALSE : r_buff1_thd2;
   __VERIFIER_atomic_end();
   __VERIFIER_atomic_begin();
-  __unbuffered_cnt = __unbuffered_cnt + 1;
+  // __unbuffered_cnt = __unbuffered_cnt + 1;
+  __unbuffered_cnt = 1;
   __VERIFIER_atomic_end();
   return 0;
 }
@@ -257,10 +259,10 @@ int main()
   r_buff1_thd0 = w_buff0_used && r_buff0_thd0 || w_buff1_used && r_buff1_thd0 ? FALSE : r_buff1_thd0;
   __VERIFIER_atomic_end();
   __VERIFIER_atomic_begin();
-  // weak_choice0 = __VERIFIER_nondet_bool();
-  weak_choice0 = 1;
-  // weak_choice2 = __VERIFIER_nondet_bool();
-  weak_choice2 = 1;
+  weak_choice0 = __VERIFIER_nondet_bool();
+  // weak_choice0 = 1;
+  weak_choice2 = __VERIFIER_nondet_bool();
+  // weak_choice2 = 1;
   flush_delayed = weak_choice2;
   mem_tmp = y;
   y = !w_buff0_used || !r_buff0_thd0 && !w_buff1_used || !r_buff0_thd0 && !r_buff1_thd0 ? y : (w_buff0_used && r_buff0_thd0 ? w_buff0 : w_buff1);
