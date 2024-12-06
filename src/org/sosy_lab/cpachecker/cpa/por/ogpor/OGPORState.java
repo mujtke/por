@@ -414,7 +414,7 @@ public class OGPORState implements AbstractState, Graphable {
                 int depth = loopDepthTable.get(loop);
                 res = hash(res, loop, depth);
             }
-        } while (res != 0);
+        } while (res == 0);
 
         return res;
     }
