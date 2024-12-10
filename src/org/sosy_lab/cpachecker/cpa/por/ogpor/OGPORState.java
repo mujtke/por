@@ -43,6 +43,7 @@ public class OGPORState implements AbstractState, Graphable {
     private int pathLen;
 
     // Use this var to aid the obtaining of the ObsGraphs, as the key of OGMap.
+    public static int snum = 0; // Total number of OGPORState.
     private int sid;
     /**
      * Assume there is an edge: sn -- Ei --> sm, then the value of 'inThread' will be
@@ -227,7 +228,8 @@ public class OGPORState implements AbstractState, Graphable {
 
     public OGPORState(int pPathLen, CFAEdge pEdge) {
         pathLen = pPathLen;
-        sid = -1;
+        sid = snum;
+        snum++;
         threads = new HashMap<>();
         enteringEdge = pEdge;
         if (!(pEdge instanceof DummyCFAEdge))

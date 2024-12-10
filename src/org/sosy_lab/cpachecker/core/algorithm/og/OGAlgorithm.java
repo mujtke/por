@@ -12,6 +12,7 @@ import org.sosy_lab.cpachecker.core.algorithm.Algorithm;
 import org.sosy_lab.cpachecker.core.interfaces.*;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
+import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.exceptions.CPAEnabledAnalysisPropertyViolationException;
 import org.sosy_lab.cpachecker.exceptions.CPAException;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -156,7 +157,7 @@ public class OGAlgorithm implements Algorithm, StatisticsProvider {
 
     ARGState parState = (ARGState) state, chState;
     successors = reorder(parState, successors);
-    List<ObsGraph> parGraphs = OGMap.get(parState.getStateId()), chGraphs = null;
+    List<ObsGraph> parGraphs = getGraphs(parState), chGraphs = null;
     if ((parGraphs == null || parGraphs.isEmpty())) {
       return false;
     }
@@ -207,6 +208,13 @@ public class OGAlgorithm implements Algorithm, StatisticsProvider {
     }
 
     return false;
+  }
+
+  List<ObsGraph> getGraphs(ARGState state) {
+    OGPORState ogporState = AbstractStates.extractStateByType(state, OGPORState.class);
+    assert ogporState != null;
+    int index = ogporState.getSid();
+    return OGMap.get(index);
   }
 
   private void addState(final ReachedSet pReachedSet,

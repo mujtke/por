@@ -1046,27 +1046,13 @@ public class OGTransfer {
   }
 
   public void transferGraphTo(ARGState state, ObsGraph g) {
+    OGPORState ogporState = AbstractStates.extractStateByType(state, OGPORState.class);
+    assert ogporState != null;
+    int index = ogporState.getSid();
     List<ObsGraph> graphs =
-        OGMap.computeIfAbsent(state.getStateId(),
+        OGMap.computeIfAbsent(index,
             k -> new ArrayList<>());
     graphs.add(g);
-  }
-
-  // FIXME: neither the chState is in the waitlist nor does it have any child.
-  // In this case, should we add the chState to the waitlist again?
-  // At the same time, when we can add states to the waitlist, do we
-  // still need to adjust it?
-  private void handleLeafNode(Vector<AbstractState> waitlist,
-                              ARGState leadState,
-                              ARGState chState,
-                              ObsGraph chGraph) {
-    if (!exitEarly(leadState)) {
-      waitlist.add(chState);
-    }
-    List<ObsGraph> chGraphs =
-        OGMap.computeIfAbsent(chState.getStateId(),
-            k -> new ArrayList<>());
-    chGraphs.add(chGraph);
   }
 
   private void adjustWaitlist(Map<Integer, List<ObsGraph>> OGMap,

@@ -34,7 +34,7 @@ public class OGPORPrecisionAdjustment implements PrecisionAdjustment {
         // Update chOgState's sid.
         assert state instanceof OGPORState && fullState instanceof ARGState;
         OGPORState chOgState = (OGPORState) state;
-        chOgState.setSid(((ARGState) fullState).getStateId());
+        // chOgState.setSid(((ARGState) fullState).getStateId());
 
         // Handle the early termination of the main thread.
         assert ((ARGState) fullState).getParents().size() == 1;

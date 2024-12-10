@@ -52,7 +52,7 @@ public class OGPORCPA extends AbstractCPA implements ConfigurableProgramAnalysis
 
         String mainFuncName = cfa.getMainFunction().getFunctionName();
         OGPORState initState = new OGPORState(0, new DummyCFAEdge(null, null));
-        initState.setSid(0);
+        // initState.setSid(0);
         OGPORTransferRelation transferRelation = (OGPORTransferRelation) getTransferRelation();
 
         initState.getThreads().put(mainFuncName, "N" + node.getNodeNumber());
