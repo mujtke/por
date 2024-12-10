@@ -408,13 +408,14 @@ public class OGPORState implements AbstractState, Graphable {
         }
         // At current state, we may locate in nested loops. For this case, we compute
         // loop depth by hashing, until we get a non-zero hash value.
-        int res = 0;
+        int res = 0, depth = 0;
+        List<CFANode> nestedLoops = new ArrayList<>(loops.get(inThread));
+        CFANode loop;
         do {
-            for (CFANode loop : loops.get(inThread)) {
-                int depth = loopDepthTable.get(loop);
-                res = hash(res, loop, depth);
-            }
-        } while (res == 0);
+            loop = nestedLoops.remove(0);
+            depth = loopDepthTable.get(loop);
+            res = hash(res, loop, depth);
+        } while (!nestedLoops.isEmpty());
 
         return res;
     }

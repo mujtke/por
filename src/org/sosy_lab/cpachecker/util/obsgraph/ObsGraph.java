@@ -895,7 +895,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     tripleList.add(Triple.of(edge, chOgState.getLoopDepth(), chOgState.getPathLen()));
 
     if (assumeEdgeTable.containsKey(curThd)) {
-      assumeEdgeTable.computeIfPresent(curThd, (k, v) -> v + 1);
+      // assumeEdgeTable.computeIfPresent(curThd, (k, v) -> v + 1);
     } else {
       assumeEdgeTable.put(curThd, 0);
     }

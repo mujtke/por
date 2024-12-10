@@ -262,6 +262,7 @@ public class OGTransfer {
         // choose coEdge(!d). And either of them will remember their choices.
         copiedGraph = handleNonDet(graph, parState, edge);
         graph.addVisitedAssumeEdge(curThd, edge, chOgState);
+        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, chOgState);
       } else if (coARGEdge != null) {
         // Not the first time that graph meets the edge.
         if (!graph.cachedEdgeMatch(curThd, edge, chOgState))
