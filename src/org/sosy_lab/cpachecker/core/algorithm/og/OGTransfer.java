@@ -2,10 +2,13 @@ package org.sosy_lab.cpachecker.core.algorithm.og;
 
 import com.google.common.base.Preconditions;
 import edu.umd.cs.findbugs.annotations.NonNull;
+import org.sosy_lab.common.configuration.Configuration;
+import org.sosy_lab.common.configuration.InvalidConfigurationException;
+import org.sosy_lab.common.configuration.Option;
+import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
-import org.sosy_lab.cpachecker.core.interfaces.StatisticsProvider;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
@@ -23,8 +26,11 @@ import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction;
 import static org.sosy_lab.cpachecker.util.obsgraph.DebugAndTest.getDotStr;
 
+@Options(prefix = "og.transfer")
 public class OGTransfer {
 
+  @Option(description = "Using CDG to reduce state space.")
+  private boolean useCDG = false;
   public enum ConflictType {
     NONE, /* Has no conflict */
     TRUE, /* Conflict is certain */
@@ -46,10 +52,13 @@ public class OGTransfer {
   public OGTransfer(
       Map<Integer, List<ObsGraph>> pOGMap,
       HashMap<Integer, List<SharedEvent>> pEdgeVarMap,
-      OGStatistics pStat) {
+      Configuration config,
+      OGStatistics pStat) throws InvalidConfigurationException {
     this.OGMap = pOGMap;
     this.edgeVarMap = pEdgeVarMap;
     this.stat = pStat;
+    config.inject(this);
+    if (useCDG) { ObsGraph.useCDG = true; }
   }
 
   public NLTComparator getNltcmp() { return nltcmp; }

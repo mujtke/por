@@ -61,7 +61,8 @@ public class OGAlgorithm implements Algorithm, StatisticsProvider {
                      ConfigurableProgramAnalysis cpa,
                      LogManager pLog,
                      Configuration config,
-                     ShutdownNotifier pShutdownNotifier) {
+                     ShutdownNotifier pShutdownNotifier)
+      throws InvalidConfigurationException {
     this.logger = pLog;
     this.shutdownNotifier = pShutdownNotifier;
     this.status = AlgorithmStatus.SOUND_AND_PRECISE;
@@ -72,7 +73,7 @@ public class OGAlgorithm implements Algorithm, StatisticsProvider {
     assert OGMap != null;
     this.revisitor = new OGRevisitor(config, cfa, stat, logger);
     this.revisitor.enableDebug(ogInfo.isEnableDebug());
-    this.transfer = new OGTransfer(ogInfo.getOGMap(), ogInfo.getEdgeVarMap(), stat);
+    this.transfer = new OGTransfer(ogInfo.getOGMap(), ogInfo.getEdgeVarMap(), config, stat);
     this.transfer.enableDebug(ogInfo.isEnableDebug());
     this.nlt = ogInfo.getNlt();
     this.enableDebug = ogInfo.isEnableDebug();

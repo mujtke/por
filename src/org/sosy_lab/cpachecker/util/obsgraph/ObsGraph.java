@@ -24,6 +24,7 @@ import static java.util.Objects.hash;
 
 public class ObsGraph implements Copier<ObsGraph> {
 
+  public static boolean useCDG = false;
   private final List<OGNode> nodes = new ArrayList<>();
 
   /**
@@ -1317,13 +1318,15 @@ public class ObsGraph implements Copier<ObsGraph> {
         if (hasCircleFor(curNode)) {
           for (OGNode cn : circles.get(curNode)) {
             if (!cn.fromRead(curNode) || !curNode.fromRead(cn)) continue;
-            ConditionalDepGraph cdg =
-                GlobalInfo.getInstance().getEdgeInfo().getCondDepGraph();
-            CondDepConstraints cdc =
-                (CondDepConstraints) cdg.dep(cdg.getDGNode(curNode.getBlockEdges().get(0).hashCode()),
-                cdg.getDGNode(cn.getBlockEdges().get(0).hashCode()));
-            if (cdc == null) {
-              return OGTransfer.ConflictType.BLOCKED;
+            if (useCDG) {
+              ConditionalDepGraph cdg =
+                  GlobalInfo.getInstance().getEdgeInfo().getCondDepGraph();
+              CondDepConstraints cdc =
+                  (CondDepConstraints) cdg.dep(cdg.getDGNode(curNode.getBlockEdges().get(0).hashCode()),
+                      cdg.getDGNode(cn.getBlockEdges().get(0).hashCode()));
+              if (cdc == null) {
+                return OGTransfer.ConflictType.BLOCKED;
+              }
             }
           }
           return OGTransfer.ConflictType.TEMP;
