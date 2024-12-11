@@ -21,6 +21,7 @@ import org.sosy_lab.cpachecker.util.obsgraph.ObsGraph;
 import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static java.util.Objects.hash;
 import static org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState.CriticalAreaAction;
@@ -332,11 +333,15 @@ public class OGTransfer {
           // Indeterminacy exists, and it's the first time that graph meets
           // the edge.
           copiedGraph = handleNonDet(graph, parState, edge);
+          List<ARGState> coSucStates = parState.getChildren()
+              .stream().filter(s -> Objects.equals(coARGEdge, parState.getEdgeToChild(s)))
+              .collect(Collectors.toList());
+          assert coSucStates.size() == 1;
           OGNode copiedNode = new OGNode(
               new ArrayList<>(Collections.singleton(coARGEdge)),
               true,
               parState,
-              null);
+              coSucStates.get(0));
           copiedGraph.addNode(copiedNode);
           copiedNode.setInGraph(false);
         }
@@ -1124,7 +1129,9 @@ public class OGTransfer {
     }
     else { // case(2)
       if (g.getLastNode() != null) {
-        backTo = g.getRollbackState(chState, OGPORState.getEntryFunctionName());
+        backTo = g.getLastNode().getPreState();
+        g.removeNode(g.getLastNode(), true);
+        backTo = g.getRollbackState(backTo, OGPORState.getEntryFunctionName());
         transferTasks.add(Pair.of(backTo, g));
       } else {
         // logger.log(Level.WARNING, "The program exits early, nothing to do with it.");
