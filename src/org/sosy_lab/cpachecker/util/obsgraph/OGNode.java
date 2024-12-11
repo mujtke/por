@@ -2,6 +2,7 @@ package org.sosy_lab.cpachecker.util.obsgraph;
 
 import de.uni_freiburg.informatik.ultimate.util.datastructures.relation.LinkedHashRelation;
 import edu.umd.cs.findbugs.annotations.NonNull;
+import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
 import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
@@ -1003,5 +1004,33 @@ public class OGNode implements Copier<OGNode> {
   // Tests.
   public void checkLHE(SharedEvent e) {
     assert getLastHandledEvent() == e : "Last-handled event is not set correctly!";
+  }
+
+  // Not contained.
+  public int getRmEventStartIndex(SharedEvent r) {
+    assert events.contains(r);
+    int rEdgeIndex = blockEdges.indexOf(r.getInEdge());
+    assert rEdgeIndex >= 0;
+    boolean hasTargetAssumptionEdge = false;
+    for (int i = rEdgeIndex; i < blockEdges.size(); i++) {
+      if (blockEdges.get(i) instanceof AssumeEdge) {
+        // TODO: maybe we can confine the range further, e.g., 'a = X', if r is
+        //  R(X) and there isn't any r(a) which comes from an assumption edge that after r.inEdge.
+        hasTargetAssumptionEdge = true;
+        break;
+      }
+    }
+    return hasTargetAssumptionEdge ? events.indexOf(r) : events.size();
+  }
+
+  public int getRmEdgeStartIndex(SharedEvent r) {
+    int rmEventStartIndex = getRmEventStartIndex(r);
+    int rmEdgeStartIndex;
+    if (rmEventStartIndex < events.size()) {
+      rmEdgeStartIndex = blockEdges.indexOf(events.get(rmEventStartIndex).getInEdge());
+    } else {
+      rmEdgeStartIndex = blockEdges.size();
+    }
+    return rmEdgeStartIndex;
   }
 }

@@ -560,7 +560,11 @@ public class ObsGraph implements Copier<ObsGraph> {
     // Handle the node that r in.
     OGNode rNode = r.getInNode();
     List<SharedEvent> events = r.getInNode().getEvents();
-    for (int i = events.indexOf(r) + 1; i < events.size(); i++) {
+    // int rmStartIndex = events.indexOf(r) + 1;
+    // TODO: sometimes, we needn't to remove events after and in the
+    //  same node with r. Range: (rmStartIndex, events.size() - 1]
+    int rmStartIndex = rNode.getRmEventStartIndex(r); // Not contained.
+    for (int i = rmStartIndex + 1; i < events.size(); i++) {
       SharedEvent e = events.get(i);
       if (r.isRead() && r.inSameEdgeWith(e))
         continue;
@@ -571,14 +575,6 @@ public class ObsGraph implements Copier<ObsGraph> {
     if (type == OGRevisitor.REVISIT_TYPE.WRITE) {
       int rNodeIdx = nodes.indexOf(r.getInNode()),
               wNodeIdx = nodes.indexOf(w.getInNode());
-      // FIXME: ignore the reads after the w?
-//            List<SharedEvent> exclusiveReadEvents =
-//                    getExclusiveReadEvents(w.getInNode(), w);
-      // Storing rfs for exclusive read events.
-//            List<Pair<SharedEvent, SharedEvent>> removedRfs =
-//                    getRemovedRfs(exclusiveReadEvents);
-      // Remove rfs for exclusive read events.
-//            exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
       for (int i = rNodeIdx + 1; i < wNodeIdx; i++) {
         OGNode ni = nodes.get(i), nw = nodes.get(wNodeIdx);
         if (!porf(ni, nw)) {
@@ -586,8 +582,6 @@ public class ObsGraph implements Copier<ObsGraph> {
           // FIXME: ni may have no event?
         }
       }
-      // Restoring the removed rfs.
-//            restoreDeleteRfs(removedRfs);
     }
 
     return delete;
@@ -602,11 +596,10 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     OGNode rpn = rp.getInNode();
     // In rpn, some events may get delete, and we need to remove corresponding edges, too.
+    int rmEdgeStartIndex = rpn.getRmEdgeStartIndex(rp);
     CFAEdge rpe = rp.getInEdge();
-    assert rpn.contains(rpe);
-    int rpeIndex = rpn.getBlockEdges().indexOf(rpe);
     Set<CFAEdge> edgesToRemove = rpn.getBlockEdges().stream()
-            .filter(edge -> rpn.getBlockEdges().indexOf(edge) > rpeIndex)
+            .filter(edge -> rpn.getBlockEdges().indexOf(edge) > rmEdgeStartIndex)
             .collect(Collectors.toSet());
     Set<OGNode> nodesToRemove = new HashSet<>();
 
