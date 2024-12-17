@@ -1,21 +1,15 @@
 package org.sosy_lab.cpachecker.util.obsgraph;
 
-import de.uni_freiburg.informatik.ultimate.util.datastructures.relation.LinkedHashRelation;
 import edu.umd.cs.findbugs.annotations.NonNull;
 import org.sosy_lab.cpachecker.cfa.model.AssumeEdge;
 import org.sosy_lab.cpachecker.cfa.model.CFAEdge;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.por.ogpor.OGPORState;
 import org.sosy_lab.cpachecker.util.AbstractStates;
 import org.sosy_lab.cpachecker.util.globalinfo.OGInfo;
-import org.sosy_lab.cpachecker.util.predicates.pathformula.pointeraliasing.SMTHeapReadAndWriteTest;
 
 import java.util.*;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
-
-import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.READ;
 
 public class OGNode implements Copier<OGNode> {
 
@@ -632,6 +626,16 @@ public class OGNode implements Copier<OGNode> {
     return false;
   }
 
+  public boolean hasReadNeedRevisit(SharedEvent r) {
+    assert events.contains(r);
+    for (int i = events.indexOf(r); i < events.size(); i++) {
+      if (events.get(i).isRead() && i > LHRIndex) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   public int getRefCount(String type, OGNode other) {
     int refCount = 0;
     switch (type) {
@@ -1032,5 +1036,28 @@ public class OGNode implements Copier<OGNode> {
       rmEdgeStartIndex = blockEdges.size();
     }
     return rmEdgeStartIndex;
+  }
+
+  public void setIgnoredEvents(
+      List<SharedEvent> ignoredEvents, SharedEvent a) {
+    if (a.isRead()) {
+      for (int i = events.indexOf(a) + 1; i < events.size(); i++) {
+        SharedEvent e = events.get(i);
+        if (e.isRead()) {
+          ignoredEvents.add(e);
+        }
+      }
+      ignoredEvents.addAll(Ws);
+    } else {
+      assert a.isWrite();
+      for (int i = events.indexOf(a) + 1; i < events.size(); i++) {
+        SharedEvent e = events.get(i);
+        if (e.isWrite()) {
+          ignoredEvents.add(e);
+        }
+      }
+    }
+
+    ignoredEvents.forEach(SharedEvent::setIgnored);
   }
 }

@@ -1094,7 +1094,7 @@ public class OGTransfer {
     assert ogState != null;
     if (ogState.blockFor(OGPORState.getEntryFunctionName())) {
       // When main thread is blocked, the program won't exit early.
-      return false;
+      // return false;
     }
     // If there is no unblocked child thread, then program exit normally?
     Set<String> unblockedChTs = new HashSet<>(ogState.getThreads().keySet());

@@ -278,14 +278,16 @@ public class ObsGraph implements Copier<ObsGraph> {
             getRemovedRfs(exclusiveReadEvents);
     // Remove rfs for exclusive read events.
     exclusiveReadEvents.forEach(SharedEvent::removeReadFrom);
-    // Similarly, maybe we shouldn't consider fr relations for write events after
-    // event r.
+    // Maybe we shouldn't consider the fr/wb relations for write events in rNode.
     List<SharedEvent> exclusiveWriteEvents = getExclusiveWriteEvents(rNode, r);
-    // Storing frbs for exclusive write events.
+    // Storing frbs/wbs for exclusive write events.
     List<Pair<SharedEvent, SharedEvent>> removedFrbs =
             getRemovedFrbs(exclusiveWriteEvents);
-    // Remove frbs for exclusive write events.
+    List<Pair<SharedEvent, SharedEvent>> removedWas =
+        getRemovedWas(exclusiveWriteEvents);
+    // Remove frbs/wbs for exclusive write events.
     exclusiveWriteEvents.forEach(SharedEvent::removeFromReadBy);
+    exclusiveWriteEvents.forEach(SharedEvent::removeWriteAfter);
 
     List<OGNode> porfPres = new ArrayList<>();
     // FIXME: if arfNode exclusivePorf aNode, then we cannot revisit a?
@@ -332,8 +334,9 @@ public class ObsGraph implements Copier<ObsGraph> {
 
     // Restoring the rfs removed before if necessary.
     restoreDeleteRfs(removedRfs);
-    // Restoring the frbs removed before.
+    // Restoring the frbs/wbs removed before.
     restoreDeleteFrbs(removedFrbs);
+    restoreDeleteWas(removedWas);
 
     return result;
   }
@@ -387,11 +390,6 @@ public class ObsGraph implements Copier<ObsGraph> {
   }
 
   private List<SharedEvent> getExclusiveWriteEvents(OGNode rNode, SharedEvent r) {
-    assert rNode.getEvents().contains(r);
-    int rIndex = rNode.getEvents().indexOf(r);
-//        return rNode.getWs().stream()
-//                .filter(e -> rNode.getEvents().indexOf(e) > rIndex)
-//                .collect(Collectors.toList());
     return new ArrayList<>(rNode.getWs());
   }
 
@@ -410,6 +408,15 @@ public class ObsGraph implements Copier<ObsGraph> {
     return removedFrbs;
   }
 
+  private List<Pair<SharedEvent, SharedEvent>> getRemovedWas(
+      List<SharedEvent> exclusiveWriteEvents) {
+    List<Pair<SharedEvent, SharedEvent>> removedWas = new ArrayList<>();
+    exclusiveWriteEvents.forEach(w -> {
+      w.getWAfter().forEach(wa -> removedWas.add(Pair.of(w, wa)));
+    });
+    return removedWas;
+  }
+
   private void restoreDeleteRfs(List<Pair<SharedEvent, SharedEvent>> removedRfs) {
     if (removedRfs != null && !removedRfs.isEmpty()) {
       removedRfs.forEach(rfpair -> {
@@ -424,6 +431,15 @@ public class ObsGraph implements Copier<ObsGraph> {
       removedFrbs.forEach(frbpair -> {
         SharedEvent w = frbpair.getFirstNotNull(), frb = frbpair.getSecondNotNull();
         w.setFromReadBy(frb);
+      });
+    }
+  }
+
+  private void restoreDeleteWas(List<Pair<SharedEvent, SharedEvent>> removedWas) {
+    if (removedWas != null) {
+      removedWas.forEach(wapair -> {
+        SharedEvent w = wapair.getFirstNotNull(), wa = wapair.getSecondNotNull();
+        wa.setWriteBefore(w);
       });
     }
   }
@@ -592,7 +608,7 @@ public class ObsGraph implements Copier<ObsGraph> {
    * @param rp the upper bound of the deleted events (not including {@param rp}).
    * FIXME: remove cached assumption edges here?
    */
-  public void removeDelete(List<SharedEvent> delete, SharedEvent rp) {
+  public boolean removeDelete(List<SharedEvent> delete, SharedEvent rp) {
 
     OGNode rpn = rp.getInNode();
     // In rpn, some events may get delete, and we need to remove corresponding edges, too.
@@ -601,6 +617,8 @@ public class ObsGraph implements Copier<ObsGraph> {
     Set<CFAEdge> edgesToRemove = rpn.getBlockEdges().stream()
             .filter(edge -> rpn.getBlockEdges().indexOf(edge) > rmEdgeStartIndex)
             .collect(Collectors.toSet());
+    // Indicate whether rpn is complete.
+    boolean rpnComplete = edgesToRemove.isEmpty();
     Set<OGNode> nodesToRemove = new HashSet<>();
 
     // remove relations before removing nodes.
@@ -656,6 +674,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     // Remove the corresponding cached assumption edges because of the removal of
     // deleted events.
     removeAssumeEdges(delete, rp);
+    return rpnComplete;
   }
 
   public void deduceFromRead() {
@@ -689,11 +708,12 @@ public class ObsGraph implements Copier<ObsGraph> {
     for (i = 0; i < n; i++) {
       OGNode ni = nodes.get(i);
       for (SharedEvent w1 : ni.getWs()) {
+        if (w1.isIgnored()) continue;
         for (j = 0; j < n; j++) {
           if (j == i) continue;
           OGNode nj = nodes.get(j);
           SharedEvent w2 = nj.getWriteToSameVar(w1);
-          if (w2 == null) continue;
+          if (w2 == null || w2.isIgnored()) continue;
           // Else, w1 may wb w2.
           if (porf[i][j]) {
             w1.setWriteBefore(w2);
@@ -712,6 +732,7 @@ public class ObsGraph implements Copier<ObsGraph> {
     for (i = 0; i < n; i++) {
       OGNode ni = nodes.get(i);
       for (SharedEvent r : ni.getRs()) {
+        if (r.isIgnored()) continue;
         SharedEvent w = r.getReadFrom();
         assert w != null : "Missing readFrom when trying to build fr!";
         // FIXME
@@ -725,7 +746,7 @@ public class ObsGraph implements Copier<ObsGraph> {
           if (wNode.writeBefore(nj)) {
             // If wNode write before nj.
             SharedEvent frnw = nj.getWriteToSameVar(r);
-            if (frnw != null)
+            if (frnw != null && !frnw.isIgnored())
               r.setFromRead(frnw);
           }
         }
@@ -1451,6 +1472,42 @@ public class ObsGraph implements Copier<ObsGraph> {
     if (idx < 0 || idx >= cacheEdges.size()) return true;
     // Else, there is some edge we need to meet first.
     return false;
+  }
+
+  public void updateNeedToRevisit(SharedEvent r, boolean rnIsComplete) {
+    if (!rnIsComplete) {
+      setNeedToRevisit(false);
+    }
+    // Else, rn is complete, we check whether there is any re-visitable read event.
+    if (r.getInNode().hasReadNeedRevisit(r)) {
+      setNeedToRevisit(true);
+    }
+  }
+
+  // Only used during a revisit.
+  public void setIgnoredEvents(
+      List<SharedEvent> ignoredEvents,
+      List<Pair<SharedEvent, SharedEvent>> removedRfs,
+      SharedEvent a) {
+    OGNode aNode = a.getInNode();
+    aNode.setIgnoredEvents(ignoredEvents, a);
+    ignoredEvents.forEach(e -> {
+      if (e.isRead()) {
+        SharedEvent erf = e.getReadFrom();
+        removedRfs.add(Pair.of(e, erf));
+        e.removeReadFrom();
+      }
+    });
+  }
+
+  public void restoreIgnoredEvents(
+      List<SharedEvent> ignoredEvents,
+      List<Pair<SharedEvent, SharedEvent>> removedRfs) {
+    ignoredEvents.forEach(SharedEvent::unsetIgnored);
+    removedRfs.forEach(p -> {
+      SharedEvent r = p.getFirstNotNull(), rf = p.getSecondNotNull();
+      r.setReadFrom(rf);
+    });
   }
 
   // Debug.

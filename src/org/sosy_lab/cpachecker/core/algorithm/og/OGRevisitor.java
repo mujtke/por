@@ -6,10 +6,7 @@ import org.sosy_lab.common.configuration.InvalidConfigurationException;
 import org.sosy_lab.common.configuration.Options;
 import org.sosy_lab.common.log.LogManager;
 import org.sosy_lab.cpachecker.cfa.CFA;
-import org.sosy_lab.cpachecker.cfa.DummyCFAEdge;
-import org.sosy_lab.cpachecker.core.interfaces.AbstractState;
 import org.sosy_lab.cpachecker.core.interfaces.Precision;
-import org.sosy_lab.cpachecker.core.interfaces.Statistics;
 import org.sosy_lab.cpachecker.core.reachedset.ReachedSet;
 import org.sosy_lab.cpachecker.cpa.arg.ARGState;
 import org.sosy_lab.cpachecker.cpa.bdd.ConditionalStatementHandler;
@@ -23,7 +20,6 @@ import org.sosy_lab.cpachecker.util.obsgraph.SharedEvent;
 
 import java.util.*;
 import java.util.logging.Level;
-import java.util.stream.Collectors;
 
 import static org.sosy_lab.cpachecker.util.obsgraph.SharedEvent.AccessType.*;
 
@@ -151,9 +147,10 @@ public class OGRevisitor {
               List<SharedEvent> delete =
                       Gr.getDelete(REVISIT_TYPE.READ, ap, wp);
               // Maximality should always hold when revisiting a read.
-              Gr.removeDelete(delete, ap);
+              boolean apnComplete = Gr.removeDelete(delete, ap);
               // FIXME: The next revisit cannot be performed until the node become complete.
-              Gr.setNeedToRevisit(false);
+              // Gr.setNeedToRevisit(false);
+              Gr.updateNeedToRevisit(ap, apnComplete);
               Pair<ObsGraph, ObsGraph> GrAndcoGr =
                       setReadFrom(Gr, ap, wp, REVISIT_TYPE.READ, precision);
 
@@ -269,6 +266,12 @@ public class OGRevisitor {
     // Clear the old wb & fr.
     G.clearWb();
     G.clearFR();
+    List<SharedEvent> ignoredEvents = new ArrayList<>(),
+        coIgnoredEvents = new ArrayList<>();
+    List<Pair<SharedEvent, SharedEvent>> removedRfs = new ArrayList<>(),
+        coRemovedRfs = new ArrayList<>();
+    G.setIgnoredEvents(
+        ignoredEvents, removedRfs, type == REVISIT_TYPE.READ ? r : w);
 
     // When setting read-from relation, we may get a new graph because of the indeterminacy.
     ObsGraph coG = null;
@@ -295,6 +298,8 @@ public class OGRevisitor {
               && memo.containsKey(System.identityHashCode(w));
       SharedEvent rp = (SharedEvent) memo.get(System.identityHashCode(r)),
               wp = (SharedEvent) memo.get(System.identityHashCode(w));
+      coG.setIgnoredEvents(
+          coIgnoredEvents, coRemovedRfs, type == REVISIT_TYPE.READ ? rp : wp);
 
       corp = coG.changeAssumeEdge(rp);
       corp.setReadFrom(wp);
@@ -317,8 +322,11 @@ public class OGRevisitor {
     }
 
     G.deduceFromRead();
-    if (coG != null)
+    G.restoreIgnoredEvents(ignoredEvents, removedRfs);
+    if (coG != null) {
       coG.deduceFromRead();
+      coG.restoreIgnoredEvents(coIgnoredEvents, coRemovedRfs);
+    }
 
     // Debug. If type == REVISIT_TYPE.READ, then r and corp should be the last-handled
     // events in their nodes. Otherwise, w should be the last-handled event in its

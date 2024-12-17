@@ -36,6 +36,7 @@ public class SharedEvent implements Copier<SharedEvent> {
   private OGNode inNode;
   // CFAEdge this event in.
   private CFAEdge inEdge;
+  private boolean ignored = false;
 
   // FIXME
   public List<SharedEvent> getAllMoBefore() {
@@ -173,6 +174,20 @@ public class SharedEvent implements Copier<SharedEvent> {
     }
   }
 
+  public void removeWriteAfter() {
+    // wAfter.forEach(this::removeWriteAfter);
+    for (Iterator<SharedEvent> it = wAfter.iterator(); it.hasNext();) {
+      SharedEvent wa = it.next();
+      it.remove();
+      wa.wBefore.remove(this);
+      OGNode waNode = wa.getInNode();
+      if (inNode.getRefCount("wa", waNode) < 1) {
+        inNode.removeWriteAfter(waNode);
+        waNode.removeWriteBefore(inNode);
+      }
+    }
+  }
+
   public void removeFromRead(SharedEvent fr) {
     assert fr != null && fromRead.contains(fr)
             && fr.getFromReadBy().contains(this) :
@@ -285,6 +300,7 @@ public class SharedEvent implements Copier<SharedEvent> {
     this.fromReadBy.forEach(frb -> nEvent.fromReadBy.add(frb.deepCopy(memo)));
 
     nEvent.inNode = this.inNode == null ? null : this.inNode.deepCopy(memo);
+    nEvent.ignored = this.ignored;
 
     return nEvent;
   }
@@ -312,6 +328,12 @@ public class SharedEvent implements Copier<SharedEvent> {
   public OGNode getInNode() {
     return this.inNode;
   }
+
+  public boolean isIgnored() { return this.ignored; }
+
+  public void setIgnored() { this.ignored = true; }
+
+  public void unsetIgnored() { this.ignored = false; }
 
   public void setMoBefore(SharedEvent mb) {
     assert mb != null;
