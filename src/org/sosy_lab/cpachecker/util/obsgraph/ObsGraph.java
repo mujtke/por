@@ -903,16 +903,19 @@ public class ObsGraph implements Copier<ObsGraph> {
 
   public void addVisitedAssumeEdge(String curThd,
                                    CFAEdge edge,
-                                   OGPORState chOgState) {
+                                   OGPORState chOgState,
+                                   boolean forCopiedGraph) {
     // Add assume edges to the cache when we meet them at the first time.
     List<Triple<CFAEdge, Integer, Integer>> tripleList =
             cachedAssumeEdges.computeIfAbsent(curThd, k -> new ArrayList<>());
     tripleList.add(Triple.of(edge, chOgState.getLoopDepth(), chOgState.getPathLen()));
 
     if (assumeEdgeTable.containsKey(curThd)) {
-      // assumeEdgeTable.computeIfPresent(curThd, (k, v) -> v + 1);
+      if (!forCopiedGraph) {
+        assumeEdgeTable.computeIfPresent(curThd, (k, v) -> v + 1);
+      }
     } else {
-      assumeEdgeTable.put(curThd, 0);
+      assumeEdgeTable.put(curThd, forCopiedGraph ? 0 : 1);
     }
   }
 
@@ -953,6 +956,7 @@ public class ObsGraph implements Copier<ObsGraph> {
    * will meet to the first one in {@link #cachedAssumeEdges}.get(tid).
    */
   public void resetCachedAssumeEdge() {
+    // FIXME
     for (String t : assumeEdgeTable.keySet()) {
       assumeEdgeTable.put(t, 0);
     }
@@ -1462,14 +1466,14 @@ public class ObsGraph implements Copier<ObsGraph> {
   }
 
   public boolean meetNewAssumeEdge(String tid) {
-    // If it's the first time we meet an new assume edge in thread tid, then
+    // If it's the first time we meet a new assume edge in thread tid, then
     // for this thread, the next assume edge we need to meet according to the cachedAssumeEdges
     // must be null.
     if (!cachedAssumeEdges.containsKey(tid)) return true;
     assert assumeEdgeTable.containsKey(tid);
     List<Triple<CFAEdge, Integer, Integer>> cacheEdges = cachedAssumeEdges.get(tid);
     int idx = assumeEdgeTable.get(tid);
-    if (idx < 0 || idx >= cacheEdges.size()) return true;
+    if (idx >= cacheEdges.size()) return true;
     // Else, there is some edge we need to meet first.
     return false;
   }

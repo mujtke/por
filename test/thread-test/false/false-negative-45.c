@@ -1,0 +1,138 @@
+
+#define offsetof(TYPE, MEMBER) ((unsigned long) &((TYPE *)0)->MEMBER)
+// The pthread relative.
+typedef unsigned pthread_t;
+typedef unsigned pthread_mutex_t;
+#define NULL ((void *) 0)
+extern void pthread_create(pthread_t *, void *, void *(*)(void *), void *);
+extern void pthread_mutex_lock(pthread_t *);
+extern void pthread_mutex_unlock(pthread_t *);
+extern void pthread_mutex_init(pthread_mutex_t *, void *);
+extern void pthread_join(pthread_t , void **);
+extern void pthread_mutex_destroy(pthread_mutex_t *);
+
+// Assertions.
+extern void assert(int);
+extern void abort(void);
+extern void reach_error();
+
+// Atomic block.
+extern void __VERIFIER_atomic_begin();
+extern void __VERIFIER_atomic_end();
+
+#define container_of(ptr, type, member) ({                      \
+	const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
+	(type *)( (char *)__mptr - offsetof(type,member) );})
+
+extern void abort(void);
+void reach_error() { assert(0); }
+extern void __VERIFIER_atomic_begin(void);
+extern void __VERIFIER_atomic_end(void);
+int __VERIFIER_nondet_int(void);
+void ldv_assert(int expression) { if (!expression) { ERROR: {reach_error();abort();}}; return; }
+
+pthread_t t1,t2;
+
+struct device {
+	//struct device_private   *p;
+};
+
+struct A {
+	int a;
+	int b;
+};
+
+struct my_data {
+	pthread_mutex_t lock;
+	struct device dev;
+	struct A shared;
+};
+
+void *my_callback(void *arg) {
+	struct device *dev = (struct device*)arg;
+	struct my_data *data;
+	data = container_of(dev, struct my_data, dev);
+	
+	pthread_mutex_lock (&data->lock);
+    __VERIFIER_atomic_begin();
+    data->shared.a = 1;
+    __VERIFIER_atomic_end();
+    __VERIFIER_atomic_begin();
+    int lb = data->shared.b;
+    __VERIFIER_atomic_end();
+    __VERIFIER_atomic_begin();
+    data->shared.b = lb + 1;
+    __VERIFIER_atomic_end();
+	pthread_mutex_unlock (&data->lock);
+	return 0;
+}
+
+int my_drv_probe(struct my_data *data) {
+	struct device *d = &data->dev;
+	
+	//init data (single thread)
+	//not a race
+	pthread_mutex_init(&data->lock, NULL);
+	data->shared.a = 0;
+	data->shared.b = 0;
+	
+	int res = __VERIFIER_nondet_int();
+	if(res)
+		goto exit;
+	//register callback
+	pthread_create(&t1, NULL, my_callback, (void *)d);
+	pthread_create(&t2, NULL, my_callback, (void *)d);
+	//race on data->shared.a and data->shared.b
+    __VERIFIER_atomic_begin();
+     data->shared.a = 3;
+     __VERIFIER_atomic_end();
+     __VERIFIER_atomic_begin();
+     data->shared.b = 3;
+     __VERIFIER_atomic_end();
+     __VERIFIER_atomic_begin();
+     ldv_assert(data->shared.a==3);
+     __VERIFIER_atomic_end();
+     __VERIFIER_atomic_begin();
+     ldv_assert(data->shared.b==3);
+     __VERIFIER_atomic_end();
+    return 0;
+
+exit:
+	pthread_mutex_destroy(&data->lock);
+	return -1;
+}
+
+void my_drv_disconnect(struct my_data *data) {
+	void *status;
+	pthread_join(t1, &status);
+	pthread_join(t2, &status);
+	pthread_mutex_destroy(&data->lock);
+}
+
+int my_drv_init(void) {
+	return 0;
+}
+ 
+void my_drv_cleanup(void) {
+	return;
+}
+
+int main(void) {
+	int ret = my_drv_init();
+	if(ret==0) {
+		int probe_ret;
+		struct my_data data;
+		probe_ret = my_drv_probe(&data);
+		if(probe_ret==0) {
+			my_drv_disconnect(&data);
+			ldv_assert(data.shared.a==1);
+			ldv_assert(data.shared.b==2);
+		}
+		my_drv_cleanup();
+		data.shared.a = -1;
+		data.shared.b = -1;
+		ldv_assert(data.shared.a==-1);
+		ldv_assert(data.shared.b==-1);
+	}
+	return 0;
+}

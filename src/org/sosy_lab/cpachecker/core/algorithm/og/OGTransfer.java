@@ -271,8 +271,8 @@ public class OGTransfer {
         // Specifically, if graph G choose edge(d), then its deep copy nG will
         // choose coEdge(!d). And either of them will remember their choices.
         copiedGraph = handleNonDet(graph, parState, edge);
-        graph.addVisitedAssumeEdge(curThd, edge, chOgState);
-        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, chOgState);
+        graph.addVisitedAssumeEdge(curThd, edge, chOgState, false);
+        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, chOgState, true);
       } else if (coARGEdge != null) {
         // Not the first time that graph meets the edge.
         if (!graph.cachedEdgeMatch(curThd, edge, chOgState))
@@ -905,8 +905,8 @@ public class OGTransfer {
       copiedNode.addEdgeWithEvents(coARGEdge,
           isShared ? edgeVarMap.get(coARGEdge.hashCode()) : null);
       if (!isShared) {
-        graph.addVisitedAssumeEdge(curThd, edge, chOgState);
-        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, chOgState);
+        graph.addVisitedAssumeEdge(curThd, edge, chOgState, false);
+        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, chOgState, true);
       } else {
         // FIXME: should we store the edge if it contains shared vars?
       }
@@ -941,8 +941,8 @@ public class OGTransfer {
       copiedNode.addEdgeWithEvents(coARGEdge,
           isShared ? edgeVarMap.get(coARGEdge.hashCode()) : null);
       if (!isShared) {
-        graph.addVisitedAssumeEdge(curThd, edge, chOgState);
-        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, chOgState);
+        graph.addVisitedAssumeEdge(curThd, edge, chOgState, false);
+        copiedGraph.addVisitedAssumeEdge(curThd, coARGEdge, chOgState, true);
       } else {
         // FIXME: cache the edge when it has share vars?
       }
